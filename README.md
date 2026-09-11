@@ -56,7 +56,7 @@
 ### 把农场跑起来
 
 ```bash
-git clone https://github.com/xxxscarlxrd404/qq-farm-bot.git
+git clone https://github.com/yuni202301mkq-create/qq-farm-bot
 cd qq-farm-bot
 
 corepack enable
@@ -76,7 +76,7 @@ pnpm dev:web
 ## 🐳 Docker 部署
 
 ```bash
-git clone https://github.com/xxxscarlxrd404/qq-farm-bot.git
+git clone https://github.com/yuni202301mkq-create/qq-farm-bot
 cd qq-farm-bot
 docker compose up -d --build
 ```
