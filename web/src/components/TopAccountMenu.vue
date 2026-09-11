@@ -5,18 +5,24 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } f
 import api from '@/api'
 import AccountCareerModal from '@/components/AccountCareerModal.vue'
 import AccountModal from '@/components/AccountModal.vue'
+import RenewCardModal from '@/components/RenewCardModal.vue'
 import RemarkModal from '@/components/RemarkModal.vue'
 import { getPlatformClass, getPlatformLabel, useAccountStore } from '@/stores/account'
 import { useStatusStore } from '@/stores/status'
+import { useUserStore } from '@/stores/user'
+import { useRouter } from 'vue-router'
 
 const accountStore = useAccountStore()
 const statusStore = useStatusStore()
+const userStore = useUserStore()
+const router = useRouter()
 const { accounts, currentAccount } = storeToRefs(accountStore)
 const { currentStatusReady, status } = storeToRefs(statusStore)
 
 const showAccountDropdown = ref(false)
 const showAccountModal = ref(false)
 const showRemarkModal = ref(false)
+const showRenewModal = ref(false)
 const showCareerModal = ref(false)
 const careerLoading = ref(false)
 const careerError = ref('')
@@ -154,8 +160,8 @@ async function loadCareer() {
   }
 }
 
-function openCareer(event: MouseEvent) {
-  event.stopPropagation()
+function openCareer(event?: Event) {
+  event?.stopPropagation()
   if (!currentAccount.value)
     return
   closeDropdown()
@@ -229,6 +235,12 @@ async function handleAccountSaved() {
   showRemarkModal.value = false
   accountToEdit.value = null
 }
+
+function handleLogout() {
+  closeDropdown()
+  userStore.clearSession()
+  router.replace('/login')
+}
 </script>
 
 <template>
@@ -238,18 +250,28 @@ async function handleAccountSaved() {
       class="max-w-[min(76vw,280px)] flex items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-gray-100/70 dark:hover:bg-gray-700/50"
       @click="toggleDropdown"
     >
-      <div class="h-9 w-9 flex shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200 transition dark:bg-gray-700 hover:ring-2 dark:ring-gray-600 hover:ring-[var(--theme-primary)]" title="查看角色生涯" @click="openCareer">
-        <img
-          v-if="shouldShowAvatar(currentAccount)"
-          :src="currentAvatarSrc"
-          :alt="displayName"
-          class="h-full w-full object-cover"
-          @error="markAvatarFailed(currentAccount)"
-        >
-        <span v-else class="text-sm text-gray-500 font-semibold dark:text-gray-300">
-          {{ avatarInitial(currentAccount) }}
-        </span>
-      </div>
+      <span
+        class="-m-1.5 h-12 w-12 flex shrink-0 cursor-pointer items-center justify-center rounded-full"
+        role="button"
+        tabindex="0"
+        aria-label="查看角色生涯"
+        title="查看角色生涯"
+        @click="openCareer"
+        @keydown.enter.prevent="openCareer"
+      >
+        <div class="h-9 w-9 flex items-center justify-center overflow-hidden rounded-full bg-gray-100 ring-1 ring-gray-200 transition dark:bg-gray-700 hover:ring-2 dark:ring-gray-600 hover:ring-[var(--theme-primary)]">
+          <img
+            v-if="shouldShowAvatar(currentAccount)"
+            :src="currentAvatarSrc"
+            :alt="displayName"
+            class="h-full w-full object-cover"
+            @error="markAvatarFailed(currentAccount)"
+          >
+          <span v-else class="text-sm text-gray-500 font-semibold dark:text-gray-300">
+            {{ avatarInitial(currentAccount) }}
+          </span>
+        </div>
+      </span>
       <div class="min-w-0 flex flex-col">
         <span class="truncate text-sm text-gray-900 font-semibold dark:text-gray-100">
           {{ displayName }}
@@ -335,6 +357,14 @@ async function handleAccountSaved() {
         </div>
         <div class="mt-1 border-t border-gray-100 pt-1 dark:border-gray-700">
           <button
+            class="w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+            :style="{ color: 'var(--theme-primary)' }"
+            @click="openCareer()"
+          >
+            <div class="i-carbon-chart-histogram" />
+            <span>角色生涯</span>
+          </button>
+          <button
             class="w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
             :style="{ color: 'var(--theme-primary)' }"
             @click="openAddAccount"
@@ -351,6 +381,21 @@ async function handleAccountSaved() {
             <div class="i-carbon-add-alt" />
             <span>管理账号</span>
           </router-link>
+          <button
+            class="w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
+            :style="{ color: 'var(--theme-primary)' }"
+            @click="showRenewModal = true; closeDropdown()"
+          >
+            <div class="i-carbon-renew" />
+            <span>续费卡密/额度</span>
+          </button>
+          <button
+            class="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 transition-colors hover:bg-red-50/60 dark:hover:bg-red-900/20"
+            @click="handleLogout"
+          >
+            <div class="i-carbon-logout" />
+            <span>退出登录</span>
+          </button>
         </div>
       </div>
     </Teleport>
@@ -368,6 +413,11 @@ async function handleAccountSaved() {
         :account="accountToEdit"
         @close="showRemarkModal = false"
         @saved="handleAccountSaved"
+      />
+
+      <RenewCardModal
+        :show="showRenewModal"
+        @close="showRenewModal = false"
       />
 
       <AccountCareerModal

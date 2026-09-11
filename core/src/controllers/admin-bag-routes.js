@@ -193,10 +193,14 @@ function registerAdminBagRoutes({
       const result = store.syncBagSeedPriority(accountId, seeds);
       if (result.changed && typeof provider.syncAccountConfig === "function")
         provider.syncAccountConfig(accountId);
+      const lockedIds = new Set(
+        (typeof store.getSeedLocks === "function" ? (store.getSeedLocks(accountId) || []) : [])
+          .map(id => Number(id))
+      );
       res.json({
         ok: true,
         data: {
-          seeds: result.seeds,
+          seeds: result.seeds.map(seed => ({ ...seed, locked: lockedIds.has(Number(seed && seed.seedId)) })),
           priority: result.priority,
           knownIds: result.knownIds,
         },

@@ -182,6 +182,16 @@ function registerAdminAccountRoutes({
         return res.status(404).json({ ok: false, error: "Account not found" });
       }
 
+      // 用户隔离：普通用户只能改自己的账号备注
+      const remarkUser = req.currentUser;
+      if (
+        remarkUser &&
+        !isAdminUser(remarkUser) &&
+        !canAccessAccount(req, account.id)
+      ) {
+        return res.status(403).json({ ok: false, error: "无权访问此账号" });
+      }
+
       const remark = String(
         body.remark !== undefined ? body.remark : body.name || "",
       ).trim();

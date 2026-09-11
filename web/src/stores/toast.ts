@@ -3,11 +3,17 @@ import { ref } from 'vue'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
+export interface ToastAction {
+  label: string
+  handler: () => void
+}
+
 export interface Toast {
   id: number
   message: string
   type: ToastType
   duration?: number
+  action?: ToastAction
 }
 
 export const useToastStore = defineStore('toast', () => {
@@ -15,7 +21,7 @@ export const useToastStore = defineStore('toast', () => {
   const recentMessages = new Set<string>()
   let nextId = 1
 
-  function add(message: string, type: ToastType = 'info', duration = 3000) {
+  function add(message: string, type: ToastType = 'info', duration = 3000, action?: ToastAction) {
     const key = `${type}:${message}`
 
     // Prevent duplicate toasts if one with the same message and type is already visible
@@ -32,10 +38,11 @@ export const useToastStore = defineStore('toast', () => {
     setTimeout(() => recentMessages.delete(key), 2000)
 
     const id = nextId++
-    const toast: Toast = { id, message, type, duration }
+    const toast: Toast = { id, message, type, duration, action }
     toasts.value.push(toast)
 
-    if (duration > 0) {
+    // Toasts with an action button stay until dismissed (or until the action is clicked)
+    if (duration > 0 && !action) {
       setTimeout(() => {
         remove(id)
       }, duration)
@@ -46,6 +53,18 @@ export const useToastStore = defineStore('toast', () => {
     const index = toasts.value.findIndex(t => t.id === id)
     if (index !== -1) {
       toasts.value.splice(index, 1)
+    }
+  }
+
+  function runAction(id: number) {
+    const toast = toasts.value.find(t => t.id === id)
+    if (!toast || !toast.action)
+      return
+    try {
+      toast.action.handler()
+    }
+    finally {
+      remove(id)
     }
   }
 
@@ -69,6 +88,7 @@ export const useToastStore = defineStore('toast', () => {
     toasts,
     add,
     remove,
+    runAction,
     success,
     error,
     warning,

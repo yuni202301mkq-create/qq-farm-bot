@@ -15,9 +15,9 @@ test('default config exposes expected fields', () => {
   assert.deepEqual(DEFAULT_CONFIG.proxyBind, ['0.0.0.0']);
   assert.deepEqual(DEFAULT_CONFIG.advertiseIps, ['auto']);
   assert.ok(DEFAULT_CONFIG.captureHosts.length > 0);
-  assert.ok(DEFAULT_CONFIG.proxyPortFrom >= 1024);
-  assert.equal(DEFAULT_CONFIG.proxyPortFrom, 18000);
-  assert.equal(DEFAULT_CONFIG.proxyPortTo, 18000);
+  assert.ok(DEFAULT_CONFIG.proxyPortFrom >= 1000);
+  assert.equal(DEFAULT_CONFIG.proxyPortFrom, 1000);
+  assert.equal(DEFAULT_CONFIG.proxyPortTo, 9999);
 });
 
 test('splitList handles arrays and comma strings', () => {
@@ -27,11 +27,12 @@ test('splitList handles arrays and comma strings', () => {
 });
 
 test('parsePortRange validates port ranges', () => {
-  assert.deepEqual(parsePortRange('18000', 1, 2), { from: 18000, to: 18000 });
-  assert.deepEqual(parsePortRange('18000-18999', 1, 2), { from: 18000, to: 18000 });
+  assert.deepEqual(parsePortRange('1000', 1, 2), { from: 1000, to: 1000 });
+  assert.deepEqual(parsePortRange('1000-9999', 1, 2), { from: 1000, to: 9999 });
   assert.deepEqual(parsePortRange('', 100, 200), { from: 100, to: 200 });
   assert.deepEqual(parsePortRange('invalid', 100, 200), { from: 100, to: 200 });
   assert.deepEqual(parsePortRange('30000-1000', 100, 200), { from: 100, to: 200 });
+  // 低于 1000 被拒绝，回退到默认值
   assert.deepEqual(parsePortRange('80-90', 100, 200), { from: 100, to: 200 });
 });
 
@@ -39,8 +40,12 @@ test('normalizeConfig fills defaults and sanitizes values', () => {
   const config = normalizeConfig({ apiPort: '9999', proxyPortFrom: '5000', proxyPortTo: '6000' });
   assert.equal(config.apiPort, 9999);
   assert.equal(config.proxyPortFrom, 5000);
-  assert.equal(config.proxyPortTo, 5000);
+  assert.equal(config.proxyPortTo, 6000);
   assert.equal(config.autoStopSec >= 60, true);
+  // proxyPortTo < proxyPortFrom 时回退到 proxyPortFrom
+  const collapsed = normalizeConfig({ proxyPortFrom: '7000', proxyPortTo: '6000' });
+  assert.equal(collapsed.proxyPortFrom, 7000);
+  assert.equal(collapsed.proxyPortTo, 7000);
 });
 
 test('loadConfig writes default file on first run', () => {

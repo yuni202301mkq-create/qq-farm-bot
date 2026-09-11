@@ -36,6 +36,7 @@ const { registerAdminAccountRoutes } = require("./admin-account-routes");
 const { registerAdminAnalyticsRoutes } = require("./admin-analytics-routes");
 const { createAdminAccountAccess } = require("./admin-account-access");
 const { registerAdminAuthRoutes } = require("./admin-auth-routes");
+const { registerAdminCardKeyRoutes } = require("./admin-card-key-routes");
 const { registerAdminBagRoutes } = require("./admin-bag-routes");
 const { registerAdminCareerRoutes } = require("./admin-career-routes");
 const { registerAdminCaptureRoutes, setEmbeddedCapture } = require("./admin-capture-routes");
@@ -53,6 +54,7 @@ const { registerAdminPetRoutes } = require("./admin-pet-routes");
 const {
   registerAdminPlantBlacklistRoutes,
 } = require("./admin-plant-blacklist-routes");
+const { registerAdminSeedLockRoutes } = require("./admin-seed-lock-routes");
 const { registerAdminProxyRoutes } = require("./admin-proxy-routes");
 const { registerAdminPublicInfoRoutes } = require("./admin-public-info-routes");
 const { registerAdminQrLoginRoutes } = require("./admin-qr-login-routes");
@@ -420,6 +422,13 @@ function startAdminServer(dataProvider) {
     createAdminSession,
     updateAdminSessions,
   });
+  registerAdminCardKeyRoutes({
+    app,
+    requireAdminToken,
+    requireSuperAdminRole,
+    invalidateAdminSessions,
+    updateAdminSessions,
+  });
   registerHealthRoute(app);
   registerAuthGate(app, requireAdminToken);
   registerRequestTimeoutGuard(app);
@@ -460,6 +469,14 @@ function startAdminServer(dataProvider) {
   registerAdminPlantBlacklistRoutes({
     app,
     provider,
+    store,
+    requireAdminToken,
+    getAccountIdFromRequest,
+    canAccessAccount,
+    sendProviderError,
+  });
+  registerAdminSeedLockRoutes({
+    app,
     store,
     requireAdminToken,
     getAccountIdFromRequest,
@@ -561,6 +578,7 @@ function startAdminServer(dataProvider) {
     requireAdminRole,
     userStore,
     store,
+    updateAdminSessions,
   });
   registerAdminAccountRoutes({
     app,
@@ -584,6 +602,15 @@ function startAdminServer(dataProvider) {
   registerAdminProxyRoutes({ app, logger: adminLogger });
   registerSpaFallback(app, webDist);
 
+  // 用户隔离：普通用户不加入全局房间，只订阅自己有权限的账号
+  const joinOwnAccountRooms = (socket, session) => {
+    const accessibleIds = session ? getAccessibleAccountIdsForUser(session) : [];
+    for (const accessibleId of accessibleIds) {
+      if (accessibleId) socket.join(`account:${  accessibleId}`);
+    }
+    socket.data.accountId = "";
+  };
+
   const subscribeSocketToAccount = (socket, accountRef = "") => {
     const rawAccountRef = String(accountRef || "").trim();
     const accountId =
@@ -602,8 +629,7 @@ function startAdminServer(dataProvider) {
           error: "无权访问此账号",
         });
         leaveAccountRooms(socket);
-        socket.join("account:all");
-        socket.data.accountId = "";
+        joinOwnAccountRooms(socket, session);
         return;
       }
     }
@@ -612,6 +638,9 @@ function startAdminServer(dataProvider) {
     if (accountId) {
       socket.join(`account:${  accountId}`);
       socket.data.accountId = accountId;
+    } else if (session && !hasElevatedAdminRole(session)) {
+      // 普通用户：全局订阅只覆盖自己的账号，避免收到其他用户的数据
+      joinOwnAccountRooms(socket, session);
     } else {
       socket.join("account:all");
       socket.data.accountId = "";

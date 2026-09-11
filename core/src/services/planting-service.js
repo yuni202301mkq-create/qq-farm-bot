@@ -6,9 +6,12 @@ const { getPlantNameBySeedId, getPlantGrowTime, formatGrowTime, getAllSeeds, get
 const {
   getPlantingStrategy,
   syncBagSeedPriority,
+  getBagSeedPriority,
+  getBagSeedExcludedIds,
   getBagSeedFallbackStrategy,
   getPrioritize2x2Crops,
   getPrioritizeGrowthTasks,
+  getSeedLocks,
 } = require('../models/store');
 const { getPlantRankings } = require('./analytics');
 const { getBagSeeds } = require('./warehouse');
@@ -76,6 +79,77 @@ function isSeedLockedByLevel(seed, userLevel) {
 function isLockedPlantError(error) {
   const message = String(error && error.message || error || '').toLowerCase();
   return /锁定|未解锁|等级不足|level|lock|unlock/.test(message);
+}
+
+// 服务端明确拒绝「该种子在当前状态下不可种植」（实测 code=1003005「格子已锁定」）。
+// 这类错误与地块无关：换一块地、同一颗种子仍会被拒。
+// 因此必须立刻停止这颗种子在剩余地块上的尝试，并在一段时间内不再重试——
+// 否则每轮种植都会对每块空地重试一遍，既刷掉大量必然失败的请求，
+// 又会让「背包种子优先顺序」看起来完全没生效（其实是靠前的种子都被服务端挡住了）。
+const SEED_UNAVAILABLE_ERROR_CODES = new Set([1003005]);
+// 只匹配「种子自身不可种植」的文案；刻意不匹配泛化的「锁定 / 未解锁」，
+// 避免把「某块地临时被占用」这类与种子无关的失败误判成种子不可用。
+const SEED_UNAVAILABLE_ERROR_PATTERN = /格子已锁定|种子已锁定|种子未解锁|等级不足/;
+// 从 `... 错误: code=1003005 格子已锁定` 里取出服务端错误码。
+const PROTO_ERROR_CODE_PATTERN = /code=(-?\d+)/;
+// 冷却期内不再重试：游戏内解锁 / 状态恢复后，最多等待这么久就会重新纳入种植顺序。
+const SEED_UNAVAILABLE_COOLDOWN_MS = 15 * 60 * 1000;
+
+// `${accountId}:${seedId}` → { until, reason }
+const unavailableBagSeeds = new Map();
+
+/** 判断是否为「该种子当前不可种植」的服务端拒绝 */
+function isSeedUnavailableError(error) {
+  const message = String((error && error.message) || error || '').trim();
+  if (!message) return false;
+  const codeMatch = PROTO_ERROR_CODE_PATTERN.exec(message);
+  if (codeMatch && SEED_UNAVAILABLE_ERROR_CODES.has(Number(codeMatch[1]))) return true;
+  return SEED_UNAVAILABLE_ERROR_PATTERN.test(message);
+}
+
+function bagSeedUnavailableKey(accountId, seedId) {
+  return `${String(accountId || '')}:${toNum(seedId)}`;
+}
+
+/** 标记种子当前不可种植，冷却期内不再尝试 */
+function markBagSeedUnavailable(accountId, seedId, reason, now = Date.now()) {
+  const id = toNum(seedId);
+  if (id <= 0) return;
+  unavailableBagSeeds.set(bagSeedUnavailableKey(accountId, id), {
+    until: now + SEED_UNAVAILABLE_COOLDOWN_MS,
+    reason: String(reason || ''),
+  });
+}
+
+/** 种子是否处于「当前不可种植」冷却期 */
+function isBagSeedUnavailable(accountId, seedId, now = Date.now()) {
+  const entry = unavailableBagSeeds.get(bagSeedUnavailableKey(accountId, seedId));
+  if (!entry) return false;
+  if (entry.until <= now) {
+    unavailableBagSeeds.delete(bagSeedUnavailableKey(accountId, seedId));
+    return false;
+  }
+  return true;
+}
+
+/** 种植成功后清除标记，让种子立刻回到优先顺序里 */
+function clearBagSeedUnavailable(accountId, seedId) {
+  unavailableBagSeeds.delete(bagSeedUnavailableKey(accountId, seedId));
+}
+
+/** 当前被标记为不可种植的种子（供日志 / 面板观察） */
+function getUnavailableBagSeeds(accountId, now = Date.now()) {
+  const prefix = `${String(accountId || '')}:`;
+  const result = [];
+  for (const [key, entry] of unavailableBagSeeds.entries()) {
+    if (!key.startsWith(prefix) || entry.until <= now) continue;
+    result.push({
+      seedId: toNum(key.slice(prefix.length)),
+      reason: entry.reason,
+      retryAt: entry.until,
+    });
+  }
+  return result;
 }
 
 function groupKey(landIds) {
@@ -283,9 +357,35 @@ async function plantPrioritized2x2Crops(emptyLandIds, lands, accountId) {
   }
   const userState = getUserState();
   const userLevel = Number(userState && userState.level) || 0;
-  const sortedSize2Seeds = bagSeeds
+  const { plantable: unlockedBagSeeds, locked: lockedBagSeeds } = splitLockedBagSeeds(bagSeeds, accountId);
+  if (lockedBagSeeds.length > 0) {
+    log('种植', `已跳过被锁定的背包种子: ${lockedBagSeeds.map(seed => seed.name || seed.seedId).join('，')}`, {
+      module: 'farm',
+      event: '种植2x2作物',
+      result: 'skip_seed_locked',
+      seedIds: lockedBagSeeds.map(seed => seed.seedId),
+    });
+  }
+  // 2x2 种子同样按「背包种子优先顺序」消耗：优先列表内的按用户顺序，
+  // 未入列的（如新种子）按游戏内背包顺序兜底。被移出优先列表的种子不参与种植。
+  const size2PriorityIndex = new Map(
+    (typeof getBagSeedPriority === 'function' ? (getBagSeedPriority(accountId) || []) : [])
+      .map((id, index) => [Number(id), index])
+  );
+  const size2ExcludedSet = new Set(
+    (typeof getBagSeedExcludedIds === 'function' ? (getBagSeedExcludedIds(accountId) || []) : [])
+      .map(id => Number(id))
+      .filter(id => id > 0)
+  );
+  const sortedSize2Seeds = unlockedBagSeeds
     .filter(seed => Number(seed?.count) > 0 && Number(seed?.plantSize) === 2)
-    .sort(compareBagSeedGameOrder)
+    .filter(seed => !size2ExcludedSet.has(Number(seed?.seedId)))
+    .sort((a, b) => {
+      const pa = size2PriorityIndex.has(Number(a.seedId)) ? size2PriorityIndex.get(Number(a.seedId)) : Number.MAX_SAFE_INTEGER;
+      const pb = size2PriorityIndex.has(Number(b.seedId)) ? size2PriorityIndex.get(Number(b.seedId)) : Number.MAX_SAFE_INTEGER;
+      if (pa !== pb) return pa - pb;
+      return compareBagSeedGameOrder(a, b);
+    })
     .map(seed => ({ ...seed, count: Number(seed.count) || 0 }));
   const lockedByLevelSeeds = sortedSize2Seeds.filter(seed => isSeedLockedByLevel(seed, userLevel));
   const size2Seeds = sortedSize2Seeds.filter(seed => !isSeedLockedByLevel(seed, userLevel));
@@ -441,6 +541,7 @@ async function plantPrioritized2x2Crops(emptyLandIds, lands, accountId) {
  */
 async function plantSeeds(seedId, landIds, options = {}) {
   let planted = 0;
+  let unavailableReason = '';
   const plantedLandIds = [];
   const occupiedSet = new Set();
   const maxPlantCount = Math.max(1, toNum(options.maxPlantCount) || 1) || Number.POSITIVE_INFINITY;
@@ -473,27 +574,60 @@ async function plantSeeds(seedId, landIds, options = {}) {
         remainingLandIds.delete(occId);
       }
     } catch (err) {
+      if (isSeedUnavailableError(err)) {
+        // 种子被服务端拒绝：换任何一块地结果都一样，立即结束这颗种子的尝试，
+        // 由调用方换下一颗种子，避免对每块地重复发起必然失败的请求。
+        unavailableReason = err.message;
+        break;
+      }
       logWarn('种植', `土地#${landId} 失败: ${err.message}`);
     }
     // 多地种植时加间隔
     if (landIds.length > 1) await sleep(200, 400);
   }
 
-  return {
+  const result = {
     planted,
     plantedLandIds,
     occupiedLandIds: [...occupiedSet]
   };
+  if (unavailableReason) {
+    result.unavailable = true;
+    result.unavailableReason = unavailableReason;
+  }
+  return result;
 }
 
 // ─── 背包种子种植 ───
 
 /**
+ * 过滤掉被用户在「我的背包」里锁定的种子——锁定的种子不参与任何自动种植。
+ * @param {Array} seeds
+ * @param {string} [accountId]
+ * @returns {{plantable: Array, locked: Array}}
+ */
+function splitLockedBagSeeds(seeds, accountId) {
+  const list = Array.isArray(seeds) ? seeds : [];
+  const lockedIds = new Set(
+    (typeof getSeedLocks === 'function' ? (getSeedLocks(accountId) || []) : [])
+      .map(id => Number(id))
+      .filter(id => id > 0)
+  );
+  if (lockedIds.size === 0)
+    return { plantable: list, locked: [] };
+  return {
+    plantable: list.filter(seed => !lockedIds.has(Number(seed && seed.seedId))),
+    locked: list.filter(seed => lockedIds.has(Number(seed && seed.seedId))),
+  };
+}
+
+/**
  * 按背包优先级排序背包种子
  * @param {Array} bagSeeds - 背包种子列表
  * @param {Array} priorityList - 优先级种子 ID 列表
+ * @param {Array} [excludedSeedIds] - 被移出优先顺序的种子 ID（完全不参与背包优先种植）
  */
-function sortBagSeedsForPlanting(bagSeeds, priorityList) {
+function sortBagSeedsForPlanting(bagSeeds, priorityList, excludedSeedIds) {
   const priorityMap = new Map();
   const priorities = Array.isArray(priorityList) ? priorityList : [];
   priorities.forEach((seedId, index) => {
@@ -501,37 +635,65 @@ function sortBagSeedsForPlanting(bagSeeds, priorityList) {
     if (num > 0) priorityMap.set(num, index);
   });
 
-  return [...(Array.isArray(bagSeeds) ? bagSeeds : [])].sort((a, b) => {
-    const priorityA = priorityMap.has(a.seedId) ? priorityMap.get(a.seedId) : Number.MAX_SAFE_INTEGER;
-    const priorityB = priorityMap.has(b.seedId) ? priorityMap.get(b.seedId) : Number.MAX_SAFE_INTEGER;
-    if (priorityA !== priorityB) return priorityA - priorityB;
+  const excludedSet = new Set(
+    (Array.isArray(excludedSeedIds) ? excludedSeedIds : [])
+      .map(id => Number(id))
+      .filter(id => id > 0)
+  );
 
-    const levelA = Number(a.requiredLevel || 0);
-    const levelB = Number(b.requiredLevel || 0);
-    if (levelA !== levelB) return levelB - levelA;
+  return [...(Array.isArray(bagSeeds) ? bagSeeds : [])]
+    .filter(seed => !excludedSet.has(Number(seed && seed.seedId)))
+    .sort((a, b) => {
+      const priorityA = priorityMap.has(a.seedId) ? priorityMap.get(a.seedId) : Number.MAX_SAFE_INTEGER;
+      const priorityB = priorityMap.has(b.seedId) ? priorityMap.get(b.seedId) : Number.MAX_SAFE_INTEGER;
+      if (priorityA !== priorityB) return priorityA - priorityB;
 
-    return Number(a.seedId || 0) - Number(b.seedId || 0);
-  });
+      const levelA = Number(a.requiredLevel || 0);
+      const levelB = Number(b.requiredLevel || 0);
+      if (levelA !== levelB) return levelB - levelA;
+
+      return Number(a.seedId || 0) - Number(b.seedId || 0);
+    });
 }
 
 /**
  * 使用背包种子种植（bag_priority 策略）
+ *
+ * 1x1 与 2x2 种子统一按「背包种子优先顺序」交错消耗：轮到某颗种子时，
+ * 2x2 需要一整块空闲四格地，暂时凑不齐就预留该区域并继续下一颗。
+ * 2x2 是否参与由「优先种植四格作物」开关决定（总闸）。
+ *
  * @param {number[]} emptyLandIds - 空地 ID 列表
+ * @param {string} [accountId] - 账号 ID
+ * @param {object} [options] - { lands } 完整土地列表，用于 2x2 组合与预留判断
  */
-async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()) {
+async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId(), options = {}) {
   const landIds = (Array.isArray(emptyLandIds) ? emptyLandIds : [])
     .map(id => Number(id))
     .filter(id => id > 0);
+  const lands = Array.isArray(options && options.lands) ? options.lands : [];
 
   if (landIds.length === 0) {
     return {
-      remainingLandIds: [], fallbackAllowed: false,
+      remainingLandIds: [], reservedLandIds: [], fallbackAllowed: false,
       plantedLandIds: [], totalPlanted: 0, occupiedCount: 0
     };
   }
 
   const bagSeeds = await getBagSeeds();
   const allSeeds = Array.isArray(bagSeeds) ? bagSeeds : [];
+  const { plantable: plantableBagSeeds, locked: lockedBagSeeds } = splitLockedBagSeeds(allSeeds, accountId);
+  if (lockedBagSeeds.length > 0) {
+    log('种植', `已跳过被锁定的背包种子: ${lockedBagSeeds.map(seed => seed.name || seed.seedId).join('，')}`, {
+      module: 'farm',
+      event: '种植种子',
+      result: 'skip_seed_locked',
+      strategy: 'bag_priority',
+      seedIds: lockedBagSeeds.map(seed => seed.seedId),
+    });
+  }
+  // sync 用全量种子：锁定种子仍在背包、仍在优先列表里占位（解锁后按原顺序恢复），
+  // 只是种植时被过滤。
   const syncedPriority = syncBagSeedPriority(accountId, allSeeds, { persist: false });
   if (syncedPriority.changed && typeof process.send === 'function') {
     try {
@@ -543,27 +705,75 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
     } catch { }
   }
   const seedPriority = syncedPriority.priority;
+  const excludedSeedIds = typeof getBagSeedExcludedIds === 'function'
+    ? (getBagSeedExcludedIds(accountId) || [])
+    : [];
 
   // The synchronized list is the same order shown in the settings page.
-  const availableSeeds = sortBagSeedsForPlanting(
-    syncedPriority.seeds,
-    seedPriority
+  // 1x1 与 2x2 共用同一份顺序；只要能拿到土地布局，2x2 就按列表顺序参与。
+  // 「优先种植四格作物」开关只控制“插队先种”，不影响背包优先策略内的参与权。
+  const size2Enabled = lands.length > 0;
+  const orderedSeeds = sortBagSeedsForPlanting(
+    plantableBagSeeds.filter((seed) => {
+      if (Number(seed && seed.count) <= 0) return false;
+      const plantSize = Number(seed && seed.plantSize) || 1;
+      if (plantSize === 1) return true;
+      return plantSize === 2 && size2Enabled;
+    }),
+    seedPriority,
+    excludedSeedIds
   );
 
+  // 等级未解锁的种子直接跳过（200 级按项目约定不参与本地等级判断）。
+  // 取不到用户等级时不做过滤，避免误伤。
+  const userState = getUserState();
+  const userLevel = Number(userState && userState.level) || 0;
+  const lockedByLevelSeeds = userLevel > 0
+    ? orderedSeeds.filter(seed => isSeedLockedByLevel(seed, userLevel))
+    : [];
+  const levelUsableSeeds = userLevel > 0
+    ? orderedSeeds.filter(seed => !isSeedLockedByLevel(seed, userLevel))
+    : orderedSeeds;
+  if (lockedByLevelSeeds.length > 0) {
+    log('种植', `已跳过当前等级未解锁的背包种子: ${lockedByLevelSeeds.map(seed => seed.name || seed.seedId).join('，')}`, {
+      module: 'farm', event: '种植种子', result: 'skip_locked',
+      strategy: 'bag_priority',
+      seedIds: lockedByLevelSeeds.map(seed => seed.seedId),
+      userLevel,
+    });
+  }
+
+  // 冷却期内的种子（上一轮被服务端判定为不可种植）本轮直接跳过，
+  // 冷却结束后自动回到原来的优先顺序里，不会打乱用户排的顺序。
+  const coolingDownSeeds = levelUsableSeeds.filter(seed => isBagSeedUnavailable(accountId, seed.seedId));
+  const availableSeeds = levelUsableSeeds.filter(seed => !isBagSeedUnavailable(accountId, seed.seedId));
+  if (coolingDownSeeds.length > 0) {
+    log('种植', `已跳过 ${coolingDownSeeds.length} 个当前不可种植的背包种子: ${coolingDownSeeds.map(seed => seed.name || seed.seedId).join('，')}`, {
+      module: 'farm', event: '种植种子', result: 'skip_seed_unavailable',
+      strategy: 'bag_priority',
+      seedIds: coolingDownSeeds.map(seed => seed.seedId),
+      retryAfterMinutes: Math.round(SEED_UNAVAILABLE_COOLDOWN_MS / 60000),
+    });
+  }
+
   if (availableSeeds.length === 0) {
-    const hasAnySeeds = allSeeds.some(s => Number(s && s.count) > 0);
+    const hasAnySeeds = plantableBagSeeds.some(s => Number(s && s.count) > 0);
     log('种植', hasAnySeeds
-      ? '背包中没有可用的 1x1 种子，准备按第二优先策略补种'
+      ? '背包中没有可用的种子，准备按第二优先策略补种'
       : '背包种子已用完，准备按第二优先策略补种', {
       module: 'farm', event: '种植种子', result: 'fallback_ready', strategy: 'bag_priority'
     });
     return {
-      remainingLandIds: landIds, fallbackAllowed: true,
+      remainingLandIds: landIds, reservedLandIds: [], fallbackAllowed: true,
       plantedLandIds: [], totalPlanted: 0, occupiedCount: 0
     };
   }
 
   let remainingIds = [...landIds];
+  const emptySet = new Set(landIds);
+  const reservedLandIdSet = new Set();
+  const size2Groups = size2Enabled ? build2x2LandGroups(lands) : [];
+  const waitingGroups = [];
   let fallbackAllowed = true;
   let totalPlanted = 0;
   let totalOccupied = 0;
@@ -573,13 +783,92 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
   for (const seed of availableSeeds) {
     if (remainingIds.length === 0) break;
 
+    // ── 2x2 种子：需要一整块空闲四格地，凑不齐就预留并继续下一颗 ──
+    if (Number(seed.plantSize) === 2) {
+      let count = Number(seed.count) || 0;
+      let plantedForSeed = 0;
+      let unavailableReason = '';
+
+      while (count > 0) {
+        const group = select2x2Reservations(size2Groups, remainingIds, 1, lands)[0];
+        if (!group) break;
+        const retryAt = failed2x2Retries.get(`${group.key}:${seed.seedId}`) || 0;
+        if (retryAt > Date.now()) break;
+
+        if (!group.landIds.every(id => emptySet.has(Number(id)))) {
+          // 还没凑齐：为这颗（更高优先级的）2x2 种子预留区域，继续按顺序尝试后面的种子。
+          const waitingLands = group.landIds.filter(id => remainingIds.includes(Number(id)));
+          if (waitingLands.length === 0) break;
+          waitingLands.forEach(id => reservedLandIdSet.add(Number(id)));
+          waitingGroups.push(group.landIds.join(','));
+          break;
+        }
+
+        try {
+          const planted = await plant2x2Seed(seed.seedId, group);
+          failed2x2Retries.delete(`${group.key}:${seed.seedId}`);
+          count -= 1;
+          plantedForSeed += 1;
+          totalOccupied += planted.occupiedLandIds.length;
+          allPlantedIds.push(planted.masterLandId);
+          planted.occupiedLandIds.forEach((id) => {
+            emptySet.delete(Number(id));
+            reservedLandIdSet.delete(Number(id));
+          });
+          remainingIds = remainingIds.filter(id => !planted.occupiedLandIds.includes(Number(id)));
+          log('种植', `已按背包优先顺序种植 2x2 作物 ${seed.name}，主地块#${planted.masterLandId}，占地 ${planted.occupiedLandIds.join(',')}`, {
+            module: 'farm', event: '种植2x2作物', result: 'ok',
+            strategy: 'bag_priority', seedId: seed.seedId,
+            masterLandId: planted.masterLandId, landIds: planted.occupiedLandIds,
+          });
+        } catch (err) {
+          if (isLockedPlantError(err)) {
+            // 与旧的 2x2 行为一致：该种子本轮不再尝试，直接换下一优先种子。
+            // 仅当服务端明确判定「种子本身不可种植」时才进入冷却，避免把地块级失败误判。
+            if (isSeedUnavailableError(err)) unavailableReason = err.message;
+            count = 0;
+            logWarn('种植', `2x2 作物 ${seed.name} 当前不可种植，已切换其他优先种子: ${err.message}`, {
+              module: 'farm', event: '种植2x2作物', result: 'seed_locked',
+              strategy: 'bag_priority', seedId: seed.seedId, landIds: group.landIds,
+            });
+            break;
+          }
+          failed2x2Retries.set(`${group.key}:${seed.seedId}`, Date.now() + TWO_BY_TWO_RETRY_DELAY_MS);
+          logWarn('种植', `2x2 作物 ${seed.name} 种植失败: ${err.message}`, {
+            module: 'farm', event: '种植2x2作物', result: 'error',
+            seedId: seed.seedId, landIds: group.landIds,
+          });
+          break;
+        }
+      }
+
+      if (plantedForSeed > 0) {
+        totalPlanted += plantedForSeed;
+        batches.push(`${seed.name  }x${  plantedForSeed}`);
+        clearBagSeedUnavailable(accountId, seed.seedId);
+      } else if (unavailableReason) {
+        markBagSeedUnavailable(accountId, seed.seedId, unavailableReason);
+        log('种植', `2x2 背包种子 ${seed.name} 已进入不可种植冷却（${Math.round(SEED_UNAVAILABLE_COOLDOWN_MS / 60000)} 分钟内不再重试），冷却结束后按原顺序恢复`, {
+          module: 'farm', event: '种植2x2作物', result: 'skip_seed_unavailable',
+          strategy: 'bag_priority', seedId: seed.seedId, reason: unavailableReason,
+        });
+      }
+      continue;
+    }
+
+    // ── 1x1 种子：避开为更高优先级 2x2 种子预留的区域 ──
+    const targetLands = reservedLandIdSet.size > 0
+      ? remainingIds.filter(id => !reservedLandIdSet.has(Number(id)))
+      : remainingIds;
+    if (targetLands.length === 0) continue;
+
     const maxCount = Math.min(
       Number(seed.count || 0),
-      remainingIds.length
+      targetLands.length
     );
     if (maxCount <= 0) continue;
 
-    const plantResult = await plantSeeds(seed.seedId, remainingIds, { maxPlantCount: maxCount });
+    const plantResult = await plantSeeds(seed.seedId, targetLands, { maxPlantCount: maxCount });
     const occupiedIds = (Array.isArray(plantResult.occupiedLandIds) ? plantResult.occupiedLandIds : [])
       .map(Number).filter(id => id > 0);
     const plantedIds = (Array.isArray(plantResult.plantedLandIds) ? plantResult.plantedLandIds : [])
@@ -589,8 +878,26 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
       totalPlanted += plantResult.planted;
       totalOccupied += occupiedIds.length > 0 ? occupiedIds.length : plantResult.planted;
       allPlantedIds.push(...plantedIds);
+      // emptySet 必须跟着一起更新：后面的 2x2 种子靠它判断四格地是否真的空着，
+      // 否则会把刚种下 1x1 的地当成空的，凑出并不存在的 2x2 区域。
+      occupiedIds.forEach((id) => {
+        emptySet.delete(Number(id));
+        reservedLandIdSet.delete(Number(id));
+      });
       remainingIds = remainingIds.filter(id => !occupiedIds.includes(id));
       batches.push(`${seed.name  }x${  plantResult.planted}`);
+      clearBagSeedUnavailable(accountId, seed.seedId);
+    }
+
+    // 服务端判定该种子当前不可种植（如「格子已锁定」）：换种子继续，而不是
+    // 每轮对每块地重试。冷却期内不再尝试，也不会因此关闭第二优先策略。
+    if (plantResult.unavailable && plantResult.planted === 0) {
+      markBagSeedUnavailable(accountId, seed.seedId, plantResult.unavailableReason);
+      logWarn('种植', `背包种子 ${seed.name} 当前不可种植，已跳过并继续下一优先种子（${Math.round(SEED_UNAVAILABLE_COOLDOWN_MS / 60000)} 分钟内不再重试）: ${plantResult.unavailableReason}`, {
+        module: 'farm', event: '种植种子', result: 'skip_seed_unavailable',
+        seedId: seed.seedId, reason: plantResult.unavailableReason,
+      });
+      continue;
     }
 
     // 如果实际种植数少于请求数，避免误购商店种子
@@ -603,6 +910,19 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
     }
   }
 
+  const waitingSignature = [...new Set(waitingGroups)].sort().join('|');
+  if (waitingGroups.length > 0) {
+    if (waitingSignature !== last2x2WaitingSignature) {
+      log('种植', `已为 2x2 作物预留土地，等待区域清空: ${[...new Set(waitingGroups)].join(' | ')}`, {
+        module: 'farm', event: '预留2x2土地', result: 'waiting',
+        groups: [...new Set(waitingGroups)],
+      });
+    }
+    last2x2WaitingSignature = waitingSignature;
+  } else {
+    last2x2WaitingSignature = '';
+  }
+
   if (batches.length > 0) {
     log('种植', `已按背包优先策略种植: ${batches.join('，')}`, {
       module: 'farm', event: '种植种子', result: 'ok',
@@ -611,7 +931,9 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
   }
 
   return {
-    remainingLandIds: remainingIds,
+    // 交给第二优先策略的空地不包含 2x2 预留区，避免把等待中的四格地填成单格作物。
+    remainingLandIds: remainingIds.filter(id => !reservedLandIdSet.has(Number(id))),
+    reservedLandIds: [...reservedLandIdSet],
     fallbackAllowed,
     plantedLandIds: [...new Set(allPlantedIds)],
     totalPlanted,
@@ -729,8 +1051,9 @@ async function findBestSeedFromLocal(overrideStrategy, accountId = getCurrentAcc
     return null;
   }
 
+  const { plantable: plantableBagSeeds } = splitLockedBagSeeds(bagSeeds, accountId);
   const ownedSeedMap = new Map(
-    (Array.isArray(bagSeeds) ? bagSeeds : [])
+    plantableBagSeeds
       .filter(seed => Number(seed && seed.count) > 0)
       .map(seed => [Number(seed.seedId), seed])
   );
@@ -929,26 +1252,12 @@ async function autoPlantEmptyLands(deadLandIds, emptyLandIds, lands = []) {
       return result;
     }
   }
-  const size2Result = await plantPrioritized2x2Crops(allEmptyLands, lands, accountId);
-  const reservedLandSet = new Set(size2Result.reservedLandIds || []);
-  const normalEmptyLands = allEmptyLands.filter(id => !reservedLandSet.has(Number(id)));
-  result.reservedLandIds = [...reservedLandSet];
-  result.plantedLands.push(...(size2Result.plantedMasterIds || []));
-  result.plantedCount += Number(size2Result.plantedCount || 0);
-  result.occupiedCount += Number(size2Result.occupiedCount || 0);
-
-  if (size2Result.plantedMasterIds.length > 0) {
-    await runFertilizerByConfig(size2Result.plantedMasterIds);
-  }
-
-  if (allEmptyLands.length === 0) return result;
-  if (normalEmptyLands.length === 0) return result;
-
-  // 背包优先策略
+  // 背包优先策略：1x1 与 2x2 统一按「背包种子优先顺序」交错种植
+  // （2x2 是否参与由「优先种植四格作物」开关决定），因此这里不再单独跑一遍 2x2 优先。
   if (strategy === 'bag_priority') {
     let bagResult;
     try {
-      bagResult = await plantFromBagSeeds(normalEmptyLands, accountId);
+      bagResult = await plantFromBagSeeds(allEmptyLands, accountId, { lands });
     } catch (err) {
       logWarn('种植', `读取背包种子失败，本轮跳过第二优先策略以避免误购: ${err.message}`, {
         module: 'farm', event: '种植种子', result: 'bag_load_error'
@@ -956,6 +1265,7 @@ async function autoPlantEmptyLands(deadLandIds, emptyLandIds, lands = []) {
       return result;
     }
 
+    result.reservedLandIds = [...(bagResult.reservedLandIds || [])];
     const plantedLands = bagResult.plantedLandIds || [];
     result.plantedLands.push(...plantedLands);
     result.plantedCount += Number(bagResult.totalPlanted || 0);
@@ -982,6 +1292,21 @@ async function autoPlantEmptyLands(deadLandIds, emptyLandIds, lands = []) {
     }
     return result;
   }
+
+  const size2Result = await plantPrioritized2x2Crops(allEmptyLands, lands, accountId);
+  const reservedLandSet = new Set(size2Result.reservedLandIds || []);
+  const normalEmptyLands = allEmptyLands.filter(id => !reservedLandSet.has(Number(id)));
+  result.reservedLandIds = [...reservedLandSet];
+  result.plantedLands.push(...(size2Result.plantedMasterIds || []));
+  result.plantedCount += Number(size2Result.plantedCount || 0);
+  result.occupiedCount += Number(size2Result.occupiedCount || 0);
+
+  if (size2Result.plantedMasterIds.length > 0) {
+    await runFertilizerByConfig(size2Result.plantedMasterIds);
+  }
+
+  if (allEmptyLands.length === 0) return result;
+  if (normalEmptyLands.length === 0) return result;
 
   // 商店购买种植
   const fallbackStrategy = strategy === 'task_priority' ? getBagSeedFallbackStrategy(accountId) : undefined;
@@ -1103,9 +1428,15 @@ async function plantFromShop(landIds, userState, overrideStrategy, accountId = g
   // 执行种植
   let plantedLands = [];
   try {
-    const { planted, plantedLandIds, occupiedLandIds } =
-      await plantSeeds(finalSeedId, landIds, { maxPlantCount: plantCount });
+    const plantResult = await plantSeeds(finalSeedId, landIds, { maxPlantCount: plantCount });
+    const { planted, plantedLandIds, occupiedLandIds } = plantResult;
     const occupiedCount = occupiedLandIds.length > 0 ? occupiedLandIds.length : planted;
+    if (plantResult.unavailable && planted === 0) {
+      logWarn('种植', `${getPlantNameBySeedId(finalSeedId)} 当前不可种植，本轮跳过: ${plantResult.unavailableReason}`, {
+        module: 'farm', event: '种植种子', result: 'skip_seed_unavailable',
+        seedId: finalSeedId, reason: plantResult.unavailableReason
+      });
+    }
     if (planted > 0) {
       if (plantSize > 1) {
         log('种植', `已种植 ${planted} 组 ${plantSize}x${plantSize} 作物，占用 ${occupiedCount} 块地 (${occupiedLandIds.join(',')})`, {
@@ -1144,6 +1475,12 @@ module.exports = {
   PLANTING_STRATEGY_LABELS,
   getPlantingStrategyLabel,
   sortBagSeedsForPlanting,
+  splitLockedBagSeeds,
+  isSeedUnavailableError,
+  markBagSeedUnavailable,
+  isBagSeedUnavailable,
+  clearBagSeedUnavailable,
+  getUnavailableBagSeeds,
   plantFromBagSeeds,
   findBestSeed,
   getAvailableSeeds,

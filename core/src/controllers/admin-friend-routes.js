@@ -115,10 +115,8 @@ function registerAdminFriendRoutes({
   });
 
   app.get("/api/interact-records", async (req, res) => {
-    const accountId = getAccountIdFromRequest(req);
-    if (!accountId) {
-      return res.status(400).json({ ok: false, error: "Missing x-account-id" });
-    }
+    const accountId = getAccountOrRespond(req, res, access);
+    if (!accountId) return;
 
     try {
       const data = await provider.getInteractRecords(accountId);

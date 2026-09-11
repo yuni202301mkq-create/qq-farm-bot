@@ -5,6 +5,17 @@ const {
 } = require('../services/account-resolver');
 const { getSchedulerRegistrySnapshot } = require('../services/scheduler');
 
+// 被视为"启动/连接失败"的账号日志动作：
+// 账号处于未运行状态且最近一条日志命中了这些动作时，前端会提示"启动失败 / 重新获取"。
+const START_FAILURE_ACTIONS = new Set([
+    'start_failed',            // 子进程创建失败
+    'worker_unexpected_exit',  // 启动后进程立即退出
+    'ws_400',                  // 登录失效（通常是 Code 无效/过期）
+    'ws_reconnect_failed',     // 断线重连失败
+    'auto_relogin_blocked',    // 自动重登被熔断
+    'auto_code_refresh_failed' // 自动刷新 Code 失败
+]);
+
 /**
  * 创建数据提供器 —— 封装对 Worker 的 API 调用，供 Admin Server 使用
  */
@@ -284,9 +295,10 @@ function createDataProvider(deps) {
                 goldenBugKeepCount: s.goldenBugKeepCount,
                 goldenBugRoundLimit: s.goldenBugRoundLimit,
                 autoAcceptFriendMinLevel: s.autoAcceptFriendMinLevel,
+                bagSeedFallbackStrategy: s.bagSeedFallbackStrategy,
                 bagSeedPriority: s.bagSeedPriority,
                 bagSeedKnownIds: s.bagSeedKnownIds,
-                bagSeedFallbackStrategy: s.bagSeedFallbackStrategy,
+                bagSeedExcludedIds: s.bagSeedExcludedIds,
             };
             store.applyConfigSnapshot(patch, { accountId: id });
             const rev = nextConfigRevision();
@@ -310,6 +322,7 @@ function createDataProvider(deps) {
                 goldenBugRoundLimit: store.getConfigSnapshot(id).goldenBugRoundLimit,
                 autoAcceptFriendMinLevel: store.getAutoAcceptFriendMinLevel(id),
                 bagSeedPriority: store.getBagSeedPriority(id),
+                bagSeedExcludedIds: store.getBagSeedExcludedIds(id),
                 bagSeedFallbackStrategy: store.getBagSeedFallbackStrategy(id),
                 configRevision: rev
             };
@@ -369,6 +382,27 @@ function createDataProvider(deps) {
                 delete acc.accesstoken;
                 if (worker && worker.status && worker.status.status && worker.status.status.name) {
                     acc.nick = worker.status.status.name;
+                }
+                // 账号未运行且最近一次状态事件是启动/连接失败时，暴露 startError 供前端提示
+                if (!acc.running && Array.isArray(accountLogs) && accountLogs.length > 0) {
+                    const targetId = String(acc.id || '');
+                    let latest = null;
+                    for (let i = accountLogs.length - 1; i >= 0; i--) {
+                        const log = accountLogs[i];
+                        if (!log) continue;
+                        if (String(log.accountId || '') !== targetId) continue;
+                        latest = log;
+                        break;
+                    }
+                    if (latest && START_FAILURE_ACTIONS.has(String(latest.action || ''))) {
+                        // 优先使用人类可读的 msg（如"登录失效，请更新 Code"），
+                        // 其次才回退到 reason（可能是 ws_400 这类内部标记）
+                        const reason = String(
+                            (latest && (latest.msg || latest.reason)) || '启动失败，请查看日志'
+                        ).trim();
+                        acc.startError = reason.slice(0, 200);
+                        acc.startErrorAt = latest.ts || 0;
+                    }
                 }
             });
             return data;

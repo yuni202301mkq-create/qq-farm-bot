@@ -1,4 +1,4 @@
-import { useStorage } from '@vueuse/core'
+import { StorageSerializers, useStorage } from '@vueuse/core'
 import axios from 'axios'
 import NProgress from 'nprogress'
 import { createRouter, createWebHistory } from 'vue-router'
@@ -8,35 +8,40 @@ import 'nprogress/nprogress.css'
 NProgress.configure({ showSpinner: false })
 
 const adminToken = useStorage('admin_token', '')
-const userInfo = useStorage('user_info', '')
-let sessionPromise: Promise<boolean> | null = null
-let sessionBootstrapAttempted = false
+const userInfo = useStorage<Record<string, any> | null>('user_info', null, undefined, { serializer: StorageSerializers.object })
 
-async function ensureAdminSession() {
-  // 管理页面采用宽松鉴权：已有 token 时直接放行，不在导航时重复校验。
-  if (adminToken.value || sessionBootstrapAttempted)
+const PUBLIC_PATHS = new Set(['/login'])
+
+function clearSession() {
+  adminToken.value = ''
+  userInfo.value = null
+}
+
+/** 用本地 token 校验会话是否有效，有效则刷新本地用户信息 */
+async function verifySession(): Promise<boolean> {
+  const token = adminToken.value
+  if (!token)
+    return false
+  try {
+    const { data } = await axios.get('/api/user/me', {
+      headers: { 'x-admin-token': token },
+      timeout: 6000,
+    })
+    if (!data?.ok)
+      return false
+    userInfo.value = {
+      username: data.data.username,
+      role: data.data.role === 'super_admin' ? 'super_admin' : 'user',
+      card: data.data.card ?? null,
+      accountLimit: data.data.accountLimit ?? 2,
+      expiresAt: data.data.expiresAt ?? null,
+      mustChangePassword: false,
+    }
     return true
-
-  if (!sessionPromise) {
-    sessionBootstrapAttempted = true
-    sessionPromise = axios.post('/api/auto-login', {}, { timeout: 6000 })
-      .then(({ data }) => {
-        if (!data?.ok)
-          return false
-        adminToken.value = data.data.token
-        userInfo.value = JSON.stringify({
-          username: 'admin',
-          role: 'admin',
-          card: null,
-          accountLimit: data.data.accountLimit,
-          mustChangePassword: false,
-        })
-        return true
-      })
-      .catch(() => false)
-      .finally(() => { sessionPromise = null })
   }
-  return sessionPromise
+  catch {
+    return false
+  }
 }
 
 const router = createRouter({
@@ -51,16 +56,38 @@ const router = createRouter({
         component: route.component,
       })),
     },
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/AuthView.vue'),
+    },
     { path: '/admin', redirect: '/settings?tab=system' },
-    { path: '/login', redirect: '/' },
-    { path: '/renewal', redirect: '/' },
+    { path: '/renewal', redirect: '/login?mode=renew' },
+    { path: '/register', redirect: '/login?mode=register' },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 
-router.beforeEach(async () => {
+router.beforeEach(async (to) => {
   NProgress.start()
-  await ensureAdminSession()
+
+  // 登录页：已登录则直接进入应用（注册/续费模式除外，方便已登录用户用卡密续费）
+  if (PUBLIC_PATHS.has(to.path)) {
+    const cardMode = to.query.mode === 'renew' || to.query.mode === 'register'
+    if (!cardMode && adminToken.value && await verifySession())
+      return '/'
+    return true
+  }
+
+  // 其他页面都需要有效会话
+  if (!adminToken.value) {
+    clearSession()
+    return '/login'
+  }
+  if (!(await verifySession())) {
+    clearSession()
+    return '/login'
+  }
   return true
 })
 

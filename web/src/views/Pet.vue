@@ -243,7 +243,7 @@ onMounted(load)
           </div>
         </section>
 
-        <section class="ui-card flex flex-col rounded-lg lg:min-h-0 lg:overflow-hidden">
+        <section class="ui-card min-h-0 flex flex-col overflow-hidden rounded-lg">
           <div class="shrink-0 border-b border-gray-200 p-3 dark:border-gray-700 sm:p-4">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">

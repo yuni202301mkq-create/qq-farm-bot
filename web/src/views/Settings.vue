@@ -3,10 +3,12 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
 import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
+import CardKeyPanel from '@/components/admin/CardKeyPanel.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
 import AccountSettingsTab from '@/components/settings/AccountSettingsTab.vue'
 import AutoCodeRefreshCard from '@/components/settings/AutoCodeRefreshCard.vue'
+import ChangePasswordCard from '@/components/settings/ChangePasswordCard.vue'
 import DeviceProtocolCard from '@/components/settings/DeviceProtocolCard.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -16,13 +18,15 @@ import { useStrategySettings } from '@/composables/settings/useStrategySettings'
 import { useUserSettings } from '@/composables/settings/useUserSettings'
 import { useAdminSystemConfig } from '@/composables/useAdminSystemConfig'
 import { useSettingStore } from '@/stores/setting'
+import { useUserStore } from '@/stores/user'
 
 const settingStore = useSettingStore()
+const userStore = useUserStore()
 const route = useRoute()
 
-type SettingsTabKey = 'account' | 'account-config' | 'notification' | 'system'
+type SettingsTabKey = 'account' | 'account-config' | 'notification' | 'usermgmt' | 'system' | 'cardkey'
 
-const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'account-config', 'notification', 'system']
+const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'account-config', 'notification', 'usermgmt', 'system', 'cardkey']
 const LEGACY_SETTINGS_TABS: Record<string, SettingsTabKey> = {
   'strategy': 'account-config',
   'automation': 'account-config',
@@ -59,12 +63,24 @@ watch(activeTab, (newTab) => {
   void scrollActiveTabIntoView()
 })
 
-const tabs = [
-  { key: 'account', label: '账号管理', icon: 'i-carbon-user-settings' },
-  { key: 'account-config', label: '账号设置', icon: 'i-carbon-settings-adjust' },
-  { key: 'notification', label: '通知设置', icon: 'i-carbon-notification' },
-  { key: 'system', label: '系统配置', icon: 'i-carbon-settings-services' },
-] as const
+// 普通用户没有系统配置/卡密设置页签，避免停留在不可见的 tab 上
+watch(() => userStore.isSuperAdmin, (isSuper) => {
+  if (!isSuper && (activeTab.value === 'system' || activeTab.value === 'cardkey'))
+    activeTab.value = 'account'
+}, { immediate: true })
+
+const tabs = computed(() => {
+  const all = [
+    { key: 'account', label: '账号管理', icon: 'i-carbon-user-settings' },
+    { key: 'account-config', label: '账号设置', icon: 'i-carbon-settings-adjust' },
+    { key: 'notification', label: '通知设置', icon: 'i-carbon-notification' },
+    { key: 'usermgmt', label: '用户管理', icon: 'i-carbon-user' },
+    { key: 'system', label: '系统配置', icon: 'i-carbon-settings-services' },
+    { key: 'cardkey', label: '卡密设置', icon: 'i-carbon-ticket' },
+  ] as const
+  // 系统配置与卡密设置仅超级管理员可见；用户管理所有登录用户可见
+  return userStore.isSuperAdmin ? all : all.filter(tab => tab.key !== 'system' && tab.key !== 'cardkey')
+})
 
 const modalVisible = ref(false)
 const defaultPlanSettingId = ref('')
@@ -191,6 +207,7 @@ const {
   plantingStrategyOptions,
   bagFallbackStrategyOptions,
   strategyPreviewLabel,
+  strategyPreviewLoading,
   loadStrategyData,
   resetStrategyState,
 } = useStrategySettings({
@@ -366,8 +383,20 @@ watch(currentAccountId, async () => {
   }
 })
 
+// 账号启动/停止后，种子列表（进而「策略选种预览」）需要重新获取。
+// 未启动时后端会返回「账号未运行」，此时预览显示提示文案；启动后自动刷新成真实结果。
+watch(() => accounts.value.find((a: any) => String(a.id) === String(currentAccountId.value || ''))?.running, async (running, previous) => {
+  if (running === previous)
+    return
+  if (!currentAccountId.value)
+    return
+  await loadStrategyData()
+})
+
 onMounted(async () => {
-  await Promise.all([loadSystemConfig(), loadCaptureConfig()])
+  // 系统配置/抓包配置仅超管可见，普通用户不请求，避免 403 报错弹窗
+  if (userStore.isSuperAdmin)
+    await Promise.all([loadSystemConfig(), loadCaptureConfig()])
   await fetchAccounts()
   await fetchDeviceProtocol()
   selectFirstAccountIfNeeded()
@@ -459,6 +488,7 @@ onMounted(async () => {
           :planting-strategy-options="plantingStrategyOptions"
           :bag-fallback-strategy-options="bagFallbackStrategyOptions"
           :strategy-preview-label="strategyPreviewLabel"
+          :strategy-preview-loading="strategyPreviewLoading"
           :fertilizer-land-type-options="fertilizerLandTypeOptions"
           :fertilizer-options="fertilizerOptions"
           @save="saveCurrentAccountSettings"
@@ -488,6 +518,18 @@ onMounted(async () => {
             @open-docs="openChannelDocs"
             @test="handleTestOffline"
           />
+        </div>
+
+        <div v-else-if="activeTab === 'usermgmt'" class="space-y-4">
+          <div>
+            <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
+              用户管理
+            </h3>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              管理登录账号，修改登录密码。
+            </p>
+          </div>
+          <ChangePasswordCard />
         </div>
 
         <div v-else-if="activeTab === 'system'" class="space-y-5">
@@ -559,6 +601,18 @@ onMounted(async () => {
             :capture-config-testing="captureConfigTesting"
             @test-capture="handleTestCaptureConfig"
           />
+        </div>
+
+        <div v-else-if="activeTab === 'cardkey'" class="space-y-4">
+          <div>
+            <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
+              卡密设置
+            </h3>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              生成注册 / 续期卡密，管理用户账号和有效期。
+            </p>
+          </div>
+          <CardKeyPanel v-if="userStore.isSuperAdmin" />
         </div>
       </div>
     </div>

@@ -5,12 +5,14 @@ import { computed, ref, watch } from 'vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useAccountStore } from '@/stores/account'
 import { useBagStore } from '@/stores/bag'
+import { useSeedLockStore } from '@/stores/seed-lock'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { formatCurrencyAmountByLabel, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
 
 const accountStore = useAccountStore()
 const bagStore = useBagStore()
+const seedLockStore = useSeedLockStore()
 const statusStore = useStatusStore()
 const toastStore = useToastStore()
 
@@ -78,6 +80,12 @@ const batchMode = ref(false)
 const selectedForBatch = ref<Set<number>>(new Set())
 const batchSellResult = ref<{ gold: number, goldBean: number } | null>(null)
 
+const lockBatchMode = ref(false)
+const lockBusy = ref(false)
+const selectedForLock = ref<Set<number>>(new Set())
+
+const selectedSeedCount = computed(() => selectedForLock.value.size)
+
 const selectedSellableCount = computed(() => {
   return selectedForBatch.value.size
 })
@@ -97,14 +105,68 @@ function canSell(item: any) {
 }
 
 function canBatchSell(item: any) {
-  return canSell(item) && Number(item.count || 0) > 0
+  return canSell(item) && Number(item.count || 0) > 0 && !isItemLocked(item)
 }
 
 function canUse(item: any) {
   return Boolean(item?.usable) || Number(item?.itemType || 0) === 11
 }
 
+function isSeedItem(item: any) {
+  return getItemCategory(item) === 'seed'
+}
+
+function isItemLocked(item: any) {
+  return isSeedItem(item) && seedLockStore.isLocked(Number(item.id))
+}
+
+async function toggleSeedLock(item: any) {
+  const id = Number(item.id)
+  try {
+    if (isItemLocked(item)) {
+      await seedLockStore.unlockSeedIds(id)
+      toastStore.success(`已解锁 ${item.name || '种子'}`)
+    }
+    else {
+      await seedLockStore.lockSeedIds(id)
+      toastStore.success(`已锁定 ${item.name || '种子'}，出售时将被跳过`)
+    }
+  }
+  catch (e: any) {
+    toastStore.error(`操作失败: ${e?.message || '未知错误'}`)
+  }
+}
+
+async function applyBatchLock(lock: boolean) {
+  if (!currentAccountId.value)
+    return
+  const ids = Array.from(selectedForLock.value)
+  if (!ids.length) {
+    toastStore.warning('请先选择种子')
+    return
+  }
+  lockBusy.value = true
+  try {
+    if (lock)
+      await seedLockStore.lockSeedIds(ids)
+    else
+      await seedLockStore.unlockSeedIds(ids)
+    toastStore.success(`已${lock ? '锁定' : '解锁'} ${ids.length} 种种子`)
+    selectedForLock.value.clear()
+  }
+  catch (e: any) {
+    toastStore.error(`${lock ? '锁定' : '解锁'}失败: ${e?.message || '未知错误'}`)
+  }
+  finally {
+    lockBusy.value = false
+  }
+}
+
 function handleSellClick(item: any) {
+  if (isItemLocked(item)) {
+    toastStore.warning(`${item.name || '该种子'} 已锁定，请先解锁后再出售`)
+    return
+  }
   if (batchMode.value) {
     const isSelected = selectedForBatch.value.has(Number(item.id))
     if (isSelected) {
@@ -251,6 +313,34 @@ function toggleBatchMode() {
   }
 }
 
+function toggleLockBatchMode() {
+  lockBatchMode.value = !lockBatchMode.value
+  if (!lockBatchMode.value)
+    selectedForLock.value.clear()
+}
+
+function selectAllSeeds() {
+  selectedForLock.value.clear()
+  for (const item of filteredItems.value) {
+    if (isSeedItem(item))
+      selectedForLock.value.add(Number(item.id))
+  }
+}
+
+function handleLockClick(item: any) {
+  if (!isSeedItem(item))
+    return
+  if (lockBatchMode.value) {
+    const id = Number(item.id)
+    if (selectedForLock.value.has(id))
+      selectedForLock.value.delete(id)
+    else
+      selectedForLock.value.add(id)
+    return
+  }
+  toggleSeedLock(item)
+}
+
 function selectAllSellable() {
   selectedForBatch.value.clear()
   for (const item of filteredItems.value) {
@@ -346,7 +436,9 @@ watch(currentAccountId, (newId, oldId) => {
     bagLoaded.value = false
     bagStore.clearBag()
     statusStore.clearAccountScopedData()
+    seedLockStore.clearSeedLockData()
   }
+  seedLockStore.fetchSeedLocks()
   loadBag()
 }, { immediate: true })
 
@@ -449,6 +541,50 @@ useIntervalFn(loadBag, 60000)
             </button>
           </template>
         </template>
+
+        <template v-if="selectedCategory === 'seed' || selectedCategory === 'all'">
+          <button
+            class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+            :class="lockBatchMode
+              ? 'bg-amber-500 text-white dark:bg-amber-600'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
+            @click="toggleLockBatchMode"
+          >
+            <div v-if="lockBatchMode" class="i-carbon-close mr-1 inline-block" />
+            <div v-else class="i-carbon-locked mr-1 inline-block" />
+            {{ lockBatchMode ? '取消锁种' : '批量锁种' }}
+          </button>
+          <template v-if="lockBatchMode">
+            <button
+              class="rounded-lg bg-blue-500 px-3 py-1.5 text-sm text-white font-medium transition dark:bg-blue-600 hover:bg-blue-600 dark:hover:bg-blue-700"
+              @click="selectAllSeeds"
+            >
+              全选
+            </button>
+            <button
+              class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+              :class="selectedSeedCount > 0 && !lockBusy
+                ? 'bg-amber-500 text-white hover:bg-amber-600 dark:bg-amber-600 dark:hover:bg-amber-700'
+                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'"
+              :disabled="selectedSeedCount === 0 || lockBusy"
+              @click="applyBatchLock(true)"
+            >
+              <div class="i-carbon-locked mr-1 inline-block" />
+              锁定 ({{ selectedSeedCount }})
+            </button>
+            <button
+              class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+              :class="selectedSeedCount > 0 && !lockBusy
+                ? 'bg-gray-600 text-white hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-400'
+                : 'bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500'"
+              :disabled="selectedSeedCount === 0 || lockBusy"
+              @click="applyBatchLock(false)"
+            >
+              <div class="i-carbon-unlocked mr-1 inline-block" />
+              解锁 ({{ selectedSeedCount }})
+            </button>
+          </template>
+        </template>
       </div>
 
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-5 md:grid-cols-4 sm:grid-cols-3 xl:grid-cols-6">
@@ -459,17 +595,45 @@ useIntervalFn(loadBag, 60000)
           :class="{
             'ring-2 ring-orange-500 dark:ring-orange-400': batchMode && selectedForBatch.has(Number(item.id)),
             'opacity-50': batchMode && canBatchSell(item) && !selectedForBatch.has(Number(item.id)),
+            'ring-2 ring-amber-400 dark:ring-amber-500': isItemLocked(item),
+            'ring-2 ring-amber-500 dark:ring-amber-400': lockBatchMode && isSeedItem(item) && selectedForLock.has(Number(item.id)),
           }"
-          @click="batchMode && canBatchSell(item) && handleSellClick(item)"
+          @click="lockBatchMode
+            ? (isSeedItem(item) && handleLockClick(item))
+            : (batchMode && canBatchSell(item) && handleSellClick(item))"
         >
           <div class="absolute left-2 top-2 text-xs text-gray-400 font-mono">
             #{{ item.id }}
           </div>
 
           <div class="absolute right-1 top-1 flex gap-1">
-            <template v-if="!batchMode">
+            <!-- 批量锁种模式：种子显示勾选框 -->
+            <template v-if="lockBatchMode">
+              <div
+                v-if="isSeedItem(item)"
+                class="h-5 w-5 flex items-center justify-center border-2 rounded transition"
+                :class="selectedForLock.has(Number(item.id))
+                  ? 'border-amber-500 bg-amber-500 text-white'
+                  : 'border-gray-300 bg-white dark:border-gray-600 dark:bg-gray-700'"
+              >
+                <div v-if="selectedForLock.has(Number(item.id))" class="i-carbon-checkmark text-xs" />
+              </div>
+            </template>
+            <!-- 普通模式 -->
+            <template v-else-if="!batchMode">
               <button
-                v-if="canSell(item)"
+                v-if="isSeedItem(item)"
+                class="flex items-center justify-center rounded px-1 py-0.5 text-[10px] transition"
+                :class="isItemLocked(item)
+                  ? 'bg-amber-400 text-white opacity-90 hover:opacity-100 dark:bg-amber-500'
+                  : 'bg-gray-200 text-gray-500 opacity-70 hover:opacity-100 dark:bg-gray-600 dark:text-gray-300'"
+                :title="isItemLocked(item) ? '解锁（解锁后可出售）' : '锁定（防止被出售）'"
+                @click.stop="handleLockClick(item)"
+              >
+                <div :class="isItemLocked(item) ? 'i-carbon-locked' : 'i-carbon-unlocked'" />
+              </button>
+              <button
+                v-if="canSell(item) && !isItemLocked(item)"
                 class="rounded bg-red-500 px-1.5 py-0.5 text-[10px] text-white opacity-70 transition dark:bg-red-600 hover:opacity-100"
                 title="出售全部"
                 @click.stop="handleSellClick(item)"
@@ -531,6 +695,7 @@ useIntervalFn(loadBag, 60000)
               <span v-if="getItemCategory(item) === 'seed' && Number(item.rarity) >= 2"> · 稀有</span>
               <span v-else-if="item.level > 0"> · Lv{{ item.level }}</span>
               <span v-if="item.price > 0" :class="getPriceClass(item)"> · {{ item.price }}{{ item.priceUnit || '金' }}</span>
+              <span v-if="isItemLocked(item)" class="text-amber-500 dark:text-amber-400"> · 已锁定</span>
             </span>
           </div>
 

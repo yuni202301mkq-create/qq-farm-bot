@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import BagSeedPriority from '@/components/settings/BagSeedPriority.vue'
+import BagSeedPriorityPanel from '@/components/settings/BagSeedPriorityPanel.vue'
 import StrategyTimingPanel from '@/components/settings/StrategyTimingPanel.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -15,6 +15,7 @@ interface StrategySettings {
   prioritize2x2Crops: boolean
   prioritizeGrowthTasks: boolean
   bagSeedPriority: number[]
+  bagSeedExcludedIds: number[]
   bagSeedFallbackStrategy: string
   intervals: {
     farmMin: number
@@ -37,6 +38,7 @@ withDefaults(defineProps<{
   plantingStrategyOptions: SelectOption[]
   bagFallbackStrategyOptions: SelectOption[]
   strategyPreviewLabel: string | null
+  strategyPreviewLoading?: boolean
   title?: string
   saveLabel?: string
   showActions?: boolean
@@ -46,6 +48,7 @@ withDefaults(defineProps<{
   saveLabel: '保存策略设置',
   showActions: true,
   timingSection: 'all',
+  strategyPreviewLoading: false,
 })
 
 const emit = defineEmits<{
@@ -68,6 +71,13 @@ function selectBagFallbackStrategy(value: string | number) {
 
 function isBagFallbackStrategySelected(value: string | number) {
   return settings.value.bagSeedFallbackStrategy === value
+}
+
+// 「背包种子优先顺序」面板在排序/移出/放回时回传最新值，
+// 这里同步进 model，让外层「保存并关闭」一并落库。
+function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds: number[] }) {
+  settings.value.bagSeedPriority = [...payload.priority]
+  settings.value.bagSeedExcludedIds = [...payload.excludedIds]
 }
 </script>
 
@@ -109,13 +119,15 @@ function isBagFallbackStrategySelected(value: string | number) {
             class="w-full flex items-center justify-between border border-gray-200 rounded-lg border-dashed bg-gray-50 px-3 py-2 text-gray-500 dark:border-gray-600 dark:bg-gray-800/50 dark:text-gray-400"
             title="根据当前策略自动匹配，仅供预览"
           >
-            <span class="truncate">{{ strategyPreviewLabel ?? '加载中...' }}</span>
+            <span v-if="strategyPreviewLoading" class="flex items-center gap-2 truncate">
+              <span class="i-svg-spinners-ring-resize shrink-0 text-sm" />
+              <span class="truncate">加载中...</span>
+            </span>
+            <span v-else class="truncate">{{ strategyPreviewLabel || '暂无匹配种子' }}</span>
             <div class="i-carbon-information shrink-0 text-base text-gray-400" />
           </div>
         </div>
       </div>
-
-      <BagSeedPriority v-if="settings.plantingStrategy === 'bag_priority'" :key="currentAccountId" v-model="settings.bagSeedPriority" :account-id="currentAccountId" />
 
       <div v-if="['bag_priority', 'task_priority'].includes(settings.plantingStrategy)" class="flex flex-col gap-2">
         <label class="text-sm text-gray-700 font-medium dark:text-gray-300">
@@ -145,6 +157,16 @@ function isBagFallbackStrategySelected(value: string | number) {
           </button>
         </div>
       </div>
+
+      <!-- 背包种子优先顺序：插在「第二优先策略」与「农场巡查频率」之间 -->
+      <BagSeedPriorityPanel
+        v-if="settings.plantingStrategy === 'bag_priority'"
+        :current-account-id="currentAccountId"
+        :priority="settings.bagSeedPriority"
+        :excluded-ids="settings.bagSeedExcludedIds"
+        :saving="saving"
+        @change="handleBagSeedPriorityChange"
+      />
 
       <StrategyTimingPanel v-model:settings="settings" :section="timingSection" />
 

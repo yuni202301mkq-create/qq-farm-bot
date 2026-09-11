@@ -150,6 +150,14 @@ function accountAvatar(acc: any) {
                 >
                   {{ getPlatformLabel(acc.platform) }}
                 </span>
+                <span
+                  v-if="userIsAdmin && acc.username"
+                  class="rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-purple-600 dark:bg-purple-900/30 dark:text-purple-300"
+                  :title="`归属用户：${acc.username}`"
+                >
+                  <span class="i-carbon-user mr-0.5 inline-block align-[-1px]" />
+                  {{ acc.username }}
+                </span>
               </div>
             </div>
           </div>
@@ -158,7 +166,29 @@ function accountAvatar(acc: any) {
               <div class="h-2 w-2 rounded-full" :class="acc.running ? 'bg-green-500' : 'bg-gray-300'" />
               {{ acc.running ? '运行中' : '已停止' }}
             </span>
+            <template v-if="acc.startError && !acc.running">
+              <button
+                type="button"
+                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 active:scale-95 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                :disabled="isAccountOpsDisabled"
+                :title="acc.startError"
+                @click.stop="emit('toggle', acc)"
+              >
+                <div class="i-carbon-warning-alt" />
+                启动失败
+              </button>
+              <button
+                type="button"
+                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-red-600 underline-offset-2 transition-colors hover:underline focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-400"
+                :disabled="isAccountOpsDisabled"
+                :title="`重新获取 ${acc.platform === 'wx' ? '微信Code并' : ''}启动账号`"
+                @click.stop="emit('toggle', acc)"
+              >
+                重新获取
+              </button>
+            </template>
             <BaseButton
+              v-else
               variant="secondary"
               size="sm"
               class="border rounded-full shadow-sm transition-all duration-500 ease-in-out sm:w-20 active:scale-95"

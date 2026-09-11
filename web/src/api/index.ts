@@ -57,8 +57,12 @@ api.interceptors.response.use((response) => {
       }
       toast.error(`服务器错误 ${error.response.status} ${error.response.statusText}`)
     }
+    else if (error.response.status === 404) {
+      toast.error('接口不存在（404），请将服务端更新到最新版本并重启')
+    }
     else {
-      toast.error('请求失败，请联系管理员')
+      const backendError = String(error.response.data?.error || error.response.data?.message || '').trim()
+      toast.error(backendError || `请求失败 (${error.response.status})`)
     }
   }
   else if (error.request) {

@@ -131,6 +131,10 @@ function buildSettingsPayload(store, accountId, currentUser) {
     bagSeedKnownIds: Array.isArray(accountConfig.bagSeedKnownIds)
       ? accountConfig.bagSeedKnownIds
       : [],
+    bagSeedExcludedIds:
+      accountId && typeof store.getBagSeedExcludedIds === "function"
+        ? store.getBagSeedExcludedIds(accountId)
+        : [],
     bagSeedFallbackStrategy:
       accountId && typeof store.getBagSeedFallbackStrategy === "function"
         ? store.getBagSeedFallbackStrategy(accountId)

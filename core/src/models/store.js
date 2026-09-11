@@ -413,7 +413,7 @@ const DEFAULT_INTERVALS = {
 
 /** 默认静默时段 */
 const DEFAULT_QUIET_HOURS = {
-    enabled: false,
+    enabled: true,
     start: '01:00',
     end: '07:30'
 };
@@ -448,6 +448,7 @@ const DEFAULT_ACCOUNT_CONFIG = {
     knownFriendGids: [],
     friendBlacklist: [],
     plantBlacklist: DEFAULT_PLANT_BLACKLIST,
+    seedLocks: [],
     fertilizerBuyOrganicCount: 1,
     fertilizerBuyOrganicThresholdHours: 10,
     fertilizerBuyNormalCount: 1,
@@ -455,6 +456,7 @@ const DEFAULT_ACCOUNT_CONFIG = {
     fertilizerBuyCheckIntervalMinutes: 60,
     bagSeedPriority: [],
     bagSeedKnownIds: [],
+    bagSeedExcludedIds: [],
     bagSeedFallbackStrategy: 'level',
     autoAcceptFriendMinLevel: 0,
     goldenBugKeepCount: 0,
@@ -490,6 +492,11 @@ function normalizeBagSeedPriority(rawList) {
     return result;
 }
 
+// 被移出「背包种子优先顺序」的种子：不参与背包优先种植，但仍留在背包中。
+function normalizeBagSeedExcludedIds(rawList) {
+    return normalizeBagSeedPriority(rawList);
+}
+
 function syncBagSeedPriority(accountId, bagSeeds, options = {}) {
     const cfg = getAccountConfigSnapshot(accountId);
     const currentSeeds = (Array.isArray(bagSeeds) ? bagSeeds : [])
@@ -503,20 +510,37 @@ function syncBagSeedPriority(accountId, bagSeeds, options = {}) {
             plantingPriority: Number(seed && seed.plantingPriority) || 0,
             plantSize: Number(seed && seed.plantSize) || 1,
         }))
-        .filter(seed => seed.seedId > 0 && seed.count > 0 && seed.plantSize === 1)
+        .filter(seed => seed.seedId > 0 && seed.count > 0 && (seed.plantSize === 1 || seed.plantSize === 2))
         .sort(compareBagSeedGameOrder);
     const currentIds = currentSeeds.map(seed => seed.seedId);
     const priority = normalizeBagSeedPriority(cfg.bagSeedPriority);
     const knownIds = normalizeBagSeedPriority(cfg.bagSeedKnownIds);
-    const nextPriority = [...priority, ...currentIds.filter(id => !priority.includes(id))];
+    const excludedIds = normalizeBagSeedExcludedIds(cfg.bagSeedExcludedIds);
+    const excludedSet = new Set(excludedIds);
 
-    const nextKnownIds = [...new Set([...knownIds, ...priority, ...currentIds])];
+    // 保留用户自定义的顺序：先取仍存在于背包中、且未被移出的已排种子，
+    // 再把「新出现」的背包种子按游戏顺序追加到末尾。
+    // 这样用户的排序与「移出优先列表」不会被每次同步抹掉。
+    const currentIdSet = new Set(currentIds);
+    const nextPriority = priority.filter(id => currentIdSet.has(id) && !excludedSet.has(id));
+    for (const id of currentIds) {
+        if (excludedSet.has(id)) continue;
+        if (!nextPriority.includes(id)) nextPriority.push(id);
+    }
+
+    // 背包中已不存在、或已被移出的种子，不再算作「已知」。
+    const nextKnownIds = [...new Set([...knownIds, ...priority, ...currentIds])]
+        .filter(id => currentIdSet.has(id) && !excludedSet.has(id));
+    const nextExcludedIds = excludedIds.filter(id => currentIdSet.has(id));
+
     const changed = JSON.stringify(nextPriority) !== JSON.stringify(priority)
-        || JSON.stringify(nextKnownIds) !== JSON.stringify(knownIds);
+        || JSON.stringify(nextKnownIds) !== JSON.stringify(knownIds)
+        || JSON.stringify(nextExcludedIds) !== JSON.stringify(excludedIds);
     if (changed) {
         applyConfigSnapshot({
             bagSeedPriority: nextPriority,
             bagSeedKnownIds: nextKnownIds,
+            bagSeedExcludedIds: nextExcludedIds,
         }, {
             accountId,
             persist: options.persist !== false,
@@ -527,6 +551,7 @@ function syncBagSeedPriority(accountId, bagSeeds, options = {}) {
         seeds: currentSeeds,
         priority: nextPriority,
         knownIds: nextKnownIds,
+        excludedIds: nextExcludedIds,
         changed,
     };
 }
@@ -666,6 +691,7 @@ function cloneAccountConfig(config = DEFAULT_ACCOUNT_CONFIG) {
     const friendBlacklist = Array.isArray(config.friendBlacklist) ? config.friendBlacklist : [];
     const knownFriendGids = normalizeKnownFriendGids(config.knownFriendGids);
     const plantBlacklist = Array.isArray(config.plantBlacklist) ? config.plantBlacklist : [];
+    const seedLocks = Array.isArray(config.seedLocks) ? config.seedLocks : [];
 
     return {
         ...config,
@@ -683,6 +709,7 @@ function cloneAccountConfig(config = DEFAULT_ACCOUNT_CONFIG) {
         prioritize2x2Crops: config.prioritize2x2Crops === true,
         prioritizeGrowthTasks: config.prioritizeGrowthTasks === true,
         plantBlacklist: plantBlacklist.map(Number).filter(n => Number.isFinite(n) && n > 0),
+        seedLocks: seedLocks.map(Number).filter(n => Number.isFinite(n) && n > 0),
         fertilizerBuyOrganicCount: Math.max(0, Math.min(999, Number(config.fertilizerBuyOrganicCount) || 1)),
         fertilizerBuyOrganicThresholdHours: Math.max(0, Math.min(720, Number(config.fertilizerBuyOrganicThresholdHours) || 10)),
         fertilizerBuyNormalCount: Math.max(0, Math.min(999, Number(config.fertilizerBuyNormalCount) || 1)),
@@ -693,6 +720,7 @@ function cloneAccountConfig(config = DEFAULT_ACCOUNT_CONFIG) {
         goldenBugRoundLimit: Math.max(1, Math.min(100, Number(config.goldenBugRoundLimit) || 24)),
         bagSeedPriority: normalizeBagSeedPriority(config.bagSeedPriority),
         bagSeedKnownIds: normalizeBagSeedPriority(config.bagSeedKnownIds),
+        bagSeedExcludedIds: normalizeBagSeedExcludedIds(config.bagSeedExcludedIds),
         bagSeedFallbackStrategy: normalizeBagSeedFallbackStrategy(config.bagSeedFallbackStrategy),
         capitalMode: normalizeCapitalMode(config.capitalMode)
     };
@@ -840,6 +868,11 @@ function normalizeAccountConfig(raw, fallbackConfig = accountFallbackConfig) {
         cfg.plantBlacklist = input.plantBlacklist.map(Number).filter(n => Number.isFinite(n) && n > 0);
     }
 
+    // 种子锁定
+    if (Array.isArray(input.seedLocks)) {
+        cfg.seedLocks = input.seedLocks.map(Number).filter(n => Number.isFinite(n) && n > 0);
+    }
+
     // 肥料购买配置
     if (input.fertilizerBuyOrganicCount !== undefined && input.fertilizerBuyOrganicCount !== null) {
         cfg.fertilizerBuyOrganicCount = Math.max(0, Math.min(999, Number(input.fertilizerBuyOrganicCount) || 1));
@@ -875,6 +908,9 @@ function normalizeAccountConfig(raw, fallbackConfig = accountFallbackConfig) {
     if (input.bagSeedKnownIds !== undefined && input.bagSeedKnownIds !== null) {
         cfg.bagSeedKnownIds = normalizeBagSeedPriority(input.bagSeedKnownIds);
     }
+    if (input.bagSeedExcludedIds !== undefined && input.bagSeedExcludedIds !== null) {
+        cfg.bagSeedExcludedIds = normalizeBagSeedExcludedIds(input.bagSeedExcludedIds);
+    }
 
     // 背包种子回退策略
     if (input.bagSeedFallbackStrategy !== undefined && input.bagSeedFallbackStrategy !== null) {
@@ -903,6 +939,7 @@ function pickDefaultPlanConfig(raw) {
         goldenBugRoundLimit: cfg.goldenBugRoundLimit,
         autoAcceptFriendMinLevel: cfg.autoAcceptFriendMinLevel,
         bagSeedPriority: [...cfg.bagSeedPriority],
+        bagSeedExcludedIds: [...(cfg.bagSeedExcludedIds || [])],
         bagSeedFallbackStrategy: cfg.bagSeedFallbackStrategy
     };
 }
@@ -1235,6 +1272,7 @@ function getConfigSnapshot(accountId) {
         knownFriendGids: [...cfg.knownFriendGids || []],
         friendBlacklist: [...cfg.friendBlacklist || []],
         plantBlacklist: [...cfg.plantBlacklist || []],
+        seedLocks: [...cfg.seedLocks || []],
         fertilizerBuyOrganicCount: Math.max(0, Math.min(999, Number(cfg.fertilizerBuyOrganicCount) || 1)),
         fertilizerBuyOrganicThresholdHours: Math.max(0, Math.min(720, Number(cfg.fertilizerBuyOrganicThresholdHours) || 10)),
         fertilizerBuyNormalCount: Math.max(0, Math.min(999, Number(cfg.fertilizerBuyNormalCount) || 1)),
@@ -1244,6 +1282,7 @@ function getConfigSnapshot(accountId) {
         goldenBugRoundLimit: Math.max(1, Math.min(100, Number(cfg.goldenBugRoundLimit) || 24)),
         bagSeedPriority: [...cfg.bagSeedPriority || []],
         bagSeedKnownIds: [...cfg.bagSeedKnownIds || []],
+        bagSeedExcludedIds: [...cfg.bagSeedExcludedIds || []],
         ui
     };
 }
@@ -1319,6 +1358,9 @@ function applyConfigSnapshot(patch = {}, opts = {}) {
     if (Array.isArray(patch.plantBlacklist)) {
         cfg.plantBlacklist = patch.plantBlacklist.map(Number).filter(n => Number.isFinite(n) && n > 0);
     }
+    if (Array.isArray(patch.seedLocks)) {
+        cfg.seedLocks = patch.seedLocks.map(Number).filter(n => Number.isFinite(n) && n > 0);
+    }
     if (patch.fertilizerBuyOrganicCount !== undefined && patch.fertilizerBuyOrganicCount !== null) {
         cfg.fertilizerBuyOrganicCount = Math.max(0, Math.min(999, Number(patch.fertilizerBuyOrganicCount) || 1));
     }
@@ -1348,6 +1390,9 @@ function applyConfigSnapshot(patch = {}, opts = {}) {
     }
     if (patch.bagSeedKnownIds !== undefined && patch.bagSeedKnownIds !== null) {
         cfg.bagSeedKnownIds = normalizeBagSeedPriority(patch.bagSeedKnownIds);
+    }
+    if (patch.bagSeedExcludedIds !== undefined && patch.bagSeedExcludedIds !== null) {
+        cfg.bagSeedExcludedIds = normalizeBagSeedExcludedIds(patch.bagSeedExcludedIds);
     }
     if (patch.bagSeedFallbackStrategy !== undefined && patch.bagSeedFallbackStrategy !== null) {
         cfg.bagSeedFallbackStrategy = normalizeBagSeedFallbackStrategy(patch.bagSeedFallbackStrategy);
@@ -1425,6 +1470,11 @@ function getFriendBadRetryDate(accountId) {
 
 function getBagSeedPriority(accountId) {
     return [...getAccountConfigSnapshot(accountId).bagSeedPriority || []];
+}
+
+// 被移出「背包种子优先顺序」的种子：不参与背包优先种植。
+function getBagSeedExcludedIds(accountId) {
+    return [...getAccountConfigSnapshot(accountId).bagSeedExcludedIds || []];
 }
 
 function getBagSeedFallbackStrategy(accountId) {
@@ -1515,6 +1565,19 @@ function setPlantBlacklist(accountId, blacklist) {
         ? blacklist.map(Number).filter(n => Number.isFinite(n) && n > 0) : [];
     setAccountConfigSnapshot(accountId, cfg);
     return [...cfg.plantBlacklist];
+}
+
+function getSeedLocks(accountId) {
+    return [...getAccountConfigSnapshot(accountId).seedLocks || []];
+}
+
+function setSeedLocks(accountId, seedIds) {
+    const base = getAccountConfigSnapshot(accountId);
+    const cfg = normalizeAccountConfig(base, accountFallbackConfig);
+    cfg.seedLocks = Array.isArray(seedIds)
+        ? [...new Set(seedIds.map(Number).filter(n => Number.isFinite(n) && n > 0))] : [];
+    setAccountConfigSnapshot(accountId, cfg);
+    return [...cfg.seedLocks];
 }
 
 function getUI() {
@@ -2020,6 +2083,7 @@ module.exports = {
     getFriendBadRetryDate,
     getBagSeedPriority,
     syncBagSeedPriority,
+    getBagSeedExcludedIds,
     getBagSeedFallbackStrategy,
     getIntervals,
     getFriendQuietHours,
@@ -2053,6 +2117,8 @@ module.exports = {
     applyUserDefaultAccountPlan,
     getPlantBlacklist,
     setPlantBlacklist,
+    getSeedLocks,
+    setSeedLocks,
     getDefaultAccountConfig,
     getAnnouncement,
     setAnnouncement,

@@ -1,8 +1,9 @@
 import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAccountStore } from '@/stores/account'
+import { useToastStore } from '@/stores/toast'
 import { useUserStore } from '@/stores/user'
 
 type AlertType = 'primary' | 'danger'
@@ -10,6 +11,7 @@ type AlertType = 'primary' | 'danger'
 export function useAccountSettings(showAlert: (message: string, type?: AlertType) => void) {
   const router = useRouter()
   const accountStore = useAccountStore()
+  const toastStore = useToastStore()
   const userStore = useUserStore()
   const { accounts, loading: accountsLoading, currentAccountId } = storeToRefs(accountStore)
 
@@ -57,6 +59,47 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
   useIntervalFn(() => {
     accountStore.fetchAccounts()
   }, 3000)
+
+  // 账号启动失败时，在右上角弹出可重试的通知
+  // 记录每个账号上次已提示过的失败时间戳，避免轮询期间重复弹窗
+  const notifiedStartErrors = new Map<string, number>()
+
+  watch(accounts, (list) => {
+    if (!Array.isArray(list))
+      return
+    const alive = new Set<string>()
+    for (const acc of list) {
+      if (!acc || acc.id === undefined || acc.id === null)
+        continue
+      const id = String(acc.id)
+      alive.add(id)
+      if (acc.startError && !acc.running) {
+        const stamp = Number(acc.startErrorAt || 0)
+        if (notifiedStartErrors.get(id) !== stamp) {
+          notifiedStartErrors.set(id, stamp)
+          const name = acc.name || acc.nick || id
+          toastStore.add(
+            `账号「${name}」启动失败：${acc.startError}`,
+            'error',
+            0,
+            {
+              label: acc.platform === 'wx' ? '重新获取微信Code' : '重新获取',
+              handler: () => {
+                void retryStartAccount(acc)
+              },
+            },
+          )
+        }
+      }
+      else if (!acc.startError) {
+        notifiedStartErrors.delete(id)
+      }
+    }
+    for (const id of Array.from(notifiedStartErrors.keys())) {
+      if (!alive.has(id))
+        notifiedStartErrors.delete(id)
+    }
+  }, { deep: true })
 
   async function fetchAccounts() {
     await accountStore.fetchAccounts()
@@ -108,6 +151,21 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     }
     else {
       await accountStore.startAccount(account.id)
+    }
+  }
+
+  // 启动失败后重试：清理该账号的失败提示，重新拉起启动
+  async function retryStartAccount(account: any) {
+    if (!account || !account.id)
+      return
+    notifiedStartErrors.delete(String(account.id))
+    try {
+      await accountStore.startAccount(account.id)
+      await accountStore.fetchAccounts()
+    }
+    catch (error: any) {
+      const name = account.name || account.nick || account.id
+      toastStore.error(`账号「${name}」重新获取失败：${error?.response?.data?.error || error?.message || '请稍后重试'}`)
     }
   }
 
@@ -207,6 +265,7 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     handleDelete,
     confirmDelete,
     toggleAccount,
+    retryStartAccount,
     refreshWxCodesNow,
     handleSaved,
     selectAccount,

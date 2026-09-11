@@ -42,8 +42,19 @@ function getBorderColor(type: string) {
         :class="[getBgColor(toast.type), getBorderColor(toast.type)]"
       >
         <div :class="getIcon(toast.type)" class="mt-0.5 shrink-0 text-xl" />
-        <div class="flex-1 break-words text-sm text-gray-700 dark:text-gray-200">
-          {{ toast.message }}
+        <div class="min-w-0 flex-1">
+          <div class="break-words text-sm text-gray-700 dark:text-gray-200">
+            {{ toast.message }}
+          </div>
+          <button
+            v-if="toast.action"
+            type="button"
+            class="mt-2 inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+            @click="toastStore.runAction(toast.id)"
+          >
+            <div class="i-carbon-renew" />
+            {{ toast.action.label }}
+          </button>
         </div>
         <button
           class="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"

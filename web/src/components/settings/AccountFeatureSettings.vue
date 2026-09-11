@@ -19,6 +19,7 @@ const props = defineProps<{
   plantingStrategyOptions: any[]
   bagFallbackStrategyOptions: any[]
   strategyPreviewLabel: string | null
+  strategyPreviewLoading?: boolean
   fertilizerLandTypeOptions: any[]
   fertilizerOptions: any[]
 }>()
@@ -88,9 +89,10 @@ function summaryTags(key: ModuleKey) {
     const primaryStrategy = strategy.value.plantingStrategy
     const hasFallback = primaryStrategy === 'bag_priority' || primaryStrategy === 'task_priority'
     const primaryLabel = props.plantingStrategyOptions.find(option => option.value === primaryStrategy)?.label
+    const preview = props.strategyPreviewLoading ? '预览加载中' : (props.strategyPreviewLabel || '等待选种')
     return [
       ...(hasFallback ? [primaryLabel || '未设置策略'] : []),
-      hasFallback ? `第二策略：${props.strategyPreviewLabel || '等待选种'}` : props.strategyPreviewLabel || '等待选种',
+      hasFallback ? `第二策略：${preview}` : preview,
       automation.value.automation.sell ? '卖果实' : '不卖果实',
       strategy.value.prioritize2x2Crops ? '优先 2x2' : '常规占地',
       `巡田 ${intervalTag(strategy.value.intervals.farmMin, strategy.value.intervals.farmMax)}`,
@@ -389,6 +391,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
                   :planting-strategy-options="plantingStrategyOptions"
                   :bag-fallback-strategy-options="bagFallbackStrategyOptions"
                   :strategy-preview-label="strategyPreviewLabel"
+                  :strategy-preview-loading="strategyPreviewLoading"
                 />
               </section>
             </div>

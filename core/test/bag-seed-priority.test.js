@@ -77,8 +77,27 @@ test('personal bag seed tab matches the official client order', () => {
   ]);
 });
 
-test('saved custom order survives inventory synchronization', () => {
-  const accountId = 'replace-old';
+test('existing saved order is preserved; new seeds append in game order', () => {
+  const accountId = 'preserve-saved';
+  store.applyConfigSnapshot({
+    bagSeedPriority: [103, 102, 101],
+    bagSeedKnownIds: [103, 102, 101],
+  }, { accountId, persist: false });
+
+  // 背包里 104 是新出现的种子，按游戏顺序追加到末尾，不打乱已有顺序。
+  const result = store.syncBagSeedPriority(accountId, [
+    { ...seed(101, 1), rarity: 1, plantExp: 10 },
+    { ...seed(103, 3), rarity: 2, plantExp: 20 },
+    { ...seed(102, 2), rarity: 2, plantExp: 30 },
+    { ...seed(104, 2), rarity: 2, plantExp: 999 },
+  ], { persist: false });
+
+  assert.deepEqual(result.priority, [103, 102, 101, 104]);
+  assert.equal(result.changed, true);
+});
+
+test('saved order drops seeds no longer in the bag', () => {
+  const accountId = 'drop-removed';
   store.applyConfigSnapshot({
     bagSeedPriority: [103, 102, 101],
     bagSeedKnownIds: [103, 102, 101],
@@ -87,11 +106,28 @@ test('saved custom order survives inventory synchronization', () => {
   const result = store.syncBagSeedPriority(accountId, [
     { ...seed(101, 1), rarity: 1, plantExp: 10 },
     { ...seed(103, 3), rarity: 2, plantExp: 20 },
-    { ...seed(102, 2), rarity: 2, plantExp: 30 },
   ], { persist: false });
 
-  assert.deepEqual(result.priority, [103, 102, 101]);
-  assert.equal(result.changed, false);
+  assert.deepEqual(result.priority, [103, 101]);
+});
+
+test('excluded seeds are dropped from the planting order and survive sync', () => {
+  const accountId = 'excluded-survive';
+  store.applyConfigSnapshot({
+    bagSeedPriority: [101, 102, 103],
+    bagSeedExcludedIds: [102],
+  }, { accountId, persist: false });
+
+  const result = store.syncBagSeedPriority(accountId, [
+    { ...seed(101, 1), rarity: 1, plantExp: 10 },
+    { ...seed(102, 2), rarity: 2, plantExp: 30 },
+    { ...seed(103, 3), rarity: 2, plantExp: 20 },
+  ], { persist: false });
+
+  // 被移出的 102 不会回到优先顺序里，也不会出现在 knownIds。
+  assert.deepEqual(result.priority, [101, 103]);
+  assert.deepEqual(result.excludedIds, [102]);
+  assert.deepEqual(result.knownIds, [101, 103]);
 });
 
 test('removed preferred strategies fall back to supported defaults', () => {
@@ -112,25 +148,18 @@ test('removed preferred strategies fall back to supported defaults', () => {
   assert.equal(store.getBagSeedFallbackStrategy(accountId), 'level');
 });
 
-test('empty and 2x2 seeds are excluded from the 1x1 priority', () => {
-  const result = store.syncBagSeedPriority('one-by-one-only', [
+test('empty seeds are excluded; 1x1 and 2x2 seeds both join the priority', () => {
+  const result = store.syncBagSeedPriority('one-by-one-and-2x2', [
     seed(101, 1),
     seed(102, 9, { plantSize: 2 }),
     seed(103, 8, { count: 0 }),
   ], { persist: false });
 
-  assert.deepEqual(result.priority, [101]);
-  assert.deepEqual(result.knownIds, [101]);
-  assert.deepEqual(result.seeds.map(item => item.seedId), [101]);
-});
-
-test('depleted seeds retain their position and new seeds are appended', () => {
-  const accountId = 'inventory-changes';
-  store.applyConfigSnapshot({ bagSeedPriority: [103, 101] }, { accountId, persist: false });
-  const result = store.syncBagSeedPriority(accountId, [seed(101, 1), seed(102, 2)], { persist: false });
-  assert.deepEqual(result.priority, [103, 101, 102]);
-  const restored = store.syncBagSeedPriority(accountId, [seed(102, 2), seed(103, 3), seed(101, 1)], { persist: false });
-  assert.deepEqual(restored.priority, [103, 101, 102]);
+  // 库存为 0 的被剔除；1x1 与 2x2 都进入优先顺序（面板统一排序展示）。
+  assert.deepEqual(result.priority, [101, 102]);
+  assert.deepEqual(result.knownIds, [101, 102]);
+  assert.deepEqual(result.seeds.map(item => item.seedId), [101, 102]);
+  assert.equal(result.seeds.find(item => item.seedId === 102).plantSize, 2);
 });
 
 test('settings API persists task priority and custom bag order per account', async () => {

@@ -259,15 +259,8 @@ const showThemeDropdown = ref(false)
         </button>
       </div>
 
-      <div class="mt-1 flex items-center justify-between text-[11px] font-mono opacity-45" style="color: var(--theme-text);">
+      <div class="mt-1 flex items-center justify-end text-[11px] font-mono opacity-45" style="color: var(--theme-text);">
         <span>v{{ version }}</span>
-        <a
-          href="https://github.com/xxxscarlxrd404/qq-farm-bot"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="transition-opacity hover:opacity-70"
-          title="打开 GitHub 项目主页"
-        >xxxscarlxrd404</a>
       </div>
 
       <!-- 主题选择弹出面板 -->

@@ -12,6 +12,7 @@ function registerAdminCurrentUserRoutes({
   requireAdminToken,
   userStore,
   store,
+  updateAdminSessions,
 }) {
   app.get("/api/user/me", requireAdminToken, (req, res) => {
     try {
@@ -26,6 +27,114 @@ function registerAdminCurrentUserRoutes({
           card: currentUser.card,
           accountLimit:
             currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2,
+          expiresAt: currentUser.expiresAt || null,
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // 修改自己的密码
+  app.post("/api/user/change-password", requireAdminToken, (req, res) => {
+    try {
+      const currentUser = requireCurrentUser(req, res);
+      if (!currentUser) return;
+
+      const { oldPassword, newPassword } = req.body || {};
+      if (!userStore.verifyPassword(currentUser.username, oldPassword)) {
+        return res.status(400).json({ ok: false, error: "原密码错误" });
+      }
+      if (!newPassword || String(newPassword).length < 6) {
+        return res.status(400).json({ ok: false, error: "新密码至少 6 位" });
+      }
+      userStore.updateUser(currentUser.username, { password: newPassword });
+      res.json({ ok: true });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // 查询卡密信息（不消耗，仅查看可用性/天数/额度）
+  app.post("/api/user/card-inspect", requireAdminToken, (req, res) => {
+    try {
+      const currentUser = requireCurrentUser(req, res);
+      if (!currentUser) return;
+
+      const { cardKey } = req.body || {};
+      const key = userStore.findCardKey(cardKey);
+      if (!key) {
+        return res.status(400).json({ ok: false, error: "卡密不存在，请检查后重新输入" });
+      }
+      if (key.usedBy) {
+        return res.status(400).json({ ok: false, error: "该卡密已被使用" });
+      }
+      res.json({
+        ok: true,
+        data: {
+          code: key.code,
+          days: key.days,
+          accountLimit: key.accountLimit,
+          note: key.note || "",
+        },
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // 使用卡密：为当前登录账号续期并/或增加账号额度
+  app.post("/api/user/card-redeem", requireAdminToken, (req, res) => {
+    try {
+      const currentUser = requireCurrentUser(req, res);
+      if (!currentUser) return;
+
+      if (currentUser.role === "super_admin") {
+        return res
+          .status(400)
+          .json({ ok: false, error: "超级管理员无需使用卡密" });
+      }
+
+      const { cardKey } = req.body || {};
+      const key = userStore.findCardKey(cardKey);
+      if (!key) {
+        return res.status(400).json({ ok: false, error: "卡密不存在，请检查后重新输入" });
+      }
+      if (key.usedBy) {
+        return res.status(400).json({ ok: false, error: "该卡密已被使用" });
+      }
+
+      userStore.consumeCardKey(key.code, currentUser.username);
+      const before = userStore.findUser(currentUser.username);
+      let updated = before;
+      if (key.days > 0) {
+        updated = userStore.extendUserExpiry(currentUser.username, key.days);
+      }
+      if (key.accountLimit > 0) {
+        updated = userStore.updateUser(currentUser.username, {
+          accountLimit: (before.accountLimit || 0) + key.accountLimit,
+        });
+      }
+
+      // 同步会话快照，避免 /api/user/me 等接口读到旧额度/旧有效期
+      if (typeof updateAdminSessions === "function") {
+        const fresh = userStore.findUser(currentUser.username);
+        if (fresh) {
+          updateAdminSessions(
+            (session) => session.username === currentUser.username,
+            (session) => Object.assign(session, fresh),
+          );
+        }
+      }
+
+      res.json({
+        ok: true,
+        data: {
+          code: key.code,
+          days: key.days,
+          accountLimitAdded: key.accountLimit,
+          accountLimit: updated.accountLimit,
+          expiresAt: updated.expiresAt || null,
         },
       });
     } catch (error) {

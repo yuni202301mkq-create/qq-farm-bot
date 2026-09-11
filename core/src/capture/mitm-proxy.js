@@ -1,7 +1,7 @@
 /**
  * 选择性 MITM 代理
  *
- * 每次抓包会话只使用配置的单个代理端口（默认 18000），按配置的 IP
+ * 每次抓包会话在配置的端口范围内随机选一个可用端口（默认 18000-18999），按配置的 IP
  * （局域网 / Tailscale）监听。处理 iPhone 的 HTTP 代理连接：
  *
  * - CONNECT 到抓取域名（captureHosts）→ TLS 中间人，解析 HTTP 头提取登录 code，
@@ -73,7 +73,7 @@ function findHeadEnd(buffer) {
 /**
  * 创建 MITM 代理管理器
  * @param {object} deps
- * @param {object} deps.config - 抓包服务配置（proxyBind/proxyPortFrom/autoStopSec/captureHosts）
+ * @param {object} deps.config - 抓包服务配置（proxyBind/proxyPortFrom/proxyPortTo/autoStopSec/captureHosts）
  * @param {object} deps.ca - CA 模块（getSecureContextForHost）
  * @param {object} deps.friendExtractor - createFriendExtractor() 的结果
  * @param {object} deps.sessionStore - 会话存储
@@ -84,34 +84,52 @@ function createMitmProxyManager(deps = {}) {
   const activeServers = new Map(); // sessionId -> { port, servers, stop, autoStopTimer }
 
   async function listenOnConfiguredPort(bindTargets, handler) {
-    const port = Number(config.proxyPortFrom) || 18000;
-    const servers = [];
+    const portFrom = Number(config.proxyPortFrom) || 18000;
+    const portTo = Number(config.proxyPortTo) || portFrom;
+    const rangeSize = portTo - portFrom + 1;
 
-    for (const bindIp of bindTargets) {
-      const server = net.createServer(handler);
-      server.on('error', () => {});
-      try {
-        await new Promise((resolve, reject) => {
-          const onError = (error) => {
-            server.removeListener('listening', onListening);
-            reject(error);
-          };
-          const onListening = () => {
-            server.removeListener('error', onError);
-            resolve();
-          };
-          server.once('error', onError);
-          server.once('listening', onListening);
-          server.listen(port, bindIp);
-        });
-        servers.push(server);
-      } catch (error) {
-        for (const s of servers) s.close();
-        throw new Error(`代理端口 ${port} 不可用: ${error.message}`);
+    // 在范围内随机选一个起始偏移，然后顺序尝试
+    const startOffset = rangeSize > 1 ? Math.floor(Math.random() * rangeSize) : 0;
+    let lastError = null;
+
+    for (let attempt = 0; attempt < rangeSize; attempt++) {
+      const port = portFrom + ((startOffset + attempt) % rangeSize);
+      const servers = [];
+
+      let bindFailed = false;
+      for (const bindIp of bindTargets) {
+        const server = net.createServer(handler);
+        server.on('error', () => {});
+        try {
+          await new Promise((resolve, reject) => {
+            const onError = (error) => {
+              server.removeListener('listening', onListening);
+              reject(error);
+            };
+            const onListening = () => {
+              server.removeListener('error', onError);
+              resolve();
+            };
+            server.once('error', onError);
+            server.once('listening', onListening);
+            server.listen(port, bindIp);
+          });
+          servers.push(server);
+        } catch (error) {
+          // 当前端口被占用，关闭已绑定的 server，尝试下一个端口
+          for (const s of servers) s.close();
+          lastError = error;
+          bindFailed = true;
+          break;
+        }
+      }
+
+      if (!bindFailed) {
+        return { port, servers };
       }
     }
 
-    return { port, servers };
+    throw new Error(`代理端口 ${portFrom}-${portTo} 范围内无可用端口: ${lastError?.message || '全部被占用'}`);
   }
 
   /**

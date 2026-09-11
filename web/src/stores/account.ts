@@ -17,6 +17,8 @@ export interface Account {
   username?: string
   platform?: string
   running?: boolean
+  startError?: string
+  startErrorAt?: number
   // Add other fields as discovered
 }
 

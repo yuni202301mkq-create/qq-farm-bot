@@ -61,8 +61,16 @@ function createAdminSessionManager({ logger, getIo }) {
     const token = req.headers['x-admin-token'];
     if (!token || !adminTokens.has(token))
       return sendUnauthorized(res);
+    const currentUser = adminSessions.get(token);
+    if (!currentUser)
+      return sendUnauthorized(res);
+    // 普通用户到期后立即失效，需要卡密续费
+    if (currentUser.role !== 'super_admin' && currentUser.expiresAt && Date.now() > Number(currentUser.expiresAt)) {
+      invalidateAdminSessionAndDisconnect(token);
+      return res.status(403).json({ ok: false, error: '账号已过期，请使用卡密续费后重新登录' });
+    }
     req.adminToken = token;
-    req.currentUser = adminSessions.get(token);
+    req.currentUser = currentUser;
     next();
   }
 

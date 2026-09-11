@@ -27,6 +27,9 @@ export const useFarmStore = defineStore('farm', () => {
   const summary = ref<any>({})
   const weather = ref<any>(null)
   const loading = ref(false)
+  const seedsLoading = ref(false)
+  const seedsLoaded = ref(false)
+  const seedsError = ref('')
   const dogSkillGiftPendingCount = ref(0)
   const dogSkillGiftLoading = ref(false)
   const dogSkillGiftError = ref('')
@@ -36,6 +39,9 @@ export const useFarmStore = defineStore('farm', () => {
     seeds.value = []
     summary.value = {}
     weather.value = null
+    seedsLoading.value = false
+    seedsLoaded.value = false
+    seedsError.value = ''
     dogSkillGiftPendingCount.value = 0
     dogSkillGiftError.value = ''
   }
@@ -72,13 +78,37 @@ export const useFarmStore = defineStore('farm', () => {
     if (!accountId)
       return
     const requestedId = String(accountId)
-    const { data } = await api.get('/api/seeds', {
-      headers: { 'x-account-id': accountId },
-    })
-    if (!isCurrentAccount(requestedId))
-      return
-    if (data && data.ok)
-      seeds.value = data.data || []
+    seedsLoading.value = true
+    seedsError.value = ''
+    try {
+      const { data } = await api.get('/api/seeds', {
+        headers: { 'x-account-id': accountId },
+      })
+      if (!isCurrentAccount(requestedId))
+        return
+      if (data && data.ok) {
+        seeds.value = data.data || []
+        seedsLoaded.value = true
+      }
+      else {
+        // 账号未启动时后端返回 { ok: false, error: '账号未运行' }。
+        // 之前这里静默丢弃，导致「第二优先策略预览」永远停在「加载中...」。
+        seeds.value = []
+        seedsLoaded.value = true
+        seedsError.value = String((data && data.error) || '获取种子列表失败')
+      }
+    }
+    catch (e: any) {
+      if (!isCurrentAccount(requestedId))
+        return
+      seeds.value = []
+      seedsLoaded.value = true
+      seedsError.value = String(e?.response?.data?.error || e?.message || '获取种子列表失败')
+    }
+    finally {
+      if (isCurrentAccount(requestedId))
+        seedsLoading.value = false
+    }
   }
 
   async function fetchDogSkillGiftStatus(accountId: string) {
@@ -171,6 +201,9 @@ export const useFarmStore = defineStore('farm', () => {
     summary,
     weather,
     seeds,
+    seedsLoading,
+    seedsLoaded,
+    seedsError,
     loading,
     dogSkillGiftPendingCount,
     dogSkillGiftLoading,

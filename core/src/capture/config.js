@@ -9,7 +9,7 @@
  * - CAPTURE_PROXY_BIND      逗号分隔，代理监听 IP（默认 0.0.0.0）
  * - CAPTURE_ADVERTISE_IPS   逗号分隔，对外公布的 IP（'auto' 表示自动检测）
  * - CAPTURE_PREFER_ORDER    逗号分隔，排序优先级 tailscale,lan,other
- * - CAPTURE_PORTS           代理端口，如 "18000"（兼容旧范围写法，实际只取首个端口）
+ * - CAPTURE_PORTS           代理端口范围，如 "1000" 或 "1000-9999"（范围内随机选可用端口；1000-1023 在 Linux 需 root）
  * - CAPTURE_HOSTS           逗号分隔，需要中间人抓取的域名（支持 *. 通配）
  * - CAPTURE_AUTOSTOP_SEC    代理自动停止秒数
  * - CAPTURE_SESSION_TTL_MS  会话过期时间
@@ -28,8 +28,8 @@ const DEFAULT_CONFIG = Object.freeze({
   proxyBind: ['0.0.0.0'],
   advertiseIps: ['auto'],
   preferOrder: ['tailscale', 'lan', 'other'],
-  proxyPortFrom: 18000,
-  proxyPortTo: 18000,
+  proxyPortFrom: 1000,
+  proxyPortTo: 9999,
   captureHosts: [
     '*.nqf.qq.com',
     'q.qq.com',
@@ -66,10 +66,10 @@ function parsePortRange(value, fallbackFrom, fallbackTo) {
   if (!match) return { from: Number(fallbackFrom), to: Number(fallbackTo) };
   const from = Number.parseInt(match[1], 10);
   const to = match[2] === undefined ? from : Number.parseInt(match[2], 10);
-  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1024 || to > 65535 || from > to) {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 1000 || to > 65535 || from > to) {
     return { from: Number(fallbackFrom), to: Number(fallbackTo) };
   }
-  return { from, to: from };
+  return { from, to };
 }
 
 function applyEnvOverrides(config) {
@@ -99,7 +99,9 @@ function applyEnvOverrides(config) {
 
 function normalizeConfig(raw) {
   const input = raw && typeof raw === 'object' ? raw : {};
-  const proxyPort = Number.parseInt(input.proxyPortFrom ?? DEFAULT_CONFIG.proxyPortFrom, 10) || DEFAULT_CONFIG.proxyPortFrom;
+  const proxyPortFrom = Number.parseInt(input.proxyPortFrom ?? DEFAULT_CONFIG.proxyPortFrom, 10) || DEFAULT_CONFIG.proxyPortFrom;
+  const rawTo = Number.parseInt(input.proxyPortTo ?? DEFAULT_CONFIG.proxyPortTo, 10) || DEFAULT_CONFIG.proxyPortTo;
+  const proxyPortTo = rawTo >= proxyPortFrom ? rawTo : proxyPortFrom;
   return {
     ...DEFAULT_CONFIG,
     ...input,
@@ -110,8 +112,8 @@ function normalizeConfig(raw) {
     advertiseIps: splitList(input.advertiseIps ?? DEFAULT_CONFIG.advertiseIps),
     preferOrder: splitList(input.preferOrder ?? DEFAULT_CONFIG.preferOrder),
     captureHosts: splitList(input.captureHosts ?? DEFAULT_CONFIG.captureHosts),
-    proxyPortFrom: proxyPort,
-    proxyPortTo: proxyPort,
+    proxyPortFrom,
+    proxyPortTo,
     autoStopSec: Math.max(60, Number.parseInt(input.autoStopSec ?? DEFAULT_CONFIG.autoStopSec, 10) || DEFAULT_CONFIG.autoStopSec),
     sessionTtlMs: Math.max(60_000, Number.parseInt(input.sessionTtlMs ?? DEFAULT_CONFIG.sessionTtlMs, 10) || DEFAULT_CONFIG.sessionTtlMs),
     logLevel: String(input.logLevel ?? DEFAULT_CONFIG.logLevel),
