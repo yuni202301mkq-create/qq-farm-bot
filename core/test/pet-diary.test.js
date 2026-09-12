@@ -264,7 +264,7 @@ test('素材路径使用本地 /activity/pet-diary/ 前缀', () => {
         );
         assert.ok(!charm.image.includes('activity-assets'), '不应残留上游 activity-assets 前缀');
     }
-    assert.strictEqual(assets.length, 132, '素材映射表条目数应为 132');
+    assert.strictEqual(assets.length, 129, '精简后的素材映射表条目数应为 129');
 });
 
 test('活动物品名称已进入统一配置，不出现未知物品', () => {
