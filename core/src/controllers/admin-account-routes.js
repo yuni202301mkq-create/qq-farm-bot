@@ -104,7 +104,10 @@ function registerAdminAccountRoutes({
       }
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -168,7 +171,10 @@ function registerAdminAccountRoutes({
         },
       });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -209,7 +215,10 @@ function registerAdminAccountRoutes({
       }
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -384,7 +393,10 @@ function registerAdminAccountRoutes({
         clientVersionUpdated,
       });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -410,7 +422,10 @@ function registerAdminAccountRoutes({
       }
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -439,7 +454,10 @@ function registerAdminAccountRoutes({
       }
       res.json(logs);
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 

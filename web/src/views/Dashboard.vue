@@ -629,13 +629,13 @@ useIntervalFn(updateCountdowns, 1000)
       </div>
 
       <div class="ui-card metric-card min-h-[168px] flex flex-col justify-between rounded-lg p-5">
-        <div class="grid grid-cols-4 gap-3">
-          <div class="min-w-0">
-            <div class="flex items-center gap-1.5 text-xs text-gray-500">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div class="min-w-0 text-center sm:text-left">
+            <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 sm:justify-start">
               <img src="/game-config/resource-icons/gold.png" alt="金币" class="h-5 w-5 shrink-0 object-contain">
               金币
             </div>
-            <div class="text-2xl text-yellow-600 font-bold dark:text-yellow-500">
+            <div class="text-xl text-yellow-600 font-bold sm:text-2xl dark:text-yellow-500">
               {{ formatGoldAmount(status?.status?.gold || 0) }}
             </div>
             <div
@@ -651,7 +651,7 @@ useIntervalFn(updateCountdowns, 1000)
               <img src="/game-config/resource-icons/coupon.png" alt="点券" class="h-5 w-5 shrink-0 object-contain">
               点券
             </div>
-            <div class="text-2xl text-emerald-500 font-bold dark:text-emerald-400">
+            <div class="text-xl text-emerald-500 font-bold sm:text-2xl dark:text-emerald-400">
               {{ formatCouponAmount(status?.status?.coupon || 0) }}
             </div>
             <div
@@ -667,16 +667,16 @@ useIntervalFn(updateCountdowns, 1000)
               <img src="/game-config/resource-icons/diamond.png" alt="钻石" class="h-5 w-5 shrink-0 object-contain">
               钻石
             </div>
-            <div class="text-2xl text-cyan-600 font-bold dark:text-cyan-400">
+            <div class="text-xl text-cyan-600 font-bold sm:text-2xl dark:text-cyan-400">
               {{ formatCouponAmount(status?.status?.diamond || 0) }}
             </div>
           </div>
-          <div class="min-w-0 text-right">
-            <div class="flex items-center justify-end gap-1.5 text-xs text-gray-500">
+          <div class="min-w-0 text-center sm:text-right">
+            <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 sm:justify-end">
               <img src="/game-config/resource-icons/gold-bean.png" alt="金豆豆" class="h-5 w-5 shrink-0 object-contain">
               金豆
             </div>
-            <div class="text-2xl text-amber-500 font-bold dark:text-amber-400">
+            <div class="text-xl text-amber-500 font-bold sm:text-2xl dark:text-amber-400">
               {{ formatGoldBeanAmount(status?.status?.goldBean || 0) }}
             </div>
           </div>

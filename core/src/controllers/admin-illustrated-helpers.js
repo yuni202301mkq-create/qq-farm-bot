@@ -38,7 +38,7 @@ async function getSeedShopGoodsMap({
       }
     }
 
-    adminLogger.info("种子商店映射", {
+    adminLogger.debug("种子商店映射", {
       sampleItems: goodsList.slice(0, 3).map(goods => ({
         goodsId: toNum(goods.id),
         itemId: toNum(goods.item_id),
@@ -75,7 +75,7 @@ function getPlantSeedInfo(fruitId, nongmePlant) {
 
 function buildIllustratedItem(
   rawItem,
-  { seedGoodsMap, userLevel, adminLogger, nongmeFruitMap },
+  { seedGoodsMap, userLevel, nongmeFruitMap },
 ) {
   const fruitId = toNum(rawItem.seed_id) || 0;
   const fruitConfig = getItemById(fruitId);
@@ -91,18 +91,6 @@ function buildIllustratedItem(
     seedLevel > 0 &&
     userLevel >= seedLevel &&
     !!seedGoods;
-
-  if (!unlocked && seedId > 0) {
-    adminLogger.info("图鉴可购买检查", {
-      fruitId,
-      seedId,
-      seedLevel,
-      userLevel,
-      hasGoods: !!seedGoods,
-      goodsId,
-      price,
-    });
-  }
 
   return {
     seedId: fruitId,

@@ -19,7 +19,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="app-root h-screen w-screen overflow-hidden" :style="{ color: 'var(--theme-text)' }">
+  <div class="app-root h-[100dvh] w-full overflow-hidden" :style="{ color: 'var(--theme-text)' }">
     <RouterView />
     <ToastContainer />
   </div>

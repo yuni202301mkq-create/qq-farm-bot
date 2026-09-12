@@ -165,7 +165,10 @@ function registerAdminSettingsRoutes({
       const data = store.getUserDefaultAccountPlan(currentUser.username);
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -183,7 +186,10 @@ function registerAdminSettingsRoutes({
       );
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -205,7 +211,10 @@ function registerAdminSettingsRoutes({
       );
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -230,7 +239,9 @@ function registerAdminSettingsRoutes({
       res.json({ ok: true, data });
     } catch (error) {
       const status = error.message === "尚未保存默认方案" ? 400 : 500;
-      res.status(status).json({ ok: false, error: error.message });
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(status).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -248,7 +259,10 @@ function registerAdminSettingsRoutes({
       );
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -263,7 +277,10 @@ function registerAdminSettingsRoutes({
       const data = await provider.saveSettings(accountId, req.body || {});
       res.json({ ok: true, data: data || {} });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -273,7 +290,10 @@ function registerAdminSettingsRoutes({
       const data = await provider.setUITheme(theme);
       res.json({ ok: true, data: data || {} });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -288,7 +308,10 @@ function registerAdminSettingsRoutes({
       const data = await provider.saveAutoCodeRefresh(accountId, req.body || {});
       res.json({ ok: true, data: data || {} });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -303,7 +326,10 @@ function registerAdminSettingsRoutes({
       const data = await provider.refreshAccountCode(accountId);
       res.json({ ok: true, data: data || {} });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -334,7 +360,10 @@ function registerAdminSettingsRoutes({
       }
       res.json({ ok: true, data: data || {} });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -361,7 +390,10 @@ function registerAdminSettingsRoutes({
       }
       res.json({ ok: true, data: result, message: result.msg || "发送成功" });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -377,7 +409,10 @@ function registerAdminSettingsRoutes({
         data: buildSettingsPayload(store, accountId, currentUser),
       });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 
@@ -391,7 +426,10 @@ function registerAdminSettingsRoutes({
       }
       res.json({ ok: true, data });
     } catch (error) {
-      res.status(500).json({ ok: false, error: error.message });
+      // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。
+      if (!res.headersSent && !res.writableEnded && !res.destroyed && !res.locals?.requestTimedOut) {
+        res.status(500).json({ ok: false, error: error.message });
+      }
     }
   });
 }

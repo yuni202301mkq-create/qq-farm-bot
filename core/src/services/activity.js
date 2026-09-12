@@ -11,7 +11,7 @@ const protobuf = require('protobufjs/minimal');
 const path = require('node:path');
 const { sendMsgAsync, getUserState, isConnected } = require('../utils/network');
 const { types } = require('../utils/proto');
-const { toNum } = require('../utils/utils');
+const { toNum, getServerDateKey } = require('../utils/utils');
 const { getItemImageById, getItemById } = require('../config/gameConfig');
 const { getDataDir } = require('../config/runtime-paths');
 const { createModuleLogger } = require('./logger');
@@ -105,11 +105,8 @@ function delay(ms) {
 }
 
 function getLocalDateKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  // 与游戏日界一致（服务器时间 UTC+8），避免每日限次在非 UTC+8 主机上错位
+  return getServerDateKey();
 }
 
 function getQingmeiClaimStateKey() {

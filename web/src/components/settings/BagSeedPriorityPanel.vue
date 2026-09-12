@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import draggable from 'vuedraggable'
 import api from '@/api'
 
 export interface BagSeedPrioritySeed {
@@ -83,6 +84,15 @@ const excludedBagSeeds = computed<BagSeedPrioritySeed[]>(() => {
     .filter((seed): seed is BagSeedPrioritySeed => Boolean(seed))
 })
 
+// vuedraggable 绑定列表：与 sortedBagSeeds 保持同步（仅当顺序变化时替换，避免回环）。
+const dragList = ref<BagSeedPrioritySeed[]>([])
+watch(sortedBagSeeds, (val) => {
+  const cur = dragList.value.map(s => s.seedId).join(',')
+  const next = val.map(s => s.seedId).join(',')
+  if (cur !== next)
+    dragList.value = [...val]
+}, { immediate: true })
+
 function emitChange() {
   // 只提交仍然存在于背包中的 id，避免把失效 id 写回后端。
   const bagIdSet = new Set(bagSeeds.value.map(s => Number(s.seedId)))
@@ -95,6 +105,12 @@ function emitChange() {
   localPriority.value = priority
   localExcludedIds.value = excludedIds
   emit('change', { priority: [...priority], excludedIds: [...excludedIds] })
+}
+
+// 拖拽结束后，把列表顺序回写到优先序列。
+function onDragEnd() {
+  localPriority.value = dragList.value.map(s => Number(s.seedId))
+  emitChange()
 }
 
 function moveBagSeedUp(seedId: number) {
@@ -122,340 +138,6 @@ function moveBagSeedDown(seedId: number) {
   localPriority.value = list
   emitChange()
 }
-
-// ─── 长按拖动排序 ───
-// 「短时长 + 即时反馈」策略：
-//   · 按住 100ms 即激活（按住期间卡片已有高亮 + 阴影，明显提示「已进入拖动模式」）
-//   · 计时窗口内只要位移 >12px 就取消——避免误触；同时给下滑滚动留余地
-//   · 目标判定用「DOM 顺序 + 几何行/列二分」，不依赖 elementsFromPoint：
-//     指针在首张卡左侧 = 插到首张之前；在末张卡右侧 = 插到末张之后；行内过中线决定前/后
-//     （跨多列网格、多行、不同卡片高度都稳定，且不会被浮起的拖动卡挡住命中）
-//   · pointercancel 不 commit；pointerup 才提交；中途松手落到空区也只重置、不动数据
-//   · 原位置用 `bag-seed-ghost` 占位 + 被拖卡 `invisible` 隐藏，避免「消失又出现」
-const LONG_PRESS_MS = 100
-const MOVE_CANCEL_PX = 12
-
-interface DragState {
-  seedId: number
-  pointerId: number
-  startX: number
-  startY: number
-  active: boolean
-  pressedSeedId: number // 按下时的高亮种子（即使没激活拖动也给视觉反馈）
-  // 拖动期间的命中目标与插入位置（相对于按 DOM 顺序的原始 list）
-  hoverTargetId: number | null // 命中的目标卡 id（null=拖到空区）
-  hoverInsertAfter: boolean // true=插到目标卡后面，false=插到前面
-}
-
-const draggingSeedId = ref<number | null>(null)
-const pressedSeedId = ref<number | null>(null)
-const ghostSeedId = ref<number | null>(null) // 原位置占位标记
-const dropHoverTargetId = ref<number | null>(null)
-const dropHoverInsertAfter = ref(false)
-
-let dragState: DragState | null = null
-let longPressTimer: ReturnType<typeof setTimeout> | null = null
-let ghostWidth = 0
-let ghostHeight = 0
-let touchScrollBlocker: EventListener | null = null
-
-function clearLongPressTimer() {
-  if (longPressTimer !== null) {
-    clearTimeout(longPressTimer)
-    longPressTimer = null
-  }
-}
-
-function removeTouchScrollBlocker() {
-  if (touchScrollBlocker) {
-    document.removeEventListener('touchmove', touchScrollBlocker)
-    touchScrollBlocker = null
-  }
-}
-
-function resetDragState() {
-  clearLongPressTimer()
-  removeTouchScrollBlocker()
-  dragState = null
-  draggingSeedId.value = null
-  pressedSeedId.value = null
-  ghostSeedId.value = null
-  dropHoverTargetId.value = null
-  dropHoverInsertAfter.value = false
-}
-
-// 把当前 sortedBagSeeds（按展示顺序）重新排列成一份「用户编辑的优先列表」——这只用来前端展示，
-// 真正下发的优先序列在 commitDrop 时基于原始 DOM 顺序计算，避免 ghost 占位扰乱 indexOf。
-function visibleList(): BagSeedPrioritySeed[] {
-  return sortedBagSeeds.value
-}
-
-function findDropTarget(state: DragState, clientX: number, clientY: number): { targetId: number | null, insertAfter: boolean } {
-  // 收集所有非被拖的 .bag-seed-item，按当前 DOM 顺序排列
-  const items = Array.from(document.querySelectorAll<HTMLElement>('.bag-seed-item'))
-    .filter((el) => Number(el.dataset.seedId) !== state.seedId)
-  if (items.length === 0)
-    return { targetId: null, insertAfter: false }
-
-  // 计算每张卡在网格中的几何「行带」（按 top 分组，相近 top 视为同一行），便于「指针在两行之间时按 Y 选行」
-  const rows: HTMLElement[][] = []
-  const sortedByTop = [...items].sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
-  for (const el of sortedByTop) {
-    const r = el.getBoundingClientRect()
-    const lastRow = rows[rows.length - 1]
-    if (lastRow && lastRow.length > 0) {
-      const lastElInRow = lastRow[lastRow.length - 1] as HTMLElement
-      const lastTop = lastElInRow.getBoundingClientRect().top
-      if (Math.abs(r.top - lastTop) <= r.height * 0.6) {
-        lastRow.push(el)
-        continue
-      }
-    }
-    rows.push([el])
-  }
-  // 行内按 left 排序
-  for (const row of rows)
-    row.sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)
-
-  // 选指针所在行：取行内卡平均 top 与 clientY 距离最小的行
-  let bestRow = rows[0]
-  let bestRowDist = Number.POSITIVE_INFINITY
-  for (const row of rows) {
-    const avgTop = row.reduce((s, el) => s + el.getBoundingClientRect().top, 0) / row.length
-    const d = Math.abs(clientY - avgTop)
-    if (d < bestRowDist) {
-      bestRowDist = d
-      bestRow = row
-    }
-  }
-  if (!bestRow || bestRow.length === 0)
-    return { targetId: null, insertAfter: false }
-  const firstEl = bestRow[0]
-  const lastEl = bestRow[bestRow.length - 1]
-  if (!firstEl || !lastEl)
-    return { targetId: null, insertAfter: false }
-
-  // 在选中的行里按 X 找目标：
-  //   指针 X 落在某张卡的 [left, right] 内 → 该卡为 target，根据 X 是否过中线决定 insertAfter
-  //   指针 X 落在网格首张卡的左外侧 → target = 首张卡, insertAfter = false（插到它前面）
-  //   指针 X 落在网格末张卡的右外侧 → target = 末张卡, insertAfter = true（插到它后面）
-  for (const el of bestRow) {
-    const r = el.getBoundingClientRect()
-    if (clientX >= r.left && clientX <= r.right) {
-      const id = Number(el.dataset.seedId)
-      if (!Number.isFinite(id) || id <= 0)
-        return { targetId: null, insertAfter: false }
-      const insertAfter = clientX > r.left + r.width / 2
-      return { targetId: id, insertAfter }
-    }
-  }
-  // 指针不在任何卡的 X 范围内：在行的最左/最右兜底
-  const firstRect = firstEl.getBoundingClientRect()
-  const lastRect = lastEl.getBoundingClientRect()
-  if (clientX < firstRect.left) {
-    const id = Number(firstEl.dataset.seedId)
-    if (!Number.isFinite(id) || id <= 0)
-      return { targetId: null, insertAfter: false }
-    return { targetId: id, insertAfter: false }
-  }
-  if (clientX > lastRect.right) {
-    const id = Number(lastEl.dataset.seedId)
-    if (!Number.isFinite(id) || id <= 0)
-      return { targetId: null, insertAfter: false }
-    return { targetId: id, insertAfter: true }
-  }
-  // 兜底（指针 X 在行内卡之间但被卡间隙吃掉）：取离指针 X 最近的一张
-  let nearest: HTMLElement = firstEl
-  let nearestDist = Number.POSITIVE_INFINITY
-  for (const el of bestRow) {
-    const r = el.getBoundingClientRect()
-    const cx = r.left + r.width / 2
-    const d = Math.abs(clientX - cx)
-    if (d < nearestDist) {
-      nearestDist = d
-      nearest = el
-    }
-  }
-  const r = nearest.getBoundingClientRect()
-  const id = Number(nearest.dataset.seedId)
-  if (!Number.isFinite(id) || id <= 0)
-    return { targetId: null, insertAfter: false }
-  return { targetId: id, insertAfter: clientX > r.left + r.width / 2 }
-}
-
-function handleCardPointerDown(event: PointerEvent, seedId: number) {
-  // 点在按钮（上移/下移/移出）上时不启动长按拖动
-  if ((event.target as HTMLElement | null)?.closest('button'))
-    return
-  if (event.pointerType === 'mouse' && event.button !== 0)
-    return
-
-  // 单指/单鼠标才允许拖，多指按下直接放弃
-  if (dragState) {
-    resetDragState()
-  }
-
-  const sourceEl = event.currentTarget as HTMLElement | null
-  const rect = sourceEl?.getBoundingClientRect()
-  ghostWidth = rect?.width || 0
-  ghostHeight = rect?.height || 0
-
-  const seedNum = Number(seedId)
-  pressedSeedId.value = seedNum
-
-  dragState = {
-    seedId: seedNum,
-    pointerId: event.pointerId,
-    startX: event.clientX,
-    startY: event.clientY,
-    active: false,
-    pressedSeedId: seedNum,
-    hoverTargetId: null,
-    hoverInsertAfter: false,
-  }
-
-  longPressTimer = setTimeout(() => {
-    longPressTimer = null
-    if (!dragState)
-      return
-    dragState.active = true
-    draggingSeedId.value = dragState.seedId
-    ghostSeedId.value = dragState.seedId
-    try { sourceEl?.setPointerCapture(dragState.pointerId) } catch { /* ignore */ }
-    // 触屏进入拖动后阻止页面滚动，把整段手势留给拖动。
-    const blocker: EventListener = (e) => {
-      const te = e as TouchEvent
-      if (dragState?.active && te.cancelable)
-        te.preventDefault()
-    }
-    touchScrollBlocker = blocker
-    document.addEventListener('touchmove', blocker, { passive: false })
-    nextTick(() => {
-      // 进入拖动后立即根据当前指针位置计算一次目标，给用户即时反馈
-      handleCardPointerMove(event)
-    })
-  }, LONG_PRESS_MS)
-}
-
-function handleCardPointerMove(event: PointerEvent) {
-  const state = dragState
-  if (!state || event.pointerId !== state.pointerId)
-    return
-
-  if (!state.active) {
-    // 长按计时内出现明显位移 = 用户想滚动页面，放弃本次长按
-    const moved = Math.hypot(event.clientX - state.startX, event.clientY - state.startY)
-    if (moved > MOVE_CANCEL_PX) {
-      pressedSeedId.value = null
-      resetDragState()
-    }
-    return
-  }
-
-  if (event.cancelable)
-    event.preventDefault()
-
-  // 让被拖卡片跟随指针
-  const dragEl = document.querySelector<HTMLElement>(`.bag-seed-item[data-seed-id="${state.seedId}"]`)
-  if (dragEl) {
-    const offsetX = event.clientX - state.startX
-    const offsetY = event.clientY - state.startY
-    dragEl.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(1.04)`
-    dragEl.style.boxShadow = '0 12px 28px rgba(0,0,0,0.18)'
-    dragEl.style.opacity = '0.95'
-  }
-
-  // 计算插入位置
-  const { targetId, insertAfter } = findDropTarget(state, event.clientX, event.clientY)
-  state.hoverTargetId = targetId
-  state.hoverInsertAfter = insertAfter
-  dropHoverTargetId.value = targetId
-  dropHoverInsertAfter.value = insertAfter
-}
-
-function commitDrop() {
-  const state = dragState
-  if (!state?.active) {
-    cleanupDraggedElementStyle(state?.seedId ?? null)
-    resetDragState()
-    return
-  }
-  const list = visibleList().map(s => Number(s.seedId))
-  const fromIdx = list.indexOf(state.seedId)
-  if (fromIdx < 0) {
-    cleanupDraggedElementStyle(state.seedId)
-    resetDragState()
-    return
-  }
-  // 移除被拖的那张
-  list.splice(fromIdx, 1)
-
-  let insertAt: number
-  if (state.hoverTargetId === null || state.hoverTargetId === undefined) {
-    // 没命中具体目标卡（拖到了空白区域）→ 落到末尾
-    insertAt = list.length
-  }
-  else {
-    // 命中目标卡：在「已移除被拖卡」的 list 上找目标的索引
-    const targetIdx = list.indexOf(state.hoverTargetId)
-    if (targetIdx < 0) {
-      // 目标卡不在 list 里了（理论不会发生），兜底落到末尾
-      insertAt = list.length
-    }
-    else {
-      insertAt = state.hoverInsertAfter ? targetIdx + 1 : targetIdx
-    }
-  }
-  // 边界保护
-  insertAt = Math.max(0, Math.min(insertAt, list.length))
-  list.splice(insertAt, 0, state.seedId)
-  localPriority.value = list
-  emitChange()
-  resetDragState()
-}
-
-function cleanupDraggedElementStyle(seedId?: number | null) {
-  if (seedId === undefined || seedId === null)
-    return
-  const dragEl = document.querySelector<HTMLElement>(`.bag-seed-item[data-seed-id="${seedId}"]`)
-  if (dragEl) {
-    dragEl.style.transform = ''
-    dragEl.style.boxShadow = ''
-    dragEl.style.opacity = ''
-  }
-}
-
-function handleCardPointerEnd(event: PointerEvent) {
-  if (!dragState || event.pointerId !== dragState.pointerId) {
-    return
-  }
-  // pointercancel 不提交：用户取消了手势，不应改数据，但清掉拖动样式
-  if (event.type === 'pointercancel') {
-    cleanupDraggedElementStyle(dragState.seedId)
-    resetDragState()
-    return
-  }
-  commitDrop()
-}
-
-function handleGlobalPointerCancel(event: PointerEvent) {
-  // 当任何 pointercancel 发生时（例如来电、系统弹窗）也要兜底清理
-  if (dragState && event.pointerId === dragState.pointerId) {
-    cleanupDraggedElementStyle(dragState.seedId)
-    resetDragState()
-  }
-}
-
-onBeforeUnmount(() => {
-  if (typeof document !== 'undefined')
-    document.removeEventListener('pointercancel', handleGlobalPointerCancel)
-  resetDragState()
-})
-
-onMounted(() => {
-  if (typeof document !== 'undefined')
-    document.addEventListener('pointercancel', handleGlobalPointerCancel)
-})
 
 function removeBagSeedFromPriority(seedId: number) {
   const num = Number(seedId)
@@ -560,7 +242,7 @@ defineExpose({ fetchBagSeeds })
       </div>
       <button
         type="button"
-        class="inline-flex items-center gap-1 border border-amber-300 rounded-md px-2.5 py-1 text-xs text-amber-800 font-medium transition-colors hover:bg-amber-100 disabled:opacity-50 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/40"
+        class="inline-flex items-center gap-1 border border-amber-300 rounded-md px-2.5 py-1 text-xs text-amber-800 font-medium transition-colors dark:border-amber-700 hover:bg-amber-100 dark:text-amber-200 disabled:opacity-50 dark:hover:bg-amber-900/40"
         :disabled="saving || sortedBagSeeds.length === 0"
         @click="resetBagSeedPriority"
       >
@@ -575,7 +257,7 @@ defineExpose({ fetchBagSeeds })
       <span>{{ bagSeedsError }}</span>
       <button
         type="button"
-        class="border border-amber-300 rounded-md px-2.5 py-1 text-xs text-amber-800 font-medium transition-colors hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/40"
+        class="border border-amber-300 rounded-md px-2.5 py-1 text-xs text-amber-800 font-medium transition-colors dark:border-amber-700 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
         @click="fetchBagSeeds(true)"
       >
         重新加载
@@ -585,48 +267,31 @@ defineExpose({ fetchBagSeeds })
       背包中暂无可种植的种子
     </div>
 
-    <div v-else class="bag-seed-grid grid gap-x-2 gap-y-7 sm:grid-cols-2 xl:grid-cols-3">
-      <template v-for="(seed, index) in sortedBagSeeds" :key="seed.seedId">
-        <!--
-          被拖动卡的处理：永远渲染 .bag-seed-item（避免 Vue v-if 把它从 DOM 移除后丢失事件 + E2E 难定位）。
-          - 拖动期间给它 position:fixed + transform，脱离网格布局
-          - 原位置由 .bag-seed-ghost 同步占位，宽度高度与原卡一致
-        -->
-        <div
-          v-if="ghostSeedId === Number(seed.seedId)"
-          class="bag-seed-ghost border-2 border-dashed border-amber-300 rounded-xl dark:border-amber-700/60"
-          :style="{ width: ghostWidth ? `${ghostWidth}px` : undefined, height: ghostHeight ? `${ghostHeight}px` : undefined }"
-          aria-hidden="true"
-        />
+    <draggable
+      v-else
+      v-model="dragList"
+      item-key="seedId"
+      :animation="160"
+      ghost-class="bag-seed-ghost"
+      chosen-class="bag-seed-chosen"
+      drag-class="bag-seed-drag"
+      :disabled="saving"
+      :delay="120"
+      :delay-on-touch-only="true"
+      filter=".seed-act"
+      :prevent-on-filter="false"
+      class="bag-seed-grid grid gap-x-2 gap-y-7 sm:grid-cols-2 xl:grid-cols-3"
+      @end="onDragEnd"
+    >
+      <template #item="{ element: seed, index }">
         <div
           class="bag-seed-item relative flex select-none items-center gap-2.5 border border-amber-200 rounded-xl bg-white py-2 pl-5 pr-2.5 transition-shadow dark:border-amber-700/50 dark:bg-gray-800"
           :class="{
             // 锁定种子：把默认 1px 浅橙边换成 2px 深橙边，背景也染成 amber-50 提示，单层醒目不再叠 ring 出现双边框
             '!border-2 !border-amber-500 !bg-amber-50 dark:!border-amber-400 dark:!bg-amber-900/30': seed.locked,
-            'z-30 cursor-grabbing': draggingSeedId === Number(seed.seedId),
-            'ring-2 ring-dashed ring-emerald-500 dark:ring-emerald-400': dropHoverTargetId === Number(seed.seedId)
-              && draggingSeedId !== Number(seed.seedId),
-            'cursor-grab ring-2 ring-amber-300 dark:ring-amber-600': pressedSeedId === Number(seed.seedId) && draggingSeedId !== Number(seed.seedId),
-            'invisible': draggingSeedId === Number(seed.seedId),
           }"
           :data-seed-id="seed.seedId"
-          :style="draggingSeedId === Number(seed.seedId)
-            ? {
-                position: 'fixed',
-                left: '0px',
-                top: '0px',
-                width: ghostWidth ? `${ghostWidth}px` : undefined,
-                transform: `translate(0px, 0px) scale(1.04)`,
-                willChange: 'transform',
-                pointerEvents: 'none',
-                zIndex: 50,
-              }
-            : undefined"
-          :title="seed.locked ? '该种子已在「我的背包」中锁定，不参与种植' : undefined"
-          @pointerdown="handleCardPointerDown($event, seed.seedId)"
-          @pointermove="handleCardPointerMove"
-          @pointerup="handleCardPointerEnd"
-          @pointercancel="handleCardPointerEnd"
+          :title="seed.locked ? '该种子已在「我的背包」中锁定，不参与种植' : '拖动可调整优先顺序'"
         >
           <!-- 左上角序号徽标，压在卡片边角上 -->
           <span
@@ -676,12 +341,12 @@ defineExpose({ fetchBagSeeds })
             </div>
           </div>
 
-          <!-- 右侧操作：上移 / 下移 / 移出优先列表 -->
-          <div class="flex shrink-0 items-center gap-0.5">
+          <!-- 右侧操作：上移 / 下移 / 移出优先列表（这些按钮不参与拖拽） -->
+          <div class="seed-act flex shrink-0 items-center gap-0.5">
             <div class="flex flex-col items-center">
               <button
                 type="button"
-                class="h-4 w-5 grid place-items-center rounded text-gray-400 transition-colors hover:text-amber-600 disabled:opacity-30 dark:hover:text-amber-300"
+                class="grid h-4 w-5 place-items-center rounded text-gray-400 transition-colors hover:text-amber-600 disabled:opacity-30 dark:hover:text-amber-300"
                 :disabled="index === 0"
                 title="上移"
                 aria-label="上移"
@@ -691,7 +356,7 @@ defineExpose({ fetchBagSeeds })
               </button>
               <button
                 type="button"
-                class="h-4 w-5 grid place-items-center rounded text-gray-400 transition-colors hover:text-amber-600 disabled:opacity-30 dark:hover:text-amber-300"
+                class="grid h-4 w-5 place-items-center rounded text-gray-400 transition-colors hover:text-amber-600 disabled:opacity-30 dark:hover:text-amber-300"
                 :disabled="index === sortedBagSeeds.length - 1"
                 title="下移"
                 aria-label="下移"
@@ -702,7 +367,7 @@ defineExpose({ fetchBagSeeds })
             </div>
             <button
               type="button"
-              class="h-7 w-7 shrink-0 grid place-items-center rounded-md text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+              class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
               title="移出优先列表（不参与背包优先种植）"
               aria-label="移出优先列表"
               @click="removeBagSeedFromPriority(seed.seedId)"
@@ -712,16 +377,7 @@ defineExpose({ fetchBagSeeds })
           </div>
         </div>
       </template>
-
-      <!-- 末尾的「拖到这里」提示 -->
-      <div
-        v-if="draggingSeedId !== null && dropHoverTargetId === null"
-        class="bag-seed-tail-hint border-2 border-dashed border-emerald-500 rounded-xl dark:border-emerald-400 grid place-items-center text-xs text-emerald-700 font-semibold dark:text-emerald-300"
-        :style="{ minHeight: ghostHeight ? `${ghostHeight}px` : '60px' }"
-      >
-        松手即可移动到末尾
-      </div>
-    </div>
+    </draggable>
 
     <!-- 已移出优先列表的种子：可一键放回 -->
     <div v-if="excludedBagSeeds.length > 0" class="border-t border-amber-200 pt-2 dark:border-amber-800/50">
@@ -731,7 +387,7 @@ defineExpose({ fetchBagSeeds })
         </div>
         <button
           type="button"
-          class="border border-amber-300 rounded-md px-2 py-0.5 text-xs text-amber-800 font-medium transition-colors hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 dark:hover:bg-amber-900/40"
+          class="border border-amber-300 rounded-md px-2 py-0.5 text-xs text-amber-800 font-medium transition-colors dark:border-amber-700 hover:bg-amber-100 dark:text-amber-200 dark:hover:bg-amber-900/40"
           @click="restoreAllExcludedBagSeeds"
         >
           全部放回
@@ -745,7 +401,7 @@ defineExpose({ fetchBagSeeds })
           v-for="seed in excludedBagSeeds"
           :key="seed.seedId"
           type="button"
-          class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] text-amber-800 transition-colors hover:bg-amber-200 dark:bg-amber-900/40 dark:text-amber-200 dark:hover:bg-amber-900/70"
+          class="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] text-amber-800 transition-colors dark:bg-amber-900/40 hover:bg-amber-200 dark:text-amber-200 dark:hover:bg-amber-900/70"
           :title="`放回优先列表：${seed.name}`"
           @click="restoreBagSeedToPriority(seed.seedId)"
         >
@@ -756,3 +412,22 @@ defineExpose({ fetchBagSeeds })
     </div>
   </div>
 </template>
+
+<style scoped>
+/* 拖拽占位（留在原列表中的虚线框） */
+.bag-seed-ghost {
+  opacity: 0.4;
+  border: 2px dashed rgb(217 119 6 / 0.7);
+  border-radius: 0.75rem;
+  background: rgb(255 237 213 / 0.35);
+}
+/* 被选中准备拖拽的卡片 */
+.bag-seed-chosen {
+  box-shadow: 0 0 0 2px rgb(16 185 129 / 0.5);
+}
+/* 跟随指针的拖拽影像 */
+.bag-seed-drag {
+  opacity: 0.92;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+</style>

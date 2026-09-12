@@ -21,7 +21,7 @@ const {
 const { isAutomationOn } = require('../models/store');
 const { sendMsgAsync, networkEvents, getUserState } = require('../utils/network');
 const { types } = require('../utils/proto');
-const { toLong, toNum, log, logWarn, sleep } = require('../utils/utils');
+const { toLong, toNum, log, logWarn, sleep, getServerDateKey } = require('../utils/utils');
 const { compareBagSeedGameOrder } = require('../utils/bag-seed-order');
 const { updateStatusGold } = require('./status');
 
@@ -37,10 +37,16 @@ const FERTILIZER_CONTAINER_LIMIT_HOURS = 990;
 const NORMAL_CONTAINER_ID = 1011;
 const ORGANIC_CONTAINER_ID = 1012;
 
-// 化肥相关物品 ID 集合
-const FERTILIZER_RELATED_IDS = new Set([
-  100003, 100004, 100005, 100006, 100007, 100008, 100009, 100010, 100011, 100012,
+// 化肥礼包 ID 集合（使用后产出「化肥 / 有机化肥」的礼包）
+// 注意：100005-100012 是「种子包 / 图鉴礼包 / 爱心宝箱」，并非化肥，绝不能自动使用，
+// 否则会把玩家的种子包整叠消耗掉。真正的化肥由 interaction_type=fertilizer/fertilizerpro 兜底识别。
+const FERTILIZER_GIFT_PACK_IDS = new Set([
+  100003, // 化肥礼包
+  100004, // 有机化肥礼包
 ]);
+
+// 兼容旧命名：化肥相关（可自动使用）物品 ID 集合
+const FERTILIZER_RELATED_IDS = FERTILIZER_GIFT_PACK_IDS;
 
 // 普通化肥每小时提供时间（按物品 ID）
 // 79873→1h, 80514→4h, 80003→8h, 80132→12h
@@ -68,11 +74,7 @@ let fertilizerGiftLastOpenAt = 0;
 // ---- 日期工具 ----
 
 function getDateKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getServerDateKey();
 }
 
 // ---- RPC 调用 ----
@@ -214,6 +216,11 @@ function getContainerHoursFromBagItems(items) {
 function getFertilizerItemTypeAndHours(itemId) {
   const id = Number(itemId) || 0;
 
+  // 化肥礼包：使用后产出化肥，本身不直接增加容器时间
+  if (FERTILIZER_GIFT_PACK_IDS.has(id)) {
+    return { type: 'gift', perItemHours: 0 };
+  }
+
   if (NORMAL_FERTILIZER_ITEM_HOURS.has(id)) {
     return { type: 'normal', perItemHours: NORMAL_FERTILIZER_ITEM_HOURS.get(id) };
   }
@@ -262,6 +269,10 @@ async function autoOpenFertilizerGiftPacks() {
       const itemId = Number(payload.id) || 0;
       let count = Math.max(0, Number(payload.count) || 0);
       const { type, perItemHours } = getFertilizerItemTypeAndHours(itemId);
+
+      // 只处理已确认的化肥 / 化肥礼包；其余未知类型一律跳过，
+      // 防止把种子包、宝箱等非化肥道具整叠使用掉。
+      if (type !== 'normal' && type !== 'organic' && type !== 'gift') continue;
 
       // 自适应调整使用量（不超过容器上限）
       if (type === 'normal' || type === 'organic') {
@@ -706,6 +717,7 @@ module.exports = {
   useItem,
   batchUseItems,
   openFertilizerGiftPacksSilently,
+  isFertilizerRelatedItemId,
   getFertilizerGiftDailyState: () => ({
     key: 'fertilizer_gift_open',
     doneToday: fertilizerGiftDoneDateKey === getDateKey(),

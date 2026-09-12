@@ -5,48 +5,30 @@ import FarmPanel from '@/components/FarmPanel.vue'
 import TaskPanel from '@/components/TaskPanel.vue'
 
 const currentTab = ref<'farm' | 'bag' | 'task'>('farm')
+
+const tabs = [
+  { key: 'farm' as const, label: '我的农场', icon: 'i-carbon-sprout' },
+  { key: 'bag' as const, label: '我的背包', icon: 'i-carbon-box' },
+  { key: 'task' as const, label: '我的任务', icon: 'i-carbon-task' },
+]
 </script>
 
 <template>
   <div class="h-full flex flex-col p-4">
-    <div class="mb-4 flex space-x-2">
+    <div class="mb-4 flex gap-2">
       <button
-        class="rounded-lg px-4 py-2 font-medium transition-colors"
-        :class="currentTab === 'farm'
+        v-for="tab in tabs"
+        :key="tab.key"
+        class="flex-1 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors"
+        :class="currentTab === tab.key
           ? 'text-white shadow-md'
-          : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
-        :style="currentTab === 'farm' ? { backgroundColor: 'var(--theme-primary)' } : {}"
-        @click="currentTab = 'farm'"
+          : 'border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
+        :style="currentTab === tab.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
+        @click="currentTab = tab.key"
       >
-        <div class="flex items-center space-x-2">
-          <div class="i-carbon-sprout text-lg" />
-          <span>我的农场</span>
-        </div>
-      </button>
-      <button
-        class="rounded-lg px-4 py-2 font-medium transition-colors"
-        :class="currentTab === 'bag'
-          ? 'text-white shadow-md'
-          : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
-        :style="currentTab === 'bag' ? { backgroundColor: 'var(--theme-primary)' } : {}"
-        @click="currentTab = 'bag'"
-      >
-        <div class="flex items-center space-x-2">
-          <div class="i-carbon-box text-lg" />
-          <span>我的背包</span>
-        </div>
-      </button>
-      <button
-        class="rounded-lg px-4 py-2 font-medium transition-colors"
-        :class="currentTab === 'task'
-          ? 'text-white shadow-md'
-          : 'bg-white text-gray-600 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'"
-        :style="currentTab === 'task' ? { backgroundColor: 'var(--theme-primary)' } : {}"
-        @click="currentTab = 'task'"
-      >
-        <div class="flex items-center space-x-2">
-          <div class="i-carbon-task text-lg" />
-          <span>我的任务</span>
+        <div class="flex items-center justify-center gap-2">
+          <div :class="`${tab.icon} text-lg`" />
+          <span>{{ tab.label }}</span>
         </div>
       </button>
     </div>

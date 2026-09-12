@@ -32,7 +32,7 @@ function selectTheme(theme: Theme) {
 
       <div
         v-if="appStore.showThemePanel"
-        class="fixed z-[100] w-80 rounded-xl bg-white p-4 shadow-xl dark:bg-gray-800"
+        class="fixed z-[100] w-[min(90vw,20rem)] max-h-[85dvh] overflow-y-auto rounded-xl bg-white p-4 shadow-xl dark:bg-gray-800"
         :style="{
           top: '50%',
           left: '50%',

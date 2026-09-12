@@ -12,6 +12,44 @@ const { createModuleLogger } = require('./src/services/logger');
 const mainLogger = createModuleLogger('main');
 const isWorkerProcess = process.env.FARM_WORKER === '1';
 
+// ---- 进程级异常兜底 ----
+// Node >= 15 对未处理的 Promise 拒绝会直接退出进程，而 Express 4 不会接管 async
+// handler 的拒绝（超时守卫后二次 res.json 会抛 ERR_HTTP_HEADERS_SENT 等）。这里统一
+// 兜底：先记录日志并继续运行，避免单个异常拖垮整个服务；仅在短时间内异常风暴式爆发
+// 时才退出，防止进程陷入不可用状态并无限刷日志。
+const MAX_FATAL_ERRORS = 100;
+const FATAL_ERROR_WINDOW_MS = 60 * 1000;
+let fatalErrorCount = 0;
+let fatalWindowStart = Date.now();
+
+function isFatalErrorStorm() {
+    const now = Date.now();
+    if (now - fatalWindowStart > FATAL_ERROR_WINDOW_MS) {
+        fatalWindowStart = now;
+        fatalErrorCount = 0;
+    }
+    fatalErrorCount += 1;
+    return fatalErrorCount > MAX_FATAL_ERRORS;
+}
+
+process.on('unhandledRejection', (reason) => {
+    const detail = reason && reason.stack ? reason.stack : String(reason);
+    mainLogger.error(`未处理的 Promise 拒绝: ${detail}`);
+    if (isFatalErrorStorm()) {
+        mainLogger.error('未处理拒绝过于频繁，进程退出以防资源耗尽');
+        process.exit(1);
+    }
+});
+
+process.on('uncaughtException', (err) => {
+    const detail = err && err.stack ? err.stack : String(err);
+    mainLogger.error(`未捕获异常: ${detail}`);
+    if (isFatalErrorStorm()) {
+        mainLogger.error('未捕获异常过于频繁，进程退出以防资源耗尽');
+        process.exit(1);
+    }
+});
+
 async function bootstrap() {
     if (isWorkerProcess) {
         require('./src/core/worker');

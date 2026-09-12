@@ -145,7 +145,7 @@ async function redeemCard() {
         </p>
 
         <!-- 当前额度状态 -->
-        <div class="rounded-xl border border-gray-200 bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
+        <div class="border border-gray-200 rounded-xl bg-gray-50 p-3 dark:border-gray-700 dark:bg-gray-900/40">
           <div class="flex items-center gap-2 text-sm font-medium">
             <div class="i-carbon-checkmark-filled text-base" :style="{ color: 'var(--theme-primary)' }" />
             当前额度状态
@@ -153,7 +153,7 @@ async function redeemCard() {
           <div class="mt-1.5 pl-6 text-sm" :style="{ color: 'var(--theme-primary)' }">
             {{ quotaLabel }}
           </div>
-          <div class="mt-1.5 ml-6 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+          <div class="ml-6 mt-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-xs text-gray-500 dark:bg-gray-800 dark:text-gray-400">
             有效期 {{ expiryLabel }}
           </div>
         </div>
@@ -165,65 +165,65 @@ async function redeemCard() {
         <template v-if="!userStore.isSuperAdmin">
           <!-- 卡密输入 -->
           <div>
-          <label class="mb-1.5 block text-sm font-medium">卡密</label>
-          <input
-            v-model="cardKey"
-            type="text"
-            placeholder="请输入卡密"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none transition focus:border-[var(--theme-primary)] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
-            :disabled="!!inspectedCard"
-            @keyup.enter="inspectedCard ? redeemCard() : inspectCard()"
-          >
-        </div>
-
-        <!-- 卡密信息 -->
-        <div v-if="inspectedCard" class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
-          <div class="font-medium">
-            卡密可用
-          </div>
-          <div class="mt-1 text-xs space-y-0.5">
-            <div v-if="inspectedCard.days > 0">
-              有效天数：+{{ inspectedCard.days }} 天
-            </div>
-            <div v-if="inspectedCard.accountLimit > 0">
-              新增额度：+{{ inspectedCard.accountLimit }} 个
-            </div>
-            <div v-if="inspectedCard.note">
-              备注：{{ inspectedCard.note }}
-            </div>
-          </div>
-        </div>
-
-        <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
-          {{ errorMessage }}
-        </p>
-        <p v-if="successMessage" class="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
-          {{ successMessage }}
-        </p>
-
-        <div class="flex justify-end gap-2">
-          <BaseButton variant="outline" @click="close">
-            取消
-          </BaseButton>
-          <template v-if="!userStore.isSuperAdmin">
-            <BaseButton
-              v-if="!inspectedCard"
-              variant="primary"
-              :loading="inspecting"
-              @click="inspectCard"
+            <label class="mb-1.5 block text-sm font-medium">卡密</label>
+            <input
+              v-model="cardKey"
+              type="text"
+              placeholder="请输入卡密"
+              class="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm outline-none transition dark:border-gray-600 focus:border-[var(--theme-primary)] dark:bg-gray-900 dark:text-gray-100"
+              :disabled="!!inspectedCard"
+              @keyup.enter="inspectedCard ? redeemCard() : inspectCard()"
             >
-              查询卡密
+          </div>
+
+          <!-- 卡密信息 -->
+          <div v-if="inspectedCard" class="border border-emerald-200 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+            <div class="font-medium">
+              卡密可用
+            </div>
+            <div class="mt-1 text-xs space-y-0.5">
+              <div v-if="inspectedCard.days > 0">
+                有效天数：+{{ inspectedCard.days }} 天
+              </div>
+              <div v-if="inspectedCard.accountLimit > 0">
+                新增额度：+{{ inspectedCard.accountLimit }} 个
+              </div>
+              <div v-if="inspectedCard.note">
+                备注：{{ inspectedCard.note }}
+              </div>
+            </div>
+          </div>
+
+          <p v-if="errorMessage" class="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            {{ errorMessage }}
+          </p>
+          <p v-if="successMessage" class="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+            {{ successMessage }}
+          </p>
+
+          <div class="flex justify-end gap-2">
+            <BaseButton variant="outline" @click="close">
+              取消
             </BaseButton>
-            <BaseButton
-              v-else
-              variant="primary"
-              :loading="loading"
-              @click="redeemCard"
-            >
-              确认使用
-            </BaseButton>
-          </template>
-        </div>
+            <template v-if="!userStore.isSuperAdmin">
+              <BaseButton
+                v-if="!inspectedCard"
+                variant="primary"
+                :loading="inspecting"
+                @click="inspectCard"
+              >
+                查询卡密
+              </BaseButton>
+              <BaseButton
+                v-else
+                variant="primary"
+                :loading="loading"
+                @click="redeemCard"
+              >
+                确认使用
+              </BaseButton>
+            </template>
+          </div>
         </template>
       </div>
     </div>

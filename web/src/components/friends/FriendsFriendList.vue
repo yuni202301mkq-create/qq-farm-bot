@@ -49,7 +49,7 @@ function goToPage(page: number) {
       :class="blacklistGidSet.has(Number(friend.gid)) ? 'opacity-50' : ''"
       @click="emit('toggleFriend', friend.gid)"
     >
-      <div class="flex items-center gap-3">
+      <div class="flex min-w-0 items-center gap-3">
         <div class="h-10 w-10 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gray-200 ring-1 ring-gray-100 dark:bg-gray-600 dark:ring-gray-700">
           <img
             v-if="canShowFriendAvatar(friend)"
@@ -60,12 +60,12 @@ function goToPage(page: number) {
           >
           <div v-else class="i-carbon-user text-gray-400" />
         </div>
-        <div>
-          <div class="flex items-center gap-2 font-bold">
-            {{ friend.name }} ({{ friend.gid }})
+        <div class="min-w-0">
+          <div class="flex min-w-0 items-center gap-2 font-bold">
+            <span class="truncate">{{ friend.name }} ({{ friend.gid }})</span>
 
-            <span v-if="blacklistGidSet.has(Number(friend.gid))" class="rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">已屏蔽</span>
-            <span v-if="Number(friend?.dogId) === 90021" class="rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600 dark:bg-red-900/30 dark:text-red-400">护主犬</span>
+            <span v-if="blacklistGidSet.has(Number(friend.gid))" class="shrink-0 rounded bg-gray-200 px-1.5 py-0.5 text-xs text-gray-500 dark:bg-gray-700 dark:text-gray-400">已屏蔽</span>
+            <span v-if="Number(friend?.dogId) === 90021" class="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-600 dark:bg-red-900/30 dark:text-red-400">护主犬</span>
           </div>
           <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-400">
             <span

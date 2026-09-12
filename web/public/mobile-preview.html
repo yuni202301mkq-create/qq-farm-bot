@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>登录页 · 移动端布局预览</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 16px 32px;
+    background: #f1f5f9;
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    color: #0f172a;
+  }
+  h1 { font-size: 16px; font-weight: 600; margin: 0; }
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .bar button {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    color: #0f172a;
+    font-family: inherit;
+  }
+  .bar button:hover { border-color: #10b981; }
+  .bar button.active { background: #047857; border-color: #047857; color: #fff; }
+  .stage { display: flex; justify-content: center; width: 100%; }
+  .phone {
+    position: relative;
+    border: 12px solid #0f172a;
+    border-radius: 46px;
+    background: #0f172a;
+    box-shadow: 0 24px 50px -14px rgba(15, 23, 42, 0.5);
+    flex-shrink: 0;
+  }
+  .phone::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 116px;
+    height: 20px;
+    background: #0f172a;
+    border-radius: 0 0 14px 14px;
+    z-index: 3;
+  }
+  iframe { display: block; width: 100%; height: 100%; border: 0; background: #fff; border-radius: 34px; }
+  .hint { margin: 0; font-size: 12px; color: #64748b; text-align: center; }
+  .scroll-tip { font-size: 12px; color: #64748b; margin: 0; }
+  .modebar { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; align-items: center; }
+  .modebar span { font-size: 12px; color: #64748b; }
+  .modebar button {
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    color: #0f172a;
+    font-family: inherit;
+  }
+  .modebar button:hover { border-color: #10b981; }
+  .modebar button.active { background: #047857; border-color: #047857; color: #fff; }
+</style>
+</head>
+<body>
+  <h1>登录页 · 移动端布局预览</h1>
+
+  <div class="bar" id="bar"></div>
+
+  <div class="modebar" id="modebar">
+    <span>页面：</span>
+    <button data-src="/login" class="active">登录 / 注册 / 续费</button>
+    <button data-src="/login?mode=forgot">忘记密码弹窗（两步式）</button>
+  </div>
+
+  <div class="stage">
+    <div class="phone" id="phone">
+      <iframe id="frame" src="/login" title="登录页预览"></iframe>
+    </div>
+  </div>
+
+  <p class="scroll-tip">iframe 内为真实渲染，可以直接输入、切换登录 / 注册 / 忘记密码 / 续费。</p>
+  <p class="hint">提示：软键盘相关行为（聚焦缩放、键盘弹出后的滚动）需真机验证，此处只能看布局。</p>
+
+<script>
+  // 仅用于本地开发预览，不会被应用代码引用
+  var DEVICES = [
+    { name: 'iPhone SE 375×667', w: 375, h: 667 },
+    { name: 'iPhone 14 390×844', w: 390, h: 844 },
+    { name: 'iPhone 14 Pro Max 430×932', w: 430, h: 932 },
+    { name: 'Pixel 7 412×915', w: 412, h: 915 },
+    { name: '小屏 320×640', w: 320, h: 640 },
+    { name: '平板 768×1024', w: 768, h: 1024 }
+  ]
+
+  var phone = document.getElementById('phone')
+  var bar = document.getElementById('bar')
+  var current = null
+
+  function apply(device, btn) {
+    if (current === device.name) return
+    current = device.name
+
+    phone.style.width = device.w + 'px'
+    phone.style.height = device.h + 'px'
+
+    // 高度超出窗口时整体等比缩小，保证一屏能看完
+    var chromeH = 24
+    var available = window.innerHeight - 210
+    var scale = Math.min(1, available / (device.h + chromeH))
+    phone.style.transform = 'scale(' + scale + ')'
+    phone.style.transformOrigin = 'top center'
+    // transform 不改变布局占位，用负 margin 把缩掉的高度还给文档流
+    phone.style.marginBottom = '-' + Math.round((device.h + chromeH) * (1 - scale)) + 'px'
+
+    var buttons = bar.querySelectorAll('button')
+    for (var i = 0; i < buttons.length; i++) buttons[i].classList.remove('active')
+    if (btn) btn.classList.add('active')
+  }
+
+  DEVICES.forEach(function (device) {
+    var btn = document.createElement('button')
+    btn.textContent = device.name
+    btn.addEventListener('click', function () { apply(device, btn) })
+    bar.appendChild(btn)
+  })
+
+  window.addEventListener('resize', function () {
+    var device = DEVICES.filter(function (d) { return d.name === current })[0]
+    if (device) {
+      current = null
+      var active = bar.querySelector('button.active')
+      apply(device, active)
+    }
+  })
+
+  // 切换 iframe 加载的页面（普通登录页 / 直接唤起找回密码弹窗）
+  var modebar = document.getElementById('modebar')
+  var frame = document.getElementById('frame')
+  modebar.querySelectorAll('button').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      modebar.querySelectorAll('button').forEach(function (b) { b.classList.remove('active') })
+      btn.classList.add('active')
+      frame.src = btn.getAttribute('data-src')
+    })
+  })
+
+  apply(DEVICES[1], bar.querySelectorAll('button')[1])
+</script>
+</body>
+</html>

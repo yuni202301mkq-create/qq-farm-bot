@@ -3,25 +3,28 @@ import { marked } from 'marked'
 import { computed, onBeforeUnmount, onMounted } from 'vue'
 import { useAppStore } from '@/stores/app'
 
-defineProps<{
+const props = defineProps<{
   show: boolean
+  content: string
+  loading?: boolean
+  error?: string
 }>()
 
 const emit = defineEmits<{
   close: []
+  retry: []
 }>()
-
-const updateReadme = '暂无更新日志。'
 
 const appStore = useAppStore()
 
-const renderedContent = computed(() => marked.parse(updateReadme, {
+const renderedContent = computed(() => marked.parse(props.content || '', {
   gfm: true,
   breaks: false,
 }) as string)
 
 function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape')
+  // 组件常驻挂载，弹窗没打开时不能响应 Esc，否则会把未读的更新日志误标记成已读
+  if (event.key === 'Escape' && props.show)
     emit('close')
 }
 
@@ -60,7 +63,19 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
           </header>
 
           <div class="update-log-body">
-            <article class="markdown-content" v-html="renderedContent" />
+            <p v-if="loading" class="update-log-state">
+              正在加载更新日志…
+            </p>
+            <div v-else-if="error" class="update-log-state update-log-state--error">
+              <span>{{ error }}</span>
+              <button type="button" @click="emit('retry')">
+                重试
+              </button>
+            </div>
+            <article v-else-if="content" class="markdown-content" v-html="renderedContent" />
+            <p v-else class="update-log-state">
+              暂无更新日志。
+            </p>
           </div>
 
           <footer class="update-log-footer">
@@ -154,6 +169,39 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
   color: #374151;
   font-size: 0.9rem;
   line-height: 1.72;
+}
+
+.update-log-state {
+  margin: 24px 0;
+  color: #6b7280;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.update-log-state--error {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+}
+
+.update-log-state--error span {
+  color: #b91c1c;
+}
+
+.update-log-state--error button {
+  padding: 8px 20px;
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  background: #15803d;
+  border: 0;
+  border-radius: 6px;
+  transition: 0.2s ease;
+}
+
+.update-log-state--error button:hover {
+  background: #166534;
 }
 
 .markdown-content :deep(h1) {

@@ -168,7 +168,7 @@ async function getIllustratedListV2(refresh = false, illustratedType = 1) {
       request
     );
 
-    logger.info('图鉴API响应', {
+    logger.debug('图鉴API响应', {
       replyBodyLength: body ? body.length : 0,
       replyBodyType: typeof body,
     });
@@ -177,7 +177,7 @@ async function getIllustratedListV2(refresh = false, illustratedType = 1) {
     let decoded;
     try {
       decoded = types.GetIllustratedListV2Reply.decode(body);
-      logger.info('图鉴解码成功', { itemsCount: decoded.items ? decoded.items.length : 0 });
+      logger.debug('图鉴解码成功', { itemsCount: decoded.items ? decoded.items.length : 0 });
     } catch (err) {
       logger.error('图鉴解码失败', { error: err.message });
       decoded = { items: [] };
@@ -185,7 +185,7 @@ async function getIllustratedListV2(refresh = false, illustratedType = 1) {
 
     // 原始解析作为回退和辅助
     const raw = decodeIllustratedReplyRaw(body);
-    logger.info('图鉴原始数据解析', { rawItemCount: raw.rawItemCount, normalizedCount: raw.normalizedItems.length });
+    logger.debug('图鉴原始数据解析', { rawItemCount: raw.rawItemCount, normalizedCount: raw.normalizedItems.length });
     const summary = {
       current_score: raw.currentScore,
       level: raw.level,

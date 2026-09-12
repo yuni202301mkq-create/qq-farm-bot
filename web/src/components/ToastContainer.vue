@@ -49,7 +49,7 @@ function getBorderColor(type: string) {
           <button
             v-if="toast.action"
             type="button"
-            class="mt-2 inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+            class="mt-2 inline-flex items-center gap-1 border border-red-200 rounded-md bg-red-50 px-2.5 py-1 text-xs text-red-600 font-medium transition-colors dark:border-red-800 dark:bg-red-900/20 hover:bg-red-100 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-900/30"
             @click="toastStore.runAction(toast.id)"
           >
             <div class="i-carbon-renew" />

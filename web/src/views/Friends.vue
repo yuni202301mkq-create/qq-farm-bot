@@ -1026,10 +1026,10 @@ async function handleBatchAddKnownFriendGids() {
 
       <div
         v-if="showGidListModal"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+        class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4"
         @click.self="showGidListModal = false"
       >
-        <div class="max-h-[80vh] max-w-2xl w-full flex flex-col rounded-lg bg-white shadow-xl dark:bg-gray-800">
+        <div class="my-auto max-h-[calc(100dvh-2rem)] max-w-2xl w-full flex flex-col rounded-lg bg-white shadow-xl dark:bg-gray-800 lg:max-h-[80vh]">
           <div class="flex shrink-0 items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
             <div>
               <h3 class="text-lg text-gray-800 font-semibold dark:text-gray-100">

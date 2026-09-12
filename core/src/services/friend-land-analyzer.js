@@ -436,13 +436,19 @@ async function fetchFriendsDogInfo() {
  * Get a friend's lands in detail (for frontend display).
  */
 async function getFriendLandsDetail(gid) {
+  // enter 成功后，任何异常路径都必须 Leave，否则会一直占用全局唯一的访问会话，
+  // 导致其余好友访问全部排队阻塞（直到 2 分钟超时兜底）。
+  let entered = false;
+  let left = false;
   try {
     const enterReply = await enterFriendFarm(gid);
+    entered = true;
     const lands = enterReply.lands || [];
     const userState = getUserState();
     const plantBlacklist = getPlantBlacklist(userState.accountId);
     const analysis = analyzeFriendLands(lands, userState.gid, '', { plantBlacklist });
     await leaveFriendFarm(gid);
+    left = true;
 
     const detailLands = [];
     const serverTimeSec = getServerTimeSec();
@@ -591,6 +597,13 @@ async function getFriendLandsDetail(gid) {
     return { lands: detailLands, summary: analysis };
   } catch {
     return { lands: [], summary: {} };
+  } finally {
+    // 仅在确实进入过、且尚未离开时兜底 Leave，避免 enter 自身已清理 token 时重复释放。
+    if (entered && !left) {
+      try {
+        await leaveFriendFarm(gid);
+      } catch {}
+    }
   }
 }
 

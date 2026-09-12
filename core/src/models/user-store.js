@@ -6,6 +6,10 @@ const DEFAULT_ACCOUNT_LIMIT = 2;
 const SUPER_ADMIN_USERNAME = 'admin';
 const USERS_FILE = getDataFile('users.json');
 const CARD_KEYS_FILE = getDataFile('card-keys.json');
+// 免费试用卡密领取记录：同一来源地址只能领一次
+const FREE_CARD_CLAIMS_FILE = getDataFile('free-card-claims.json');
+const FREE_CARD_DAYS = 7;
+const FREE_CARD_NOTE = '免费试用7天';
 
 ensureDataDir();
 
@@ -256,6 +260,62 @@ function deleteCardKey(code) {
   saveCardKeys(keys.filter(item => item.code !== target));
 }
 
+// ============ 免费试用卡密 ============
+
+/** 统一来源地址格式，避免 ::ffff:1.2.3.4 和 1.2.3.4 被当成两个来源 */
+function normalizeClaimAddress(address) {
+  return String(address || '').trim().toLowerCase().replace(/^::ffff:/, '');
+}
+
+function loadFreeCardClaims() {
+  const data = readJson(FREE_CARD_CLAIMS_FILE, { claims: [] });
+  return Array.isArray(data.claims) ? data.claims : [];
+}
+
+function saveFreeCardClaims(claims) {
+  writeJson(FREE_CARD_CLAIMS_FILE, { claims });
+}
+
+function listFreeCardClaims() {
+  return loadFreeCardClaims().sort((a, b) => b.claimedAt - a.claimedAt);
+}
+
+function findFreeCardClaim(address) {
+  const target = normalizeClaimAddress(address);
+  return loadFreeCardClaims().find(claim => claim.address === target) || null;
+}
+
+/** 领取免费试用卡密：同一来源地址只能领一次 */
+function claimFreeCard({ address, username = '', days = FREE_CARD_DAYS, accountLimit = DEFAULT_ACCOUNT_LIMIT } = {}) {
+  const target = normalizeClaimAddress(address);
+  if (!target) throw new Error('无法识别来源地址，请稍后重试');
+  if (findFreeCardClaim(target)) throw new Error('该网络已领取过免费卡密，请使用卡密注册');
+
+  const [card] = createCardKeys({ count: 1, days, accountLimit, note: FREE_CARD_NOTE });
+  const claims = loadFreeCardClaims();
+  claims.push({
+    address: target,
+    username: String(username || '').trim(),
+    card: card.code,
+    days: Number(card.days),
+    claimedAt: Date.now(),
+  });
+  saveFreeCardClaims(claims);
+  return card;
+}
+
+/** 清除领取记录：传 address 只清该来源，不传则清空全部 */
+function resetFreeCardClaims(address) {
+  const target = normalizeClaimAddress(address);
+  if (!target) {
+    saveFreeCardClaims([]);
+    return [];
+  }
+  const remaining = loadFreeCardClaims().filter(claim => claim.address !== target);
+  saveFreeCardClaims(remaining);
+  return remaining;
+}
+
 module.exports = {
   DEFAULT_ACCOUNT_LIMIT,
   SUPER_ADMIN_USERNAME,
@@ -273,4 +333,10 @@ module.exports = {
   findCardKey,
   consumeCardKey,
   deleteCardKey,
+  FREE_CARD_DAYS,
+  listFreeCardClaims,
+  findFreeCardClaim,
+  claimFreeCard,
+  resetFreeCardClaims,
+  normalizeClaimAddress,
 };

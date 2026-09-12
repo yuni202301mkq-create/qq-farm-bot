@@ -328,9 +328,9 @@ function formatGrowTime(seconds: any) {
 
 <template>
   <div class="space-y-4">
-    <div class="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+    <div class="custom-scrollbar flex gap-2 overflow-x-auto border-b border-gray-200 dark:border-gray-700">
       <button
-        class="border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+        class="shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors"
         :class="activeTab === 'crops'
           ? 'border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400'
           : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
@@ -345,7 +345,7 @@ function formatGrowTime(seconds: any) {
         </div>
       </button>
       <button
-        class="border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+        class="shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors"
         :class="activeTab === 'blacklist'
           ? 'border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400'
           : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
@@ -360,7 +360,7 @@ function formatGrowTime(seconds: any) {
         </div>
       </button>
       <button
-        class="border-b-2 px-4 py-2 text-sm font-medium transition-colors"
+        class="shrink-0 whitespace-nowrap border-b-2 px-4 py-2 text-sm font-medium transition-colors"
         :class="activeTab === 'strategy'
           ? 'border-blue-500 text-blue-600 dark:border-blue-400 dark:text-blue-400'
           : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
@@ -399,8 +399,8 @@ function formatGrowTime(seconds: any) {
               </p>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <div class="relative">
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="relative min-w-0 w-full sm:w-auto">
               <div class="i-carbon-search absolute left-3 top-1/2 text-gray-400 -translate-y-1/2" />
               <input
                 v-model="searchKeyword"
@@ -409,19 +409,19 @@ function formatGrowTime(seconds: any) {
                 class="w-full border border-gray-300 rounded-lg bg-white py-2 pl-10 pr-4 text-sm sm:w-64 dark:border-gray-600 focus:border-blue-500 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
               >
             </div>
-            <div v-if="list.length" class="text-sm text-gray-500">
+            <div v-if="list.length" class="shrink-0 text-sm text-gray-500">
               {{ sortedList.length }}/{{ list.length }}
             </div>
-            <label class="whitespace-nowrap text-sm font-medium">排序:</label>
+            <label class="shrink-0 whitespace-nowrap text-sm font-medium">排序:</label>
             <BaseSelect
               v-model="sortKey"
               :options="sortOptions"
-              class="w-40"
+              class="min-w-[6rem] flex-1 sm:w-40 sm:flex-none"
             />
             <BaseSelect
               v-model="sortOrder"
               :options="sortOrderOptions"
-              class="w-20"
+              class="min-w-[4.5rem] flex-1 sm:w-20 sm:flex-none"
             />
           </div>
         </div>

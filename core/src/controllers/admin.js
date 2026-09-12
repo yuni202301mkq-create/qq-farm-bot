@@ -144,9 +144,27 @@ function configureCorsMiddleware(expressApp) {
   });
 }
 
+/**
+ * Vite 产物文件名带内容哈希，可长期强缓存；
+ * 入口 HTML 与未带哈希的文件必须每次回源校验，否则用户会长时间停留在旧版本
+ * （表现为「改了代码但手机上还是老界面」）。
+ */
+const HASHED_ASSET_RE = /[/\\]assets[/\\]/;
+
 function configureStaticAssets(expressApp, webDist) {
   if (fs.existsSync(webDist)) {
-    expressApp.use(express.static(webDist));
+    expressApp.use(
+      express.static(webDist, {
+        setHeaders(res, filePath) {
+          const name = path.basename(filePath);
+          if (name === "index.html" || !HASHED_ASSET_RE.test(filePath)) {
+            res.setHeader("Cache-Control", "no-cache");
+            return;
+          }
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        },
+      }),
+    );
     return;
   }
   adminLogger.warn("web build not found", { webDist });
@@ -188,6 +206,16 @@ function registerRequestTimeoutGuard(expressApp) {
   expressApp.use((req, res, next) => {
     if (req.path === "/api/health") return next();
 
+    // 超时后若后续 handler 仍继续执行并再次 res.json/res.send（例如慢速 provider
+    // 调用在超时后才返回），直接忽略，避免 ERR_HTTP_HEADERS_SENT 抛错刷屏。
+    for (const method of ["json", "send"]) {
+      const original = res[method];
+      res[method] = function guardedSend(...args) {
+        if (res.locals.requestTimedOut && res.headersSent) return res;
+        return original.apply(this, args);
+      };
+    }
+
     const timeout = setTimeout(() => {
       if (res.headersSent || res.writableEnded || res.destroyed) return;
       res.locals.requestTimedOut = true;
@@ -212,7 +240,9 @@ function registerSpaFallback(expressApp, webDist) {
       });
     }
     if (fs.existsSync(webDist)) {
-      return res.sendFile(path.join(webDist, "index.html"));
+      return res.sendFile(path.join(webDist, "index.html"), {
+        headers: { "Cache-Control": "no-cache" },
+      });
     }
     return res
       .status(404)
@@ -421,6 +451,7 @@ function startAdminServer(dataProvider) {
     requireAdminToken,
     createAdminSession,
     updateAdminSessions,
+    invalidateAdminSessions,
   });
   registerAdminCardKeyRoutes({
     app,
@@ -558,7 +589,6 @@ function startAdminServer(dataProvider) {
     getRuntimeConfig,
     updateRuntimeConfig,
   });
-  adminLogger.info("抓包服务默认关闭，未随管理面板启动运行");
   registerAdminCaptureRoutes({
     app,
     store,
@@ -572,6 +602,11 @@ function startAdminServer(dataProvider) {
     ensureEmbeddedCaptureService,
     stopEmbeddedCaptureService,
   });
+  // 抓包服务默认开启：嵌入模式下随管理面板一起拉起，无需人工到设置页保存一次
+  if (ensureEmbeddedCaptureService())
+    adminLogger.info("抓包服务已随管理面板启动（默认开启）");
+  else
+    adminLogger.info("抓包服务未随管理面板启动（已关闭、或使用独立服务）");
   registerAdminCurrentUserRoutes({
     app,
     requireAdminToken,

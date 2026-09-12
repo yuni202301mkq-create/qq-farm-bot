@@ -39,7 +39,12 @@ function registerAdminIllustratedPurchaseRoutes({
   getAccountIdFromRequest,
   canAccessAccount,
   sendProviderError,
+  invalidateIllustratedCache,
 }) {
+  const dropCache =
+    typeof invalidateIllustratedCache === "function"
+      ? invalidateIllustratedCache
+      : () => {};
   const routeContext = {
     getAccountIdFromRequest,
     canAccessAccount,
@@ -59,6 +64,7 @@ function registerAdminIllustratedPurchaseRoutes({
       }
 
       const result = await provider.buyGoods(accountId, goodsId, 1, price || 0);
+      dropCache(accountId);
       adminLogger.info("图鉴购买种子成功", {
         accountId,
         goodsId,
@@ -131,6 +137,7 @@ function registerAdminIllustratedPurchaseRoutes({
         }
       }
 
+      dropCache(accountId, illustratedType);
       adminLogger.info("图鉴一键购买完成", {
         accountId,
         successCount,

@@ -2,15 +2,15 @@
 import type { Account } from '@/stores/account'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
+import { useRouter } from 'vue-router'
 import api from '@/api'
 import AccountCareerModal from '@/components/AccountCareerModal.vue'
 import AccountModal from '@/components/AccountModal.vue'
-import RenewCardModal from '@/components/RenewCardModal.vue'
 import RemarkModal from '@/components/RemarkModal.vue'
+import RenewCardModal from '@/components/RenewCardModal.vue'
 import { getPlatformClass, getPlatformLabel, useAccountStore } from '@/stores/account'
 import { useStatusStore } from '@/stores/status'
 import { useUserStore } from '@/stores/user'
-import { useRouter } from 'vue-router'
 
 const accountStore = useAccountStore()
 const statusStore = useStatusStore()
@@ -251,7 +251,7 @@ function handleLogout() {
       @click="toggleDropdown"
     >
       <span
-        class="-m-1.5 h-12 w-12 flex shrink-0 cursor-pointer items-center justify-center rounded-full"
+        class="h-12 w-12 flex shrink-0 cursor-pointer items-center justify-center rounded-full -m-1.5"
         role="button"
         tabindex="0"
         aria-label="查看角色生涯"

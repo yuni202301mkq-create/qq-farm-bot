@@ -8,7 +8,10 @@ const { getAllLands, harvest, farming, unlockLand, upgradeLand } = require('./fa
 const { analyzeLands, resolveRemovableHarvestedLands } = require('./farm-land-analyzer');
 const { runFertilizerByConfig } = require('./farm-fertilizer');
 const { autoPlantEmptyLands } = require('./planting-service');
-const { startFertilizerBuyCheckTimer, stopFertilizerBuyCheckTimer } = require('./farm-scheduler');
+const {
+  startFertilizerBuyCheckTimer,
+  stopFertilizerBuyCheckTimer
+} = require('./farm-scheduler');
 
 // ─── 状态标记 ───
 

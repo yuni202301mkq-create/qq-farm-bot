@@ -152,7 +152,7 @@ function accountAvatar(acc: any) {
                 </span>
                 <span
                   v-if="userIsAdmin && acc.username"
-                  class="rounded bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-purple-600 dark:bg-purple-900/30 dark:text-purple-300"
+                  class="rounded bg-purple-50 px-1.5 py-0.5 text-[10px] text-purple-600 font-medium leading-tight dark:bg-purple-900/30 dark:text-purple-300"
                   :title="`归属用户：${acc.username}`"
                 >
                   <span class="i-carbon-user mr-0.5 inline-block align-[-1px]" />
@@ -169,7 +169,7 @@ function accountAvatar(acc: any) {
             <template v-if="acc.startError && !acc.running">
               <button
                 type="button"
-                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border border-red-200 bg-red-50 px-3 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500 active:scale-95 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
+                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap border border-red-200 rounded-full bg-red-50 px-3 py-1 text-xs text-red-600 font-medium transition-colors active:scale-95 dark:border-red-800 dark:bg-red-900/20 hover:bg-red-100 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-900/30"
                 :disabled="isAccountOpsDisabled"
                 :title="acc.startError"
                 @click.stop="emit('toggle', acc)"
@@ -179,7 +179,7 @@ function accountAvatar(acc: any) {
               </button>
               <button
                 type="button"
-                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs font-medium text-red-600 underline-offset-2 transition-colors hover:underline focus:outline-none focus:ring-2 focus:ring-red-500 dark:text-red-400"
+                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-red-600 font-medium underline-offset-2 transition-colors dark:text-red-400 hover:underline focus:outline-none focus:ring-2 focus:ring-red-500"
                 :disabled="isAccountOpsDisabled"
                 :title="`重新获取 ${acc.platform === 'wx' ? '微信Code并' : ''}启动账号`"
                 @click.stop="emit('toggle', acc)"
@@ -215,7 +215,7 @@ function accountAvatar(acc: any) {
             <BaseButton
               :data-testid="`set-default-plan-${acc.id}`"
               variant="ghost"
-              class="group relative min-h-[36px] min-w-[36px] !p-2"
+              class="group relative min-h-11 min-w-11 !p-2"
               :loading="defaultPlanSettingId === String(acc.id)"
               :disabled="!!defaultPlanSettingId || !!defaultPlanApplyingId"
               aria-label="设置默认方案"
@@ -230,7 +230,7 @@ function accountAvatar(acc: any) {
             <BaseButton
               :data-testid="`apply-default-plan-${acc.id}`"
               variant="ghost"
-              class="group relative min-h-[36px] min-w-[36px] !p-2"
+              class="group relative min-h-11 min-w-11 !p-2"
               :loading="defaultPlanApplyingId === String(acc.id)"
               :disabled="!!defaultPlanSettingId || !!defaultPlanApplyingId"
               aria-label="应用默认方案"
@@ -244,7 +244,7 @@ function accountAvatar(acc: any) {
             </BaseButton>
             <BaseButton
               variant="ghost"
-              class="group relative min-h-[36px] min-w-[36px] !p-2"
+              class="group relative min-h-11 min-w-11 !p-2"
               aria-label="设置"
               title="设置"
               @click="emit('settings', acc)"
@@ -256,7 +256,7 @@ function accountAvatar(acc: any) {
             </BaseButton>
             <BaseButton
               variant="ghost"
-              class="group relative min-h-[36px] min-w-[36px] !p-2"
+              class="group relative min-h-11 min-w-11 !p-2"
               aria-label="编辑"
               title="编辑"
               @click="emit('edit', acc)"
@@ -268,7 +268,7 @@ function accountAvatar(acc: any) {
             </BaseButton>
             <BaseButton
               variant="ghost"
-              class="group relative min-h-[36px] min-w-[36px] text-red-500 !p-2 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300"
+              class="group relative min-h-11 min-w-11 text-red-500 !p-2 dark:text-red-400 hover:text-red-600 dark:hover:text-red-300"
               aria-label="删除"
               title="删除"
               @click="emit('delete', acc)"

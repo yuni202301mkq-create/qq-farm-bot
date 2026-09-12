@@ -59,7 +59,7 @@ async function submit() {
 </script>
 
 <template>
-  <div class="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+  <div class="border border-gray-200 rounded-xl bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
     <div class="border-b border-gray-100 px-4 py-3 dark:border-gray-700">
       <h3 class="flex items-center gap-2 text-base text-gray-900 font-bold dark:text-gray-100">
         <div class="i-carbon-user-role text-lg" :style="{ color: 'var(--theme-primary)' }" />
@@ -68,7 +68,7 @@ async function submit() {
     </div>
 
     <div class="p-4">
-      <div class="rounded-lg border border-gray-100 bg-gray-50/60 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+      <div class="border border-gray-100 rounded-lg bg-gray-50/60 p-4 dark:border-gray-700 dark:bg-gray-900/40">
         <div class="mb-3 flex items-center gap-2 text-sm font-semibold">
           <div class="i-carbon-password text-base" :style="{ color: 'var(--theme-primary)' }" />
           修改用户密码
@@ -83,11 +83,11 @@ async function submit() {
                 :type="showOld ? 'text' : 'password'"
                 autocomplete="current-password"
                 placeholder="当前用户密码"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-sm outline-none transition focus:border-[var(--theme-primary)] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-sm outline-none transition dark:border-gray-600 focus:border-[var(--theme-primary)] dark:bg-gray-900 dark:text-gray-100"
               >
               <button
                 type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                class="absolute right-2 top-1/2 p-1 text-gray-400 -translate-y-1/2 hover:text-gray-600"
                 @click="showOld = !showOld"
               >
                 <div :class="showOld ? 'i-carbon-view-off' : 'i-carbon-view'" />
@@ -103,11 +103,11 @@ async function submit() {
                 :type="showNew ? 'text' : 'password'"
                 autocomplete="new-password"
                 placeholder="至少 6 位"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-sm outline-none transition focus:border-[var(--theme-primary)] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-sm outline-none transition dark:border-gray-600 focus:border-[var(--theme-primary)] dark:bg-gray-900 dark:text-gray-100"
               >
               <button
                 type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                class="absolute right-2 top-1/2 p-1 text-gray-400 -translate-y-1/2 hover:text-gray-600"
                 @click="showNew = !showNew"
               >
                 <div :class="showNew ? 'i-carbon-view-off' : 'i-carbon-view'" />
@@ -123,11 +123,11 @@ async function submit() {
                 :type="showConfirm ? 'text' : 'password'"
                 autocomplete="new-password"
                 placeholder="再次输入新密码"
-                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-sm outline-none transition focus:border-[var(--theme-primary)] dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+                class="w-full border border-gray-200 rounded-lg px-3 py-2.5 pr-10 text-sm outline-none transition dark:border-gray-600 focus:border-[var(--theme-primary)] dark:bg-gray-900 dark:text-gray-100"
               >
               <button
                 type="button"
-                class="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+                class="absolute right-2 top-1/2 p-1 text-gray-400 -translate-y-1/2 hover:text-gray-600"
                 @click="showConfirm = !showConfirm"
               >
                 <div :class="showConfirm ? 'i-carbon-view-off' : 'i-carbon-view'" />

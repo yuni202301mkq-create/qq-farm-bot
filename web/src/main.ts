@@ -1,5 +1,6 @@
 import { createPinia } from 'pinia'
 import { createApp } from 'vue'
+import { usePerformanceMode } from '@/composables/usePerformanceMode'
 import { useAppStore } from '@/stores/app'
 import { useToastStore } from '@/stores/toast'
 import App from './App.vue'
@@ -7,6 +8,9 @@ import router from './router'
 import '@unocss/reset/tailwind.css'
 import 'virtual:uno.css'
 import './style.css'
+
+// 尽早挂上流畅模式，避免移动端首屏先闪一下完整动效再降级
+void usePerformanceMode()
 
 const app = createApp(App)
 const pinia = createPinia()

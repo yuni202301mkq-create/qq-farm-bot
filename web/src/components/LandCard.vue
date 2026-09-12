@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { useSharedClock } from '@/composables/useSharedClock'
 import OfficialCrystalMutation from './OfficialCrystalMutation.vue'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
   land: any
@@ -26,14 +27,26 @@ const emit = defineEmits<{
 }>()
 
 const land = computed(() => props.land)
-const now = ref(Date.now())
+// 共享时钟：整页只跑一个 1 秒定时器，而不是每张卡片各起一个。
+const now = useSharedClock()
 const cardElement = ref<HTMLElement | null>(null)
 const bubbleElement = ref<HTMLElement | null>(null)
 const floatingBubbleStyle = ref<Record<string, string>>({})
 const floatingBubbleBelow = ref(false)
-let timer: ReturnType<typeof setInterval> | null = null
 
 const floatingBubbleVisible = computed(() => props.selected)
+
+let bubbleFrame: number | null = null
+let bubbleListenersBound = false
+
+function scheduleBubbleUpdate() {
+  if (bubbleFrame !== null)
+    return
+  bubbleFrame = requestAnimationFrame(() => {
+    bubbleFrame = null
+    void updateFloatingBubblePosition()
+  })
+}
 
 async function updateFloatingBubblePosition() {
   if (!props.isometric || !floatingBubbleVisible.value)
@@ -69,19 +82,42 @@ function handleBubbleAction(type: 'fertilize' | 'remove') {
     emit('remove', land.value)
 }
 
-onMounted(() => {
-  timer = setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-  window.addEventListener('resize', updateFloatingBubblePosition)
-  window.addEventListener('scroll', updateFloatingBubblePosition, true)
-})
+// 只有「等距视图 + 当前选中」这张卡片才需要跟随滚动/缩放重定位气泡。
+// 以前每张卡片都在 window 上常驻 scroll(捕获)/resize 监听，几十张卡就是滚动一帧几十次回调，
+// 每次还会 await nextTick + getBoundingClientRect 触发强制回流。
+function bindBubbleListeners() {
+  if (bubbleListenersBound || typeof window === 'undefined')
+    return
+  bubbleListenersBound = true
+  window.addEventListener('resize', scheduleBubbleUpdate)
+  window.addEventListener('scroll', scheduleBubbleUpdate, true)
+}
+
+function unbindBubbleListeners() {
+  if (bubbleFrame !== null) {
+    cancelAnimationFrame(bubbleFrame)
+    bubbleFrame = null
+  }
+  if (!bubbleListenersBound || typeof window === 'undefined')
+    return
+  bubbleListenersBound = false
+  window.removeEventListener('resize', scheduleBubbleUpdate)
+  window.removeEventListener('scroll', scheduleBubbleUpdate, true)
+}
+
+watch(
+  () => props.isometric && floatingBubbleVisible.value,
+  (active) => {
+    if (active)
+      bindBubbleListeners()
+    else
+      unbindBubbleListeners()
+  },
+  { immediate: true },
+)
 
 onUnmounted(() => {
-  if (timer)
-    clearInterval(timer)
-  window.removeEventListener('resize', updateFloatingBubblePosition)
-  window.removeEventListener('scroll', updateFloatingBubblePosition, true)
+  unbindBubbleListeners()
 })
 
 const isFertilizable = computed(() =>

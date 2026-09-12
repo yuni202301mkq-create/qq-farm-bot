@@ -18,6 +18,10 @@ const LOG_RETENTION_MS = 3 * 24 * 60 * 60 * 1000;
 const LOG_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 const ROTATED_LOG_RE = /^(?:combined|error)(?:-\d{4}-\d{2}-\d{2}-\d{2})?\.log$/;
 
+// 只在交互式终端上输出颜色；nohup/systemd/docker logs 等重定向场景
+// 输出 ANSI 转义会被当成乱码（如 [t'o、¶、¦ 等），设置 NO_COLOR 也可强制关闭
+const CONSOLE_COLOR_ENABLED = Boolean(process.stdout?.isTTY) && !process.env.NO_COLOR;
+
 let logCleanupTimer = null;
 
 function padDatePart(value) {
@@ -158,6 +162,25 @@ function createConsoleFallback(moduleName) {
 
 let rootLogger = null;
 
+/** 终端 locale 不是 UTF-8 时中文会显示乱码（如 å®‰æŽ'），启动时给出可操作的提示 */
+function warnIfConsoleLocaleNotUtf8(logger) {
+  if (!process.stdout?.isTTY) return;
+  if (process.platform === 'win32') {
+    try {
+      const { execSync } = require('node:child_process');
+      const output = execSync('chcp', { stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      if (!/65001/.test(output)) {
+        logger.warn('当前控制台代码页不是 UTF-8(65001)，中文日志可能显示乱码；建议先执行 chcp 65001 再启动');
+      }
+    } catch {}
+    return;
+  }
+  const locale = String(process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || '').trim();
+  if (!locale || !/utf-?8/i.test(locale)) {
+    logger.warn(`终端 locale 为 ${locale || '(未设置)'}，中文日志可能显示乱码；建议启动前执行: export LANG=C.UTF-8`);
+  }
+}
+
 /** 获取/创建根 logger（Winston） */
 function getRootLogger() {
   if (rootLogger) return rootLogger;
@@ -173,6 +196,24 @@ function getRootLogger() {
 
   const level = String(process.env.LOG_LEVEL || 'info').toLowerCase();
   const { combine, timestamp, errors, json, colorize, printf } = winston.format;
+  const consoleFormats = [
+    ...(CONSOLE_COLOR_ENABLED ? [colorize()] : []),
+    timestamp(),
+    errors({ stack: true }),
+    printf(info => {
+      const moduleTag = info.module ? `[${info.module}] ` : '';
+      const msg = redactString(info.message || '');
+      const rest = { ...info };
+      delete rest.level;
+      delete rest.message;
+      delete rest.timestamp;
+      delete rest.app;
+      delete rest.module;
+      const meta = sanitizeMeta(rest);
+      const metaStr = meta && Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
+      return `${info.timestamp} [${info.level}] ${moduleTag}${msg}${metaStr}`;
+    })
+  ];
 
   rootLogger = winston.createLogger({
     level,
@@ -180,24 +221,7 @@ function getRootLogger() {
     transports: [
       // 控制台输出
       new winston.transports.Console({
-        format: combine(
-          colorize(),
-          timestamp(),
-          errors({ stack: true }),
-          printf(info => {
-            const moduleTag = info.module ? `[${info.module}] ` : '';
-            const msg = redactString(info.message || '');
-            const rest = { ...info };
-            delete rest.level;
-            delete rest.message;
-            delete rest.timestamp;
-            delete rest.app;
-            delete rest.module;
-            const meta = sanitizeMeta(rest);
-            const metaStr = meta && Object.keys(meta).length > 0 ? ` ${JSON.stringify(meta)}` : '';
-            return `${info.timestamp} [${info.level}] ${moduleTag}${msg}${metaStr}`;
-          })
-        )
+        format: combine(...consoleFormats)
       }),
       // 合并日志文件
       new DailyRotateFile({
@@ -218,6 +242,7 @@ function getRootLogger() {
       })
     ]
   });
+  warnIfConsoleLocaleNotUtf8(rootLogger);
   return rootLogger;
 }
 

@@ -53,6 +53,35 @@ function registerAdminCardKeyRoutes({
     }
   });
 
+  // 免费试用卡密领取记录
+  app.get('/api/free-card-claims', requireAdminToken, requireSuperAdminRole, (_req, res) => {
+    try {
+      res.json({
+        ok: true,
+        data: userStore.listFreeCardClaims().map(claim => ({
+          ...claim,
+          claimedAtText: formatDate(claim.claimedAt),
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // 清除领取记录：带 address 只清该来源，不带则清空全部
+  app.post('/api/free-card-claims/reset', requireAdminToken, requireSuperAdminRole, (req, res) => {
+    try {
+      const { address } = req.body || {};
+      const remaining = userStore.resetFreeCardClaims(address);
+      res.json({
+        ok: true,
+        data: remaining.map(claim => ({ ...claim, claimedAtText: formatDate(claim.claimedAt) })),
+      });
+    } catch (error) {
+      res.status(400).json({ ok: false, error: error.message });
+    }
+  });
+
   // 用户列表
   app.get('/api/users', requireAdminToken, requireSuperAdminRole, (_req, res) => {
     try {

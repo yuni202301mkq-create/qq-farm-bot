@@ -45,7 +45,7 @@ const helpMax = intervalModel('helpMax')
 
 <template>
   <div class="space-y-3">
-    <div v-if="section === 'all' || section === 'planting'" class="grid grid-cols-2 gap-3 md:grid-cols-2">
+    <div v-if="section === 'all' || section === 'planting'" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <BaseInput
         v-model.number="farmMin"
         label="农场巡查最小 (秒)"
@@ -60,7 +60,7 @@ const helpMax = intervalModel('helpMax')
       />
     </div>
 
-    <div v-if="section === 'all' || section === 'friends'" class="grid grid-cols-2 gap-3 md:grid-cols-2">
+    <div v-if="section === 'all' || section === 'friends'" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <BaseInput
         v-model.number="helpMin"
         label="帮助巡查最小 (秒)"
@@ -84,14 +84,14 @@ const helpMax = intervalModel('helpMax')
         <input
           v-model="settings.friendQuietHours.start"
           type="time"
-          class="w-20 border border-gray-200 rounded bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          class="h-9 w-24 border border-gray-200 rounded bg-white px-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           :disabled="!settings.friendQuietHours.enabled"
         >
         <span class="text-xs text-gray-500">-</span>
         <input
           v-model="settings.friendQuietHours.end"
           type="time"
-          class="w-20 border border-gray-200 rounded bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+          class="h-9 w-24 border border-gray-200 rounded bg-white px-2 text-sm dark:border-gray-600 dark:bg-gray-800 dark:text-white"
           :disabled="!settings.friendQuietHours.enabled"
         >
       </div>

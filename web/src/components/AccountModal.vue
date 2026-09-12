@@ -547,8 +547,8 @@ watch(activeTab, (tab) => {
 </script>
 
 <template>
-  <div v-if="show" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-    <div class="max-h-[90vh] max-w-md w-full overflow-hidden rounded-lg shadow-xl" :style="{ background: 'var(--theme-bg)' }">
+  <div v-if="show" class="fixed inset-0 z-[9999] flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+    <div class="my-auto max-h-[calc(100dvh-2rem)] max-w-md w-full overflow-hidden rounded-lg shadow-xl lg:max-h-[90vh]" :style="{ background: 'var(--theme-bg)' }">
       <div class="flex items-center justify-between border-b p-4" :style="{ borderColor: 'color-mix(in srgb, var(--theme-text) 10%, transparent)' }">
         <h3 class="text-lg font-semibold" :style="{ color: 'var(--theme-text)' }">
           {{ editData ? '编辑账号' : '添加账号' }}
@@ -558,7 +558,7 @@ watch(activeTab, (tab) => {
         </BaseButton>
       </div>
 
-      <div class="max-h-[calc(90vh-80px)] overflow-y-auto p-4">
+      <div class="max-h-[calc(100dvh-6rem)] overflow-y-auto p-4 lg:max-h-[calc(90vh-80px)]">
         <div v-if="errorMessage" class="mb-4 rounded p-3 text-sm" :style="{ background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }">
           {{ errorMessage }}
         </div>

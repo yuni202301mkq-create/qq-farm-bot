@@ -33,7 +33,7 @@ onUnmounted(() => {
       <header class="glass-panel relative z-30 mx-2 mt-2 h-16 flex shrink-0 items-center justify-between rounded-lg px-4 md:mx-4 md:mt-4 md:px-5">
         <div class="min-w-0 flex items-center gap-3">
           <button
-            class="h-9 w-9 flex items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            class="h-10 w-10 flex items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
             @click="appStore.toggleSidebar"
           >
             <div class="i-carbon-menu text-xl" />

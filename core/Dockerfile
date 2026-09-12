@@ -42,6 +42,9 @@ WORKDIR /app/core
 
 ENV NODE_ENV=production
 ENV TZ=Asia/Shanghai
+# musl 默认 C locale 不带 UTF-8，中文日志经 docker logs 输出到非 UTF-8 终端会显示乱码
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
 RUN apk add --no-cache tzdata && \
     cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \

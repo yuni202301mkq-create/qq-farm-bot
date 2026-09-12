@@ -284,7 +284,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
         <article
           v-for="(info, key) in moduleInfo"
           :key="key"
-          class="group min-h-[184px] flex flex-col border border-gray-200 rounded-lg bg-white p-4 transition dark:border-gray-700 hover:border-[var(--theme-primary)] dark:bg-gray-800 hover:shadow-sm"
+          class="group min-h-[150px] flex flex-col border border-gray-200 rounded-lg bg-white p-4 transition sm:min-h-[184px] dark:border-gray-700 hover:border-[var(--theme-primary)] dark:bg-gray-800 hover:shadow-sm"
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex items-center gap-3">
@@ -328,9 +328,12 @@ watch(() => props.currentAccountId, loadQixiFriends)
     </template>
 
     <Teleport to="body">
-      <div v-if="activeModule && activeInfo" class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-gray-950/45 p-3 backdrop-blur-[2px] sm:p-6" @click.self="cancel">
-        <section class="max-h-[94vh] max-w-4xl w-full flex flex-col overflow-hidden border border-gray-200 rounded-lg bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
-          <header class="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4 dark:border-gray-700 sm:px-6">
+      <!-- 移动端：用 100dvh 限高（94vh 会低于浏览器底栏、页脚被遮）；垂直位置交给弹窗的 my-auto ——
+           有富余空间时上下 auto 外边距平分即「居中」，空间不够时归零即「贴顶可滚」。
+           这样不必用任何宽度断点，也不会重蹈 place-items-center 把标题挤出屏幕顶部且滚不到的覆辙。 -->
+      <div v-if="activeModule && activeInfo" class="fixed inset-0 z-50 grid justify-items-center items-start overflow-y-auto bg-gray-950/45 p-4 backdrop-blur-[2px] sm:p-6" @click.self="cancel">
+        <section class="my-auto max-h-[calc(100dvh-2rem)] max-w-4xl w-full flex flex-col overflow-hidden border border-gray-200 rounded-lg bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800 lg:max-h-[94vh]">
+          <header class="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3.5 dark:border-gray-700 sm:gap-4 sm:px-6 sm:py-4">
             <div class="min-w-0 flex items-start gap-3">
               <img v-if="activeInfo.image" :src="activeInfo.image" alt="" class="h-11 w-11 shrink-0 rounded-lg bg-gray-100 object-contain p-1.5 dark:bg-gray-700">
               <span v-else class="inline-grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-gray-100 text-xl dark:bg-gray-700" :class="activeInfo.icon" />
@@ -348,12 +351,12 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 </p>
               </div>
             </div>
-            <button class="rounded-lg p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" @click="cancel">
+            <button class="h-11 w-11 flex shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" @click="cancel">
               <span class="i-carbon-close text-xl" />
             </button>
           </header>
 
-          <div class="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+          <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
             <div class="mb-5 flex flex-wrap gap-2">
               <span
                 v-for="tag in summaryTags(activeModule as ModuleKey)"
@@ -661,11 +664,11 @@ watch(() => props.currentAccountId, loadQixiFriends)
               </section>
             </div>
           </div>
-          <footer class="flex justify-end gap-2 border-t bg-gray-50/70 px-5 py-4 dark:border-gray-700 dark:bg-gray-900/20 sm:px-6">
-            <BaseButton variant="secondary" size="sm" @click="cancel">
+          <footer class="flex shrink-0 justify-end gap-2 border-t bg-gray-50/70 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] dark:border-gray-700 dark:bg-gray-900/20 sm:px-6 sm:py-4">
+            <BaseButton variant="secondary" size="sm" class="flex-1 sm:flex-none" @click="cancel">
               取消
             </BaseButton>
-            <BaseButton size="sm" :loading="saving" @click="finish">
+            <BaseButton size="sm" class="flex-1 sm:flex-none" :loading="saving" @click="finish">
               保存并关闭
             </BaseButton>
           </footer>

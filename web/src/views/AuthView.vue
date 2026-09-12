@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import type { UserRole } from '@/stores/user'
 import axios from 'axios'
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ResetPasswordModal from '@/components/login/ResetPasswordModal.vue'
+import UpdateLogModal from '@/components/login/UpdateLogModal.vue'
 import { useAppStore } from '@/stores/app'
-import { useToastStore } from '@/stores/toast'
 import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const appStore = useAppStore()
-const toast = useToastStore()
 
 type Mode = 'login' | 'register' | 'renew'
 
@@ -56,8 +56,10 @@ const password = ref('')
 const cardKey = ref('')
 const showPassword = ref(false)
 const loading = ref(false)
+const freeCardLoading = ref(false)
 const errorMsg = ref('')
 const renewResult = ref('')
+const freeCardResult = ref('')
 const passwordRef = ref<HTMLInputElement | null>(null)
 
 // 用户名输入回车后自动聚焦到密码框，提升移动端流畅度
@@ -81,6 +83,121 @@ function handleEnterSubmit() {
   submit()
 }
 
+// ============ 更新日志 ============
+const DEFAULT_CHANGELOG_VERSION = 'V2.5.4'
+const CHANGELOG_SEEN_KEY = 'qq-farm-bot:changelog-seen'
+
+const showUpdateLog = ref(false)
+const changelogContent = ref('')
+const changelogLoading = ref(false)
+const changelogError = ref('')
+const changelogVersion = ref('')
+
+// 日志里的版本号，例如「# 2026/08/26 V2.5.5」→ V2.5.5
+const VERSION_PATTERN = /v?\d+(?:\.\d+)+[a-z0-9]*/i
+
+function hashText(text: string) {
+  let hash = 5381
+  for (let i = 0; i < text.length; i += 1)
+    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0
+  return (hash >>> 0).toString(36)
+}
+
+// 取第一个带版本号的标题，跳过纯标题行（如「# QQ经典农场更新日志」）
+function extractVersion(markdown: string) {
+  const heading = markdown
+    .split('\n')
+    .find(line => /^\s*#{1,6}\s+\S/.test(line) && VERSION_PATTERN.test(line)) || ''
+  const matched = heading.match(VERSION_PATTERN)
+  return matched ? matched[0].toUpperCase() : ''
+}
+
+// 已读指纹：版本号 + 内容摘要，版本或内容任一项变化都会重新弹一次
+function changelogFingerprint(markdown: string) {
+  const version = extractVersion(markdown)
+  return version ? `${version}#${hashText(markdown)}` : hashText(markdown)
+}
+
+function readSeenChangelog() {
+  try {
+    return localStorage.getItem(CHANGELOG_SEEN_KEY) || ''
+  }
+  catch {
+    return ''
+  }
+}
+
+function markChangelogSeen() {
+  try {
+    localStorage.setItem(CHANGELOG_SEEN_KEY, changelogFingerprint(changelogContent.value))
+  }
+  catch {
+    void 0
+  }
+}
+
+async function loadChangelog(autoOpen = false) {
+  if (changelogLoading.value)
+    return
+  changelogLoading.value = true
+  changelogError.value = ''
+  try {
+    const { data } = await axios.get('/api/changelog')
+    if (!data?.ok)
+      throw new Error(data?.error || '获取更新日志失败')
+    changelogContent.value = String(data.data || '')
+    changelogVersion.value = changelogContent.value ? extractVersion(changelogContent.value) : ''
+    if (autoOpen && changelogContent.value && readSeenChangelog() !== changelogFingerprint(changelogContent.value))
+      showUpdateLog.value = true
+  }
+  catch (error: any) {
+    if (autoOpen)
+      return
+    changelogError.value = error?.response?.data?.error || error?.message || '获取更新日志失败'
+  }
+  finally {
+    changelogLoading.value = false
+  }
+}
+
+function openUpdateLog() {
+  showUpdateLog.value = true
+  if (!changelogContent.value && !changelogLoading.value)
+    loadChangelog()
+}
+
+function closeUpdateLog() {
+  // 只有弹窗真的打开过才算已读，避免未弹出时误记导致新版不再提醒
+  if (!showUpdateLog.value)
+    return
+  showUpdateLog.value = false
+  if (changelogContent.value)
+    markChangelogSeen()
+}
+
+// ============ 找回密码（两步式弹窗） ============
+const showResetModal = ref(false)
+
+function openResetModal() {
+  showResetModal.value = true
+}
+
+// 弹窗成功重置后：把账号回填到登录框并切回登录模式，方便用户直接用新密码登录
+function onResetSuccess(resetUsername: string) {
+  if (resetUsername)
+    username.value = resetUsername
+  if (mode.value !== 'login')
+    switchTo('login')
+  showResetModal.value = false
+}
+
+onMounted(() => {
+  loadChangelog(true)
+  // 分享链接 /login?mode=forgot 直接唤起找回弹窗，页面本身仍按登录态呈现
+  if (String(route.query.mode) === 'forgot')
+    showResetModal.value = true
+})
+
 // 夜间/白天模式，同步全局主题
 const useDark = ref(appStore.isDark)
 
@@ -95,11 +212,8 @@ function switchTo(next: Mode) {
   mode.value = next
   errorMsg.value = ''
   renewResult.value = ''
+  freeCardResult.value = ''
   router.replace({ path: '/login', query: next === 'login' ? {} : { mode: next } })
-}
-
-function handleForgotPassword() {
-  toast.info('忘记密码？请通过卡密续费或联系管理员重置账号。')
 }
 
 function applySession(data: any) {
@@ -113,11 +227,36 @@ function applySession(data: any) {
   }
 }
 
+// 免费领取 7 天试用卡密：自动填入卡密输入框，同一网络只能领一次
+async function claimFreeCard() {
+  if (freeCardLoading.value)
+    return
+  freeCardLoading.value = true
+  errorMsg.value = ''
+  freeCardResult.value = ''
+  try {
+    const { data } = await axios.post('/api/free-card', {
+      username: username.value.trim(),
+    })
+    if (!data?.ok)
+      throw new Error(data?.error || '领取失败')
+    cardKey.value = String(data.data?.cardKey || '')
+    freeCardResult.value = `已领取 ${data.data?.days || 7} 天免费卡密，已自动填入上方，完成注册即可生效`
+  }
+  catch (error: any) {
+    errorMsg.value = error?.response?.data?.error || error?.message || '领取失败，请稍后重试'
+  }
+  finally {
+    freeCardLoading.value = false
+  }
+}
+
 async function submit() {
   if (loading.value)
     return
   errorMsg.value = ''
   renewResult.value = ''
+  freeCardResult.value = ''
 
   if (mode.value === 'renew') {
     if (!username.value.trim() || !cardKey.value.trim()) {
@@ -200,8 +339,9 @@ async function submit() {
     </button>
 
     <div class="auth-card">
-      <!-- 左侧品牌区 -->
-      <aside class="brand-side">
+      <!-- 左侧品牌区：只依赖 mode，输入框每次按键都会让本组件重新 render，
+           用 v-memo 跳过这段子树的 vnode 重建与 diff，降低移动端输入延迟 -->
+      <aside v-memo="[mode]" class="brand-side">
         <div class="brand-side__inner">
           <div class="brand-side__badge">
             <span class="dot" /> {{ panel.badge }}
@@ -256,7 +396,10 @@ async function submit() {
 
         <!-- 模式标签 -->
         <div v-if="mode !== 'login'" class="form-side__mode-tag">
-          <span :class="mode === 'register' ? 'i-carbon-user-follow' : 'i-carbon-search-locate'" class="text-base" />
+          <span
+            :class="mode === 'register' ? 'i-carbon-user-follow' : 'i-carbon-search-locate'"
+            class="text-base"
+          />
           <span>{{ mode === 'register' ? '注册新号' : '使用卡密续费' }}</span>
         </div>
 
@@ -266,7 +409,6 @@ async function submit() {
             <input
               id="auth-username"
               v-model="username"
-              v-model.lazy="username"
               type="text"
               autocomplete="username"
               autocapitalize="off"
@@ -280,7 +422,7 @@ async function submit() {
             >
           </div>
 
-          <div v-if="mode !== 'renew'" class="form-side__field">
+          <div v-if="mode === 'login' || mode === 'register'" class="form-side__field">
             <label class="form-side__label" for="auth-password">
               {{ mode === 'register' ? '设置登录密码' : '密码' }}
             </label>
@@ -316,7 +458,6 @@ async function submit() {
             <input
               id="auth-card"
               v-model="cardKey"
-              v-model.lazy="cardKey"
               type="text"
               autocomplete="off"
               autocapitalize="off"
@@ -333,6 +474,17 @@ async function submit() {
                 ? '注册卡密与充值卡密是两种卡，请分开办理'
                 : '卡密注册后立即生效，有效期自动叠加' }}
             </p>
+            <button
+              v-if="mode === 'register'"
+              type="button"
+              class="form-side__free-card"
+              :disabled="freeCardLoading"
+              @click="claimFreeCard"
+            >
+              <span v-if="freeCardLoading" class="i-svg-spinners-90-ring-with-bg" />
+              <span v-else class="i-carbon-gift" />
+              <span>免费领取 7 天卡密</span>
+            </button>
           </div>
 
           <p v-if="errorMsg" class="form-side__alert form-side__alert--error">
@@ -342,6 +494,10 @@ async function submit() {
           <p v-if="renewResult" class="form-side__alert form-side__alert--success">
             <span class="i-carbon-checkmark-filled" />
             <span>{{ renewResult }}</span>
+          </p>
+          <p v-if="freeCardResult" class="form-side__alert form-side__alert--success">
+            <span class="i-carbon-checkmark-filled" />
+            <span>{{ freeCardResult }}</span>
           </p>
 
           <button
@@ -371,7 +527,7 @@ async function submit() {
           <button
             type="button"
             class="form-side__link"
-            @click="handleForgotPassword"
+            @click="openResetModal"
           >
             忘记密码
           </button>
@@ -399,16 +555,38 @@ async function submit() {
         <div class="form-side__divider" />
 
         <div class="form-side__footer">
-          <div class="form-side__version">
+          <button
+            type="button"
+            class="form-side__version"
+            title="查看更新日志"
+            @click="openUpdateLog"
+          >
             <span class="i-carbon-time" />
-            <span>更新日志 · V2.5.4</span>
-          </div>
+            <span>更新日志 · {{ changelogVersion || DEFAULT_CHANGELOG_VERSION }}</span>
+          </button>
           <div class="form-side__build">
             游戏版本 1.13.3.11, 20260826
           </div>
         </div>
       </section>
     </div>
+
+    <!-- 更新日志弹窗 -->
+    <UpdateLogModal
+      :show="showUpdateLog"
+      :content="changelogContent"
+      :loading="changelogLoading"
+      :error="changelogError"
+      @close="closeUpdateLog"
+      @retry="loadChangelog()"
+    />
+
+    <!-- 找回密码（两步式）弹窗 -->
+    <ResetPasswordModal
+      :show="showResetModal"
+      @close="showResetModal = false"
+      @success="onResetSuccess"
+    />
   </div>
 </template>
 
@@ -417,25 +595,35 @@ async function submit() {
 .auth-shell {
   position: relative;
   min-height: 100vh;
+  /* dvh：移动端地址栏/键盘收起时视口高度会变，用 100dvh 避免聚焦输入框时整页跳动 */
+  min-height: 100dvh;
   width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 32px 24px;
   overflow: hidden;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family:
+    'DM Sans',
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
   background:
     radial-gradient(ellipse 60% 50% at 18% 50%, rgba(16, 185, 129, 0.18) 0%, transparent 60%),
     radial-gradient(ellipse 50% 50% at 82% 50%, rgba(251, 191, 36, 0.18) 0%, transparent 60%),
     linear-gradient(135deg, #ecfdf5 0%, #f0fdfa 50%, #fef9c3 100%);
   color: #14532d;
-  transition: background 600ms ease, color 400ms ease;
+  transition:
+    background 600ms ease,
+    color 400ms ease;
 }
 
 .auth-shell.is-dark {
   background:
     radial-gradient(ellipse 60% 50% at 18% 50%, rgba(16, 185, 129, 0.22) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 50% at 82% 50%, rgba(251, 191, 36, 0.10) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 82% 50%, rgba(251, 191, 36, 0.1) 0%, transparent 60%),
     linear-gradient(135deg, #052e16 0%, #0b1410 50%, #1c1917 100%);
   color: #d1fae5;
 }
@@ -448,6 +636,9 @@ async function submit() {
   opacity: 0.55;
   pointer-events: none;
   transition: opacity 600ms ease;
+  /* 提升为独立合成层：这三层 80px 大模糊如果留在主绘制层，
+     输入框每次重绘都会连带重算模糊，在移动端代价极高 */
+  transform: translate3d(0, 0, 0);
 }
 .bg-blob--emerald {
   width: 520px;
@@ -530,7 +721,9 @@ async function submit() {
     0 30px 60px -15px rgba(6, 95, 70, 0.18),
     0 18px 36px -18px rgba(6, 95, 70, 0.18),
     0 0 0 1px rgba(255, 255, 255, 0.4);
-  transition: background 400ms ease, box-shadow 400ms ease;
+  transition:
+    background 400ms ease,
+    box-shadow 400ms ease;
 }
 .is-dark .auth-card {
   background: #111c17;
@@ -684,8 +877,13 @@ async function submit() {
 }
 
 @keyframes statusPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.45); }
-  50% { box-shadow: 0 0 0 8px rgba(52, 211, 153, 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(52, 211, 153, 0);
+  }
 }
 
 /* ============== Form Side (Right) ============== */
@@ -778,7 +976,11 @@ async function submit() {
   font-size: 14px;
   color: #111827;
   outline: none;
-  transition: all 200ms ease;
+  /* 只过渡真正会变的属性：`transition: all` 会让每次输入都走一遍全属性插值计算 */
+  transition:
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms ease;
   font-family: inherit;
   -webkit-appearance: none;
   appearance: none;
@@ -786,7 +988,11 @@ async function submit() {
   -webkit-tap-highlight-color: transparent;
   /* iOS 上阻止点击输入框时的灰块高亮 */
   touch-action: manipulation;
+  /* 全局设了 text-rendering: optimizeLegibility，会启用字距/连字计算；
+     输入框文本每敲一个字就要重绘，这里退回默认的渲染策略 */
+  text-rendering: auto;
 }
+
 .form-side__input::placeholder {
   color: #9ca3af;
 }
@@ -846,6 +1052,44 @@ async function submit() {
   line-height: 1.4;
 }
 
+.form-side__free-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 9px 14px;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px dashed rgba(16, 185, 129, 0.5);
+  border-radius: 10px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    opacity 160ms ease;
+}
+.form-side__free-card:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.18);
+  border-color: #10b981;
+}
+.form-side__free-card:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.is-dark .form-side__free-card {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(52, 211, 153, 0.4);
+}
+.is-dark .form-side__free-card:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #34d399;
+}
+
 .form-side__alert {
   display: flex;
   align-items: center;
@@ -891,7 +1135,10 @@ async function submit() {
   box-shadow:
     0 10px 20px -8px rgba(6, 95, 70, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  transition: transform 160ms ease, box-shadow 200ms ease, opacity 200ms ease;
+  transition:
+    transform 160ms ease,
+    box-shadow 200ms ease,
+    opacity 200ms ease;
 }
 .form-side__submit:hover:not(:disabled) {
   transform: translateY(-1px);
@@ -921,7 +1168,9 @@ async function submit() {
   color: #047857;
   cursor: pointer;
   font-size: 12px;
-  transition: color 160ms ease, font-weight 160ms ease;
+  transition:
+    color 160ms ease,
+    font-weight 160ms ease;
   padding: 0;
 }
 .form-side__link:hover {
@@ -963,12 +1212,28 @@ async function submit() {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  padding: 4px 8px;
   color: #047857;
+  font-size: 12px;
   font-weight: 500;
+  cursor: pointer;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  transition:
+    color 160ms ease,
+    background 160ms ease;
+}
+.form-side__version:hover {
+  color: #064e3b;
+  background: rgba(16, 185, 129, 0.12);
 }
 .is-dark .form-side__version {
   color: #6ee7b7;
+}
+.is-dark .form-side__version:hover {
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.15);
 }
 .form-side__build {
   font-size: 11px;
@@ -976,30 +1241,125 @@ async function submit() {
 }
 
 /* ============== Responsive ============== */
+/* 移动端：卡片转纵向，左侧品牌区压成一条紧凑横幅（原来要吃掉近 200px 纵向空间），
+   表单区全面换成拇指友好的尺寸，保证软键盘弹出后主体内容仍在一屏内可达 */
 @media (max-width: 860px) {
   .auth-card {
     flex-direction: column;
     max-width: 440px;
     min-height: 0;
+    /* 纵向堆叠后内容变高，软键盘弹出时可视高度骤减：卡片自身必须能滚动，
+       否则输入框会被裁掉且滚不过去。dvh 会跟随地址栏/键盘收缩，比 vh 准确 */
+    max-height: calc(100vh - 64px);
+    max-height: calc(100dvh - 64px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
+
+  /* ---- 品牌区：只保留徽标 + 标题的紧凑横幅 ---- */
   .brand-side {
     width: 100%;
   }
   .brand-side__inner {
     min-height: 0;
-    padding: 32px 28px 28px;
+    padding: 18px 22px 16px;
+    justify-content: flex-start;
   }
-  .brand-side__title {
-    font-size: 26px;
+  /* 长描述、三条要点、状态条在移动端都挤在首屏，直接收起 */
+  .brand-side__desc,
+  .brand-side__foot {
+    display: none;
+  }
+  .brand-side__badge {
+    font-size: 10px;
+    letter-spacing: 0.2em;
   }
   .brand-side__hero {
-    margin-top: 20px;
+    margin-top: 6px;
   }
-  .brand-side__foot {
-    margin-top: 24px;
+  .brand-side__title {
+    font-size: 20px;
+    /* 桌面是两行竖排，移动端并成一行，省掉一整行的高度 */
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 6px;
   }
+  .brand-side__title-line {
+    display: inline;
+  }
+
+  /* ---- 表单区：收紧留白 + 放大触控目标 ---- */
   .form-side {
-    padding: 32px 28px;
+    padding: 20px 22px 18px;
+    justify-content: flex-start;
+  }
+  .form-side__head {
+    margin-bottom: 16px;
+  }
+  .form-side__brand-title {
+    font-size: 15px;
+  }
+  .form-side__mode-tag {
+    margin-bottom: 14px;
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .form-side__form {
+    gap: 14px;
+  }
+  .form-side__input {
+    /* iOS Safari 会对 font-size < 16px 的输入框强制放大整页，
+       聚焦瞬间的缩放跳动就是移动端「输入不流畅」最典型的体感来源 */
+    font-size: 16px;
+    min-height: 48px;
+  }
+  .form-side__input--with-icon {
+    padding-right: 46px;
+  }
+  .form-side__eye {
+    /* 眼睛按钮放大到 44px，避免手指点偏成输入 */
+    width: 44px;
+    height: 44px;
+    right: 2px;
+  }
+  .form-side__submit {
+    height: 50px;
+    margin-top: 4px;
+  }
+
+  /* 文字链接太小，移动端改成一排等大的胶囊按钮 */
+  .form-side__links {
+    margin-top: 16px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .form-side__link {
+    min-height: 40px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: rgba(16, 185, 129, 0.08);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .form-side__link.is-active {
+    background: #047857;
+    color: #ffffff;
+  }
+  .is-dark .form-side__link.is-active {
+    background: #059669;
+    color: #ffffff;
+  }
+  .form-side__sep {
+    display: none;
+  }
+
+  /* 分割线在移动端只占空间 */
+  .form-side__divider {
+    display: none;
+  }
+  .form-side__footer {
+    margin-top: 14px;
   }
 }
 
@@ -1015,20 +1375,24 @@ async function submit() {
     padding: 8px 14px;
     font-size: 12px;
   }
-  .form-side__input {
-    /* 关键：>=16px 避免 iOS Safari 在聚焦时自动放大页面 */
-    font-size: 16px;
-    padding: 12px 14px;
+  .brand-side__inner {
+    padding: 16px 18px 14px;
+  }
+  .brand-side__title {
+    font-size: 18px;
+  }
+  .form-side {
+    padding: 18px 18px 16px;
   }
   .form-side__form {
     /* 键盘弹起时，input 滚动到视野的偏移量 */
     scroll-padding-bottom: 40vh;
   }
-  /* iOS 上 form 容器需要可滚动，否则键盘弹出时输入框会被遮挡 */
+  /* 这一档 padding 收到 16px，卡片可用高度相应放大 */
   .auth-card {
     max-height: calc(100vh - 32px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    max-height: calc(100dvh - 32px);
   }
+  /* 卡片的 overflow-y / -webkit-overflow-scrolling 已上移到 860px 断点 */
 }
 </style>

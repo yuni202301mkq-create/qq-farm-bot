@@ -11,7 +11,7 @@
 const { Buffer } = require('node:buffer');
 const { sendMsgAsync, getUserState } = require('../utils/network');
 const { types } = require('../utils/proto');
-const { toNum, log, sleep } = require('../utils/utils');
+const { toNum, log, sleep, getServerDateKey } = require('../utils/utils');
 
 // ---- 商品 ID 常量 ----
 
@@ -44,11 +44,7 @@ let freeGiftLastCheckAt = 0;
 // ---- 日期工具 ----
 
 function getDateKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, '0');
-  const day = String(now.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getServerDateKey();
 }
 
 // ---- RPC 调用 ----
@@ -245,7 +241,18 @@ async function autoBuyOrganicFertilizerViaMall() {
     perRound = Math.max(1, Math.min(BUY_PER_ROUND, Math.floor(ticket / price) || 1));
   }
 
-  for (let round = 0; round < MAX_ROUNDS; round++) {
+  // 价格或点券余额未知时无法估算可负担数量；此分支没有目标数量约束，
+  // 若照常跑满 MAX_ROUNDS 可能盲目购买上千个。因此只买一轮。
+  const priceKnown = Number.isFinite(price) && price > 0;
+  const balanceKnown = Number.isFinite(ticket) && ticket > 0;
+  const maxRounds = (priceKnown && balanceKnown) ? MAX_ROUNDS : 1;
+  if (maxRounds < MAX_ROUNDS) {
+    log('商城', `价格或点券余额未知(price=${price}, ticket=${ticket})，本轮最多购买 ${perRound} 个`, {
+      module: 'mall', event: '购买化肥', result: 'limited', price, ticket, perRound,
+    });
+  }
+
+  for (let round = 0; round < maxRounds; round++) {
     if (price > 0 && ticket > 0 && ticket < price) {
       buyPausedNoGoldDateKey = getDateKey();
       break;
@@ -321,7 +328,17 @@ async function autoBuyFertilizerViaMall(type = 'organic', targetCount = 0) {
 
   const limit = targetCount > 0 ? targetCount : Infinity;
 
-  for (let round = 0; round < MAX_ROUNDS; round++) {
+  // 有明确目标数量时已由 limit 约束；否则若价格/余额未知，只买一轮，避免盲目跑满 MAX_ROUNDS。
+  const priceKnown = Number.isFinite(price) && price > 0;
+  const balanceKnown = Number.isFinite(ticket) && ticket > 0;
+  const maxRounds = (targetCount > 0 || (priceKnown && balanceKnown)) ? MAX_ROUNDS : 1;
+  if (maxRounds < MAX_ROUNDS) {
+    log('商城', `价格或点券余额未知(price=${price}, ticket=${ticket})，本轮最多购买 ${perRound} 个`, {
+      module: 'mall', event: '购买化肥', result: 'limited', price, ticket, perRound, type,
+    });
+  }
+
+  for (let round = 0; round < maxRounds; round++) {
     if (targetCount > 0 && totalBought >= limit) break;
 
     if (price > 0 && ticket > 0 && ticket < price) {

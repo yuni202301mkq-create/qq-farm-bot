@@ -205,7 +205,7 @@ const showThemeDropdown = ref(false)
       </div>
       <!-- Mobile Close Button -->
       <button
-        class="h-8 w-8 flex flex-none items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+        class="h-10 w-10 flex flex-none items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
         @click="appStore.closeSidebar"
       >
         <div class="i-carbon-close text-xl" />
@@ -251,7 +251,7 @@ const showThemeDropdown = ref(false)
         <span class="font-mono">{{ formattedTime }}</span>
         <!-- 主题调色盘按钮 -->
         <button
-          class="h-7 w-7 flex items-center justify-center rounded-lg transition-colors hover:bg-gray-200/60 dark:hover:bg-gray-700/60"
+          class="h-9 w-9 flex items-center justify-center rounded-lg transition-colors hover:bg-gray-200/60 dark:hover:bg-gray-700/60"
           title="主题设置"
           @click="showThemeDropdown = !showThemeDropdown"
         >

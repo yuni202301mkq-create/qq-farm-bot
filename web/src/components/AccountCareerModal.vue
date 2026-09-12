@@ -84,14 +84,14 @@ onBeforeUnmount(() => {
 <template>
   <Transition name="career-fade">
     <div v-if="show" class="fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm" @click.self="emit('close')">
-      <section class="career-panel max-h-[72vh] flex w-[min(84vw,380px)] flex-col overflow-hidden rounded-3xl bg-[#f7f5ef] shadow-2xl dark:bg-gray-900 md:max-h-[min(88vh,820px)] md:w-full md:max-w-2xl">
+      <section class="career-panel max-h-[72vh] w-[min(84vw,380px)] flex flex-col overflow-hidden rounded-3xl bg-[#f7f5ef] shadow-2xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:bg-gray-900">
         <header class="relative flex flex-none items-center gap-3 border-b border-amber-100 px-4 py-3 dark:border-gray-700 sm:px-7 sm:py-5">
-          <div class="h-11 w-11 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 ring-2 ring-white dark:bg-gray-700 dark:ring-gray-600 sm:h-16 sm:w-16">
+          <div class="h-11 w-11 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 ring-2 ring-white sm:h-16 sm:w-16 dark:bg-gray-700 dark:ring-gray-600">
             <img v-if="avatar" :src="avatar" :alt="name" class="h-full w-full object-cover">
             <span v-else class="text-xl text-amber-700 font-bold">{{ name.slice(0, 1) }}</span>
           </div>
           <div class="min-w-0">
-            <h2 class="truncate text-base text-gray-900 font-bold dark:text-white sm:text-xl">
+            <h2 class="truncate text-base text-gray-900 font-bold sm:text-xl dark:text-white">
               {{ name }}
             </h2>
             <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs sm:mt-2 sm:gap-2 sm:text-sm">
@@ -107,8 +107,8 @@ onBeforeUnmount(() => {
           </button>
         </header>
 
-        <div class="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 md:p-7">
-          <div class="mb-3 text-center text-lg text-amber-700 font-bold dark:text-amber-300 sm:mb-4 sm:text-2xl">
+        <div class="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-4 md:p-7 sm:p-5">
+          <div class="mb-3 text-center text-lg text-amber-700 font-bold sm:mb-4 sm:text-2xl dark:text-amber-300">
             生涯
           </div>
 
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
           <template v-else>
             <div class="grid grid-cols-2 gap-2 sm:gap-3">
               <div class="rounded-2xl bg-white p-3 text-center shadow-sm dark:bg-gray-800 sm:p-4" :title="`精确数量：${formatNumber(totalHarvest)}`">
-                <div class="flex items-center justify-center gap-2 text-xs text-orange-600 dark:text-orange-300 sm:text-sm">
+                <div class="flex items-center justify-center gap-2 text-xs text-orange-600 sm:text-sm dark:text-orange-300">
                   <img src="/game-config/career/harvest.png" alt="" class="h-7 w-6 object-contain sm:h-9 sm:w-8">
                   <span>历史累计收获</span>
                 </div>
@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
                 </div>
               </div>
               <div class="rounded-2xl bg-white p-3 text-center shadow-sm dark:bg-gray-800 sm:p-4" :title="`精确数量：${formatNumber(totalStealCount)}`">
-                <div class="flex items-center justify-center gap-2 text-xs text-rose-600 dark:text-rose-300 sm:text-sm">
+                <div class="flex items-center justify-center gap-2 text-xs text-rose-600 sm:text-sm dark:text-rose-300">
                   <img src="/game-config/career/steal.png" alt="" class="h-7 w-7 object-contain sm:h-9 sm:w-9">
                   <span>摘取好友作物</span>
                 </div>
@@ -152,7 +152,7 @@ onBeforeUnmount(() => {
               </div>
             </div>
 
-            <div v-if="topItems.length" class="grid grid-cols-3 mt-4 gap-2 border-t border-amber-100 pt-4 dark:border-gray-700 sm:mt-5 sm:gap-3 sm:pt-5">
+            <div v-if="topItems.length" class="grid grid-cols-3 mt-4 gap-2 border-t border-amber-100 pt-4 sm:mt-5 sm:gap-3 dark:border-gray-700 sm:pt-5">
               <div v-for="(item, index) in topItems" :key="item.seedId" class="text-center">
                 <div class="mx-auto mb-1.5 h-6 w-6 flex items-center justify-center rounded-full text-xs text-white font-bold sm:mb-2 sm:h-7 sm:w-7 sm:text-sm" :class="index === 0 ? 'bg-amber-400' : index === 1 ? 'bg-slate-400' : 'bg-orange-400'">
                   {{ index + 1 }}
@@ -161,17 +161,17 @@ onBeforeUnmount(() => {
                   <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">
                   <div v-else class="i-carbon-sprout text-3xl text-green-400 sm:text-4xl" />
                 </div>
-                <div class="mt-1.5 truncate text-xs text-gray-600 dark:text-gray-300 sm:mt-2 sm:text-sm">
+                <div class="mt-1.5 truncate text-xs text-gray-600 sm:mt-2 sm:text-sm dark:text-gray-300">
                   {{ item.name }}
                 </div>
-                <div class="text-base text-amber-800 font-bold dark:text-amber-300 sm:text-lg">
+                <div class="text-base text-amber-800 font-bold sm:text-lg dark:text-amber-300">
                   {{ formatNumber(Number(item.harvestCount)) }}
                 </div>
               </div>
             </div>
 
             <div class="mb-3 mt-5 flex items-baseline gap-2 sm:mt-7">
-              <h3 class="text-base text-gray-900 font-bold dark:text-white sm:text-lg">
+              <h3 class="text-base text-gray-900 font-bold sm:text-lg dark:text-white">
                 收获明细
               </h3>
               <span class="text-xs text-gray-400 sm:text-sm">({{ harvestedItems.length }})</span>
@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
                   <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">
                   <div v-else class="i-carbon-sprout text-3xl text-green-400" />
                 </div>
-                <div class="mt-1.5 truncate text-xs text-gray-600 dark:text-gray-300 sm:mt-2">
+                <div class="mt-1.5 truncate text-xs text-gray-600 sm:mt-2 dark:text-gray-300">
                   {{ item.name }}
                 </div>
                 <div class="mt-0.5 text-sm text-gray-900 font-bold dark:text-white">

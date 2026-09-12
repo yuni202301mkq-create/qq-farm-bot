@@ -61,6 +61,24 @@ function toTimeSec(val) {
     return n;
 }
 
+// UTC+8（游戏所在时区）偏移，用于推导「游戏日」的日界
+const UTC8_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+/**
+ * 获取「游戏日」日期键（YYYY-MM-DD，服务器时间 UTC+8）。
+ * 服务器时间未同步时回退为本地时间；各模块统一用它，避免有的按本机时区、
+ * 有的按 UTC+8，导致每日计数/限次在非 UTC+8 主机上日界错位。
+ */
+function getServerDateKey() {
+    const serverSec = getServerTimeSec();
+    const timestampMs = serverSec > 0 ? serverSec * 1000 : Date.now();
+    const date = new Date(timestampMs + UTC8_OFFSET_MS);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 // ============ 日志 ============
 let logHook = null;
 function setLogHook(hook) { logHook = hook; }
@@ -157,6 +175,6 @@ function randomDelay(minMs, maxMs) {
 module.exports = {
     toLong, toNum, now,
     setLogHook,
-    getServerTimeSec, syncServerTime, toTimeSec,
+    getServerTimeSec, syncServerTime, toTimeSec, getServerDateKey,
     log, logWarn, sleep, randomDelay,
 };

@@ -8,6 +8,16 @@
 
 # 当前状态
 
+- 抓包服务已改为**默认开启**：`store.js` 的 `DEFAULT_CAPTURE_CONFIG.enabled = true`，读取/保存归一化统一为 `!== false`（显式关才关，未设置或缺失即开）；`admin.js` 在注册完抓包路由后调用 `ensureEmbeddedCaptureService()`，嵌入模式随管理面板一起拉起（原来只有到设置页点保存才会启动，默认关闭时那行只打日志）。前端 `useAdminSystemConfig.ts` 的 `defaultCaptureConfig.enabled` 同步改为 true。实测：默认 true、显式关 false、不传字段 true。
+
+- 服务器日志乱码修复：`services/logger.js` 的 Console transport 原来无条件 `colorize()`，nohup/systemd/docker logs 等非 TTY 输出里 ANSI 转义会变成 `[t'o`、`¶` 之类乱码，已改为仅 `process.stdout.isTTY` 且未设 `NO_COLOR` 时着色；新增 `warnIfConsoleLocaleNotUtf8`（TTY 下检测 Linux locale / Windows chcp 代码页，非 UTF-8 打出可操作提示）；Dockerfile runner 阶段加 `ENV LANG=C.UTF-8 LC_ALL=C.UTF-8`；README Docker 部署节补充乱码排查说明，并修正抓包服务「默认关闭」的过时描述。
+
+
+- 登录页「更新日志 · V2.5.4」已接通弹窗：点击打开 `UpdateLogModal`（原本未接线、内容写死为空），内容来自公共接口 `GET /api/changelog`。**日志已改为本地优先**：优先读 `core/UPDATE_LOG.md`，其次 `data/UPDATE_LOG.md`（打包后可写目录），都为空才回退拉 Gitee 远端（`admin-public-info-routes.js` 的 `LOCAL_CHANGELOG_FILES` / `CHANGELOG_URL`）。改内容只需编辑本地文件，每次请求实时读取，不用重启、不用重新构建。登录页加载时静默预取日志，指纹为「版本号（首个含版本号的标题，如 V2.5.5）+ 内容 hash」，与 `localStorage['qq-farm-bot:changelog-seen']` 不一致时自动弹窗一次，关闭即记已读，版本或内容变化会再弹。页脚版本号动态显示日志最新版本（拉取失败回退 V2.5.4）。**Esc 关闭需弹窗确实打开过**：`UpdateLogModal` 常驻挂载，其 Esc 监听必须判断 `props.show`，`closeUpdateLog` 也要判断 `showUpdateLog`，否则登录页随手按 Esc 会把未读版本误记为已读、新版永久不再弹。
+- 注册页「免费领取 7 天卡密」：公开接口 `POST /api/free-card`（`admin-auth-routes.js`）发放 7 天 / 2 额度试用卡并自动填入卡密框；领取记录持久化在 `data/free-card-claims.json`（`user-store` 的 `claimFreeCard` / `findFreeCardClaim` / `listFreeCardClaims` / `resetFreeCardClaims` / `normalizeClaimAddress`），**同一来源地址只能领一次**，来源取 `req.socket.remoteAddress`（不可用 `req.ip`，会被 XFF 伪造），`::ffff:` 前缀会归一化。超管可用 `GET /api/free-card-claims` 查看、`POST /api/free-card-claims/reset`（带 address 清单个，不带清全部）处理 NAT/共享出口被占用的情况。测试见 `core/test/free-card.test.js`（7 用例）。
+- 登录页「忘记密码」已从纯提示升级为自助找回：`POST /api/forgot-password`（`admin-auth-routes.js`）用账号绑定过的卡密（注册卡存 `user.card`，续费卡看卡密库 `usedBy`）验证身份后重置密码，成功后 `invalidateAdminSessions` 踢掉该用户在线会话；同 IP+用户名 10 分钟内 5 次失败锁 10 分钟（**限流键用 `req.socket.remoteAddress` 而非 `req.ip`**：项目开了 `trust proxy`，`req.ip` 来自可伪造的 X-Forwarded-For，伪造即绕过；attempt 表每次失败都清理过期项并有 5000 条硬上限，防止撑爆内存），用户名/卡密错误统一返回「用户名或绑定卡密不匹配」。`AuthView.vue` 新增 `forgot` 模式（用户名→卡密→新密码→确认新密码，回车链式聚焦），超级管理员不可走此流程。测试见 `core/test/forgot-password.test.js`（6 用例）。
+- `AuthView.vue` 修复了用户名/卡密输入框同时绑定 `v-model` 与 `v-model.lazy` 导致 `vue-tsc -b` 报 TS1117、生产构建被阻断的问题（保留单个 `v-model`）。
+
 - TSDK/ACE 安全链路已升级到 QQ Mac 客户端 2026-08-20 10:32 包内的官方
   `v3.9.0.1787057219` WASM（161114 字节，SHA-256
   `98cc5301cff10f5b87a014d0a4af92630e4a6e91292cc7de5eb86422275f0070`）。
@@ -123,3 +133,335 @@
   `core/docs/activity-update-runbook.md`，并新增
   `npm run inspect:activity-har -- <HAR>` 脱敏检查命令，后续活动按“完整抓包、协议表、
   官方资源、种子/植物/果实映射、分层接入、离线与在线验收”流程更新。
+
+
+## 2026-09-12 移动端卡顿优化
+
+问题定位（按影响排序）：
+
+1. `FarmPanel.vue` 每秒 `lands.value = lands.value.map(...)` 重建整个数组，
+   导致每一块地都拿到全新的 prop 对象，几十个 `LandCard` 每秒全量重渲染 —— 这是主因。
+2. 每个 `LandCard` 各自起一个 `setInterval(..., 1000)`，几十块地 = 几十个定时器。
+3. 每个 `LandCard` 都在 window 上常驻 `scroll`（捕获）/`resize` 监听，
+   滚动一帧触发几十次回调，每次还 `await nextTick` + `getBoundingClientRect` 强制回流。
+4. 地块变异特效（金色光环/闪光、冰晶、爱心、黑化烟雾、水滴、闪电、七夕羽毛）都是
+   `animation: ... infinite`，几十块地叠起来上百个逐帧动画；再加 7 处 `-webkit-/backdrop-filter` 毛玻璃。
+
+已做改动：
+
+- 新增 `web/src/composables/useSharedClock.ts`：全局单例秒级时钟，引用计数启停，
+  页面切后台自动停表、回前台立即校准。整页只有一个定时器。
+- `LandCard.vue`：改用共享时钟；`scroll/resize` 监听改为仅在
+  `isometric && selected` 时动态注册，并用 `requestAnimationFrame` 节流。
+- `FarmPanel.vue`：倒计时改为原地修改 `matureInSec`（不再重建数组）；
+  新增 `visibilitychange` 监听，回到前台立即拉一次真实数据校准倒计时。
+- 新增 `web/src/composables/usePerformanceMode.ts` + `src/style.css` 的 `.perf-lite` 降级规则：
+  关掉 `backdrop-filter` 与地块/天气/布局的装饰性无限动画（静态配色和滤镜保留，闪电帧固定第一帧）。
+  自动判定：手机/平板、系统“减少动效”、省流量模式 → 开启；桌面默认关闭。
+- 新增设置页「界面性能」页签 + `PerformanceModeCard.vue`（自动/始终开启/始终关闭，存 localStorage，即时生效）。
+- `main.ts`：挂载前先应用流畅模式，避免首屏闪一下完整动效。
+
+故意没做的：
+
+- 没给 `.land-card` 加 `contain: layout/paint`。卡片内部靠 `.land-card > :not(.land-ground-layer) { z-index: 1 }`
+  参与全局层叠来实现等距视图的前后遮挡，一旦每张卡自成层叠上下文，后排卡片的前景会被前排地面盖住，会破坏景深排序。
+
+验证：`npm run build`（含 `vue-tsc -b`）退出码 0；改动文件定向 ESLint 0 error 0 warning；
+产物 `index-*.css` 已确认包含 `.perf-lite` 规则。
+
+
+## 2026-09-12 移动端登录输入不流畅
+
+排查 `views/AuthView.vue`（1395 行）后的成因与修复：
+
+1. **每次按键触发整个登录页重渲染**：`username/password/...` 都在 AuthView 的 render 依赖里，
+   敲一个字就要重建品牌区 + 表单区的全部 vnode。
+   → 品牌区 `aside.brand-side` 只依赖 `mode`，加 `v-memo="[mode]"` 跳过这棵子树。
+   （没有用 `v-model.lazy`：回车提交走 `keydown`，此时 `change` 还没触发，会提交到旧值。）
+2. **三层 `filter: blur(80px)` 背景光斑（520~600px）留在主绘制层**，输入框每次重绘都会连带重算大模糊。
+   → scoped 里加 `transform: translate3d(0,0,0)` 提升为独立合成层；
+   同时在 `style.css` 的 `.perf-lite` 下 `.bg-blob { display: none }`（移动端默认开启流畅模式，直接省掉）。
+3. **`.form-side__input { transition: all 200ms ease }`** → 改为只过渡 border-color / box-shadow / background-color。
+4. **全局 `html,body { text-rendering: optimizeLegibility }`** 会让输入框文本每敲一字都走字距/连字计算
+   → 输入框上覆盖 `text-rendering: auto`。
+5. **iOS 聚焦缩放**：`font-size: 14px` 的输入框会让 Safari 自动放大整页，聚焦瞬间跳动就是最典型的“卡顿”体感。
+   → 860px 断点下统一提到 16px（原来只有 480px 断点做了）。
+6. **键盘弹出后输入框被裁掉且滚不过去**：原来只有 `@media (max-width: 480px)` 给 `.auth-card` 加了滚动，
+   且用的是 `100vh`（不随键盘收缩）。上移到 860px 断点并改用 `100dvh`，480px 档再覆盖成 `calc(100dvh - 32px)`
+   以匹配该档 16px 的 padding。`.auth-shell` 同步补 `min-height: 100dvh`。
+
+验证：`npm run build`（含 `vue-tsc -b`）退出码 0；AuthView / style.css 定向 ESLint 干净；
+产物已确认包含 `.perf-lite .bg-blob`、`100dvh`、`font-size:16px`、`text-rendering:auto`。
+
+
+## 2026-09-12 移动端登录页布局重做
+
+`views/AuthView.vue` 的 Responsive 段整体重写（860px / 480px 两个断点）：
+
+- **品牌区压成紧凑横幅**：原来的长描述 + 三条要点 + 状态条在移动端要吃掉近 200px 纵向空间，
+  860px 以下全部 `display: none`；标题两行竖排改并排一行（`display: flex; flex-wrap: wrap` + 子项 `display: inline`），
+  padding 从 44/40 收到 18/22，标题 34px → 20px（480px 档 18px）。
+- **表单区收紧**：padding 44/48 → 20/22；head margin 24 → 16；mode-tag 与表单间距同步收。
+- **触控目标放大**：输入框 min-height 48px、眼睛按钮 28px → 44px、提交按钮 46px → 50px。
+- **模式切换链接改胶囊**：原来一行小字 + 点分隔，移动端改成 `min-height: 40px` 的圆角胶囊，
+  去掉 `.form-side__sep`，当前模式用实心底色（`.is-active`，dark 下另给颜色）。
+- **分割线 `.form-side__divider`** 在移动端隐藏（纯占空间）。
+- **卡片高度修正**：860px 档的 `max-height` 原来是 `calc(100dvh - 32px)`，
+  但该档 auth-shell 上下 padding 仍是 32px（合计 64px），会超出被裁；改成 `- 64px`，
+  480px 档（padding 16px）保持 `- 32px`。
+
+新增开发预览工具 `web/public/mobile-preview.html`：手机外框 + iframe 加载 `/login`，
+支持 iPhone SE / iPhone 14 / Pro Max / Pixel 7 / 320 小屏 / 平板六档尺寸切换，
+高度超出窗口时自动等比缩放。仅用于本地预览，会被一起打进 dist，不需要时可删。
+
+验证：AuthView 定向 ESLint 干净；dev server（127.0.0.1:5173）下 `/login` 与 `/mobile-preview.html` 均 200。
+
+
+## 2026-09-12 登录页「忘记密码」改两步式弹窗
+
+把原来登录页里的 `forgot` 整页模式（用户名→卡密→新密码→确认）重做成**两步式弹窗**，对齐用户给的两张截图：步骤 1 输入卡密验证 → 步骤 2 显示绑定账号并设置新密码。
+
+后端（`core/src/controllers/admin-auth-routes.js`，上轮已完成并通过测试）：
+- 新增 `POST /api/forgot-password/verify`：卡密 → 反查绑定账号（`user.card` 或卡密库 `usedBy`）→ 返回 `{ username, resetToken, expiresInSec }`；`resetToken` 为 `crypto.randomBytes(32)` 内存态、5 分钟 TTL、一次性。
+- 新增 `POST /api/forgot-password/reset`：凭 `resetToken` + 新密码设密码，`consumeForgotResetToken` 一次性消费；成功后 `invalidateAdminSessions` 踢该账号在线会话。
+- 失败锁定键固定挂在来源地址（`req.socket.remoteAddress + '::@card-verify'`），防止换卡密/换 token 绕开锁定；XFF 伪造无效。旧单步 `/api/forgot-password` 保留兼容。
+- 测试：`core/test/forgot-password-two-step.test.js`（8 用例）+ 旧回归（14 用例）全通过。
+
+前端：
+- 新增 `web/src/components/login/ResetPasswordModal.vue`：Teleport+Transition 弹窗，沿用登录页 emerald 设计语言（12px 圆角、16px 移动端字号、`text-rendering:auto`、`100dvh` 安全、Esc/点遮罩关闭）。
+  - 步骤 1（验证卡密）：卡密输入 → 「验证卡密」→ 成功后进入步骤 2，并显示 5 分钟倒计时与「重新验证卡密」。
+  - 步骤 2（设置新密码）：显示绑定账号、新密码/确认（带显隐切换）、「重置密码」；凭据倒计时归零自动退回步骤 1；后端报「重新验证卡密」也退回步骤 1。
+  - 成功态展示勾选并「返回登录」，通过 `@success` 把账号回填到登录框。
+  - 429 锁定按返回分钟数本地倒计时禁用按钮（到点再试，最终仍由服务端裁决）。
+- `web/src/views/AuthView.vue`：删除 `forgot` 模式整段（PANEL 条目、表单项 `newPassword`/`confirmPassword`、相关 ref/函数、`submit` 分支、mode-tag/brand-sub 的 forgot 分支）；「忘记密码」链接改为 `openResetModal()` 弹出弹窗；`/login?mode=forgot` 在 `onMounted` 时直接唤起弹窗；`onResetSuccess` 回填用户名并切回登录。
+- `web/public/mobile-preview.html`：预览页新增「页面」切换条，可一键加载 `/login` 或 `/login?mode=forgot` 直接看弹窗。
+
+验证：`web/src` 改动文件定向 ESLint 0 error（`npm run build` 含 `vue-tsc -b` 退出码 0）；`BagSeedPriorityPanel.vue:324` 的 `style/max-statements-per-line` 为既有问题、不在本次改动范围未动。dev server（127.0.0.1:5173）`/mobile-preview.html` 与 `/login?mode=forgot` 均可访问。
+
+移动端弹窗最终改为居中：用户反馈手机真机上弹窗出现在底部，要求改成居中。因此去掉 `@media (max-width: 640px)` 的底部抽屉逻辑，保留居中布局；仅保留移动端触控目标放大（输入框 16px、眼睛按钮 44px、提交按钮 50px）和适当收紧的 padding。同时移除 `mobile-preview.html` 里的 viewport 强写和 `.preview-mobile` 类注入。`web/src` 改动文件 ESLint 与 `npm run build` 仍为 0 错误。
+
+`Personal.vue` 顶部 tab 栏移动端平齐优化：用户截图显示「我的农场/我的背包/我的任务」三个 tab 宽度/视觉重量不一致。把三个按钮改为 `flex-1` 等宽，内容 `justify-center` 居中；非激活态增加 `border border-gray-200`（dark 下 `dark:border-gray-700`）和 `bg-white`，使三个 tab 外形高度一致；字号降到 `text-sm`、内边距 `px-3 py-2.5`，避免小屏溢出；并用 `v-for` 循环生成 tab，减少重复结构。`src/views/Personal.vue` ESLint 与 `npm run build` 通过。
+
+## 2026-09-12 修复「填充化肥」开启后不自动使用
+
+用户反馈：开启「填充化肥 / 自动填充化肥」（`fertilizer_gift`）后，背包里的化肥礼包没有被自动开启。
+
+根因：`openFertilizerGiftPacksSilently()` 此前只挂在两处——(1) 每日任务 `runDailyRoutines`（约每天一次）、(2) 启动时登录成功钩子（`worker.js` ~L1472）。它**没有**像「自动购买化肥」（`fertilizer_buy_*`）那样接入 `farm-scheduler` 的周期性检测定时器，也**没有**在开关由关变开时立即触发。因此：
+- 会话中途打开开关，要等下次每日任务或重启 bot 才会生效；
+- 开关开启时已存在的背包礼包不会立即被开启。
+
+修复（完全对齐 `fertilizer_buy_*` 的既有模式）：
+- `core/src/services/farm-scheduler.js`：新增 `fertilizerGiftScheduler`（`createScheduler('fertilizer_gift')`）与 `startFertilizerGiftCheckTimer()` / `stopFertilizerGiftCheckTimer()`，每 30 分钟调用一次 `openFertilizerGiftPacksSilently()`；开关关时直接 return、不挂定时器。
+- `core/src/services/farming-orchestrator.js`：在 `startFarmCheckLoop` / `stopFarmCheckLoop` 中与购买定时器一起启停填充化肥定时器（同生命周期）。
+- `core/src/core/worker.js` `applyRuntimeConfig`：新增「`fertilizer_gift` 由关变开 → 2 秒后 `openFertilizerGiftPacksSilently()` 立即开启一次」的逻辑，沿用其余自动化（star/mystery/daily/friend_bad/golden_bug）的「became-enabled 立即执行」写法。该路径由 web 保存自动化（`/api/automation` → `provider.setAutomation` → `broadcastConfigToWorkers` → worker `config_sync`）触发，覆盖「账号功能」页与「自动化」页两个开关。
+
+说明：`autoOpenFertilizerGiftPacks` 内部仍有条件限制（背包需有 ID∈{100003..100012} 或 `interaction_type` 为 fertilizer/fertilizerpro 的道具、且容器未满 ≥990h 才处理），这些既有行为未改动；若背包无匹配道具或容器已满，会静默跳过，属正常。三处改动 `node --check` 通过。
+
+## 2026-09-12 「背包种子优先顺序」卡片重排改用 vuedraggable
+
+用户要求：把「背包种子优先顺序」面板的卡片移动形式换成标准拖拽库。
+
+改动：`web/src/components/settings/BagSeedPriorityPanel.vue` 用 `vuedraggable`（v4.1.0，依赖 `sortablejs` 1.15.7，已加进 `web/package.json` 并安装）替换原先自研的「100ms 长按 + 几何命中检测 (`findDropTarget`) + ghost 占位」拖拽实现。
+
+- 模板：用 `<draggable v-model="dragList" item-key="seedId" ...>` 包裹卡片，`#item` 插槽渲染；移除原 pointerdown/move/up/cancel 全套手势、`.bag-seed-ghost` 占位 div、`invisible`/`fixed` 浮动样式、「拖到这里」末尾提示。
+- 交互：桌面直接拖动，移动端设 `:delay="120"` + `:delay-on-touch-only="true"` 保留滑动手感；`filter=".seed-act"` 让上移/下移/移出按钮不参与拖拽（`preventOnFilter=false` 使按钮点击仍生效）；`:disabled="saving"` 保存时禁拖；新增 scoped 样式定义 `.bag-seed-ghost`/`.bag-seed-chosen`/`.bag-seed-drag` 三种拖拽态外观。
+- 数据：新增 `dragList` ref 与 `sortedBagSeeds` 双向同步（仅顺序变化时替换，避免回环）；`@end="onDragEnd"` 把拖拽后顺序写回 `localPriority` 并 `emitChange`。原 ↑/↓ 按钮、移出/放回/全部放回/重置顺序 逻辑全部保留。
+- 清理：删除约 150 行自研拖拽代码（`DragState`、`findDropTarget`、`commitDrop`、`resetDragState`、pointercancel 全局监听等）。
+
+验证：`web` 生产构建（`vue-tsc -b && vite build`）通过；该文件 ESLint 0 error（仅一处 `:filter="'.seed-act'"` 静态字符串绑定报错，已改为 `filter=".seed-act"`）。
+
+## 2026-09-12 「填充化肥」改为事件驱动（背包有了就自动使用，不再轮询）
+
+用户反馈：上一条加的 30 分钟轮询定时器不符合预期——要求「不用加时间，背包有了就自动使用」。改为完全事件驱动：背包收到化肥类道具的推送时立即开启礼包，去掉定时轮询。
+
+- 回退轮询：`core/src/services/farm-scheduler.js` 删除 `fertilizerGiftScheduler` / `startFertilizerGiftCheckTimer` / `stopFertilizerGiftCheckTimer` / `checkFertilizerGiftOnce` 及 `openFertilizerGiftPacksSilently` 的导入；`core/src/services/farming-orchestrator.js` 在 `startFarmCheckLoop` / `stopFarmCheckLoop` 中移除对应的启停调用与导入。
+- 导出判断函数：`warehouse.js` 在 `module.exports` 新增 `isFertilizerRelatedItemId`（原仅内部使用），供 network.js 在推送里识别化肥类道具（ID 100003–100012 或 interaction_type 为 fertilizer/fertilizerpro；容器 1011/1012 不在此列，不会误开启）。
+- 推送入口：`core/src/utils/network.js` 的 `ItemNotify` 处理里新增分支——当 `delta > 0 || count > 0` 且 `isFertilizerRelatedItemId(id)` 为真，发 `networkEvents.emit('fertilizerItemReceived', { id, count, delta })`。warehouse 与 network 互相依赖，故用 `getWarehouseLazy()` 运行时惰性加载，规避循环依赖导致的加载期导出 undefined。
+- 事件处理：`core/src/core/worker.js` 在登录就绪的监听注册块里挂 `fertilizerItemReceived`，若 `getAutomation().fertilizer_gift` 开启则用 `workerScheduler.setTimeoutTask('fertilizer_gift_on_item', 1500, ...)` 去抖（同 key 会重置，连续到达只触发一次），到时调用 `openFertilizerGiftPacksSilently()`；`stopBot` 里同步 off 并置空。保留此前「配置从关变开 → 2 秒后开启一次」的即时触发（非轮询，符合「不用加时间」）。
+- 自动开启逻辑本身不变：`autoOpenFertilizerGiftPacks` 仍只收集背包内化肥类道具、按容器上限自适应用量、容器已满则静默返回。
+
+验证：5 个改动文件 `node --check` 全部通过；全仓 grep 确认无 `start/stopFertilizerGiftCheckTimer`、`checkFertilizerGiftOnce`、`fertilizerGiftScheduler` 残留引用。
+
+## 2026-09-12 图鉴页去除逐条「图鉴可购买检查」日志，避免刷新时刷屏
+
+用户反馈：点图鉴/种子商城（橄榄/商城）时，控制台被「图鉴可购买检查」日志刷屏，每次浏览器刷新都会逐条打印所有未解锁作物的检查信息。
+
+- 原因：`core/src/controllers/admin-illustrated-helpers.js` 的 `buildIllustratedItem` 里对每个 `!unlocked && seedId > 0` 的图鉴项都 `adminLogger.info('图鉴可购买检查', {...})`；图鉴总数 186 项，未解锁项很多，每次 `GET /api/illustrated` 都会输出大量重复日志。
+- 改动：`buildIllustratedItem` 删除该逐条日志及不再使用的 `adminLogger` 参数；`core/src/controllers/admin-illustrated-routes.js` 的调用处同步去掉 `adminLogger` 传参。路由层仍保留「获取图鉴列表请求」「图鉴列表数据」「图鉴列表返回」等请求级 summary 日志，可购买数量在 `图鉴列表返回` 的 `canBuy` 字段中已有汇总。
+- 验证：两个改动文件 `node --check` 通过；全仓 grep 确认无其他调用点依赖旧的 `buildIllustratedItem` 签名。
+
+## 2026-09-12 图鉴页刷新不再刷日志：加短时缓存 + 诊断日志降为 debug
+
+用户继续反馈：上一条删掉逐条「图鉴可购买检查」后，每次浏览器刷新仍会打印一批请求级日志（`图鉴API响应`/`图鉴解码成功`/`图鉴原始数据解析`/`获取图鉴列表请求`/`种子商店映射`/`图鉴列表数据`/`图鉴列表返回`）。
+
+- 根因：前端 `Illustrated.vue` 在 `onMounted` 与 `watch([currentAccountId, illustratedType])` 都用 `refresh=false` 拉数据，整页刷新/切页都会重复走一遍 `GET /api/illustrated`；后端每次都重新取数据并逐条 info 打印。
+- 加短时缓存：`core/src/controllers/admin-illustrated-routes.js` 新增模块级 `illustratedCache`（key=`accountId:illustratedType`，TTL 30s）。非 `refresh=true` 请求命中缓存直接返回，不再触发 RPC 与日志；`refresh=true` 绕过并刷新缓存。购买后经 `invalidateIllustratedCache` 失效（`/buy` 清该账号全部类型，`/buy-all` 清对应类型），`admin-illustrated-purchase-routes.js` 通过 `routeContext` 接收该函数。
+- 降噪：把仅用于排查的中间步骤日志改为 `debug`（默认 level 为 info，不再出现在控制台）——
+  - `core/src/services/illustrated.js`：`图鉴API响应`、`图鉴解码成功`、`图鉴原始数据解析` → debug（`图鉴解码失败`/`获取图鉴列表失败` 仍为 error）。
+  - `core/src/controllers/admin-illustrated-helpers.js`：`种子商店映射` → debug。
+  - `core/src/controllers/admin-illustrated-routes.js`：`获取图鉴列表请求`、`图鉴列表数据` → debug；`图鉴列表返回` 仅当 `refresh=true`（显式刷新/购买后）时用 info，被动加载（页面刷新 `refresh=false`）时降为 debug。
+- 效果：页面刷新（`refresh=false`）无论是否命中缓存都不再产生 info 级图鉴日志；显式刷新/购买时每次最多一行 `图鉴列表返回`；购买等用户操作仍照常记录。
+- 验证：4 个改动文件 `node --check` 通过；`node --test test/illustrated-order.test.js test/illustrated-fruit-config.test.js` 4/4 通过。
+
+## 2026-09-12 移动端内部页面布局优化
+
+用户需求：优化登录后「内部页面」在手机上的布局。先用只读审查通读了所有内部视图与相关组件（`views/` 除 AuthView 外 + 布局外壳 + FarmPanel/BagPanel/shop/friends/settings 等），按「会横向溢出 / 控件不可用」优先修复了一批问题。手机基准宽 ~375px（内部内容宽约 311px）。
+
+高优先级（会溢出/被挤压）：
+- `web/src/views/Analytics.vue`：标签栏（L331）加 `custom-scrollbar overflow-x-auto`，3 个按钮加 `shrink-0 whitespace-nowrap`；作物工具栏（L402）外层加 `flex-wrap`，搜索框容器 `w-full min-w-0 sm:w-auto`，两个排序下拉改 `min-w-[6rem]/[4.5rem] flex-1 sm:w-40/20 sm:flex-none`，解决 5 个控件挤在一行溢出。
+- `web/src/views/Dashboard.vue`：资源卡从固定 `grid-cols-4` 改 `grid-cols-2 sm:grid-cols-4`；4 个数字 `text-2xl`→`text-xl sm:text-2xl`；首/末卡在手机上改居中（`text-center sm:text-left/right`，图标行 `justify-center sm:justify-start/end`），避免 4 列各 ~68px 放不下长数字。
+- `web/src/components/FarmPanel.vue`：巡田摘要从固定 `grid-cols-4` 改 `grid-cols-2 ... sm:flex sm:flex-wrap`，胶囊不再被压到溢出。
+- `web/src/components/friends/FriendsTabs.vue`：标签栏加 `overflow-x-auto`，按钮 `shrink-0 whitespace-nowrap`，手机 `px-3 sm:px-4`。
+
+中优先级（触控尺寸/固定尺寸）：
+- `web/src/components/settings/AccountSettingsTab.vue`：5 个图标按钮 `min-h-[36px] min-w-[36px]` → `min-h-11 min-w-11`（44px）。
+- `web/src/components/ThemeToggle.vue`：主题面板 `w-80` 固定 → `w-[min(90vw,20rem)] max-h-[85dvh] overflow-y-auto`。
+- `web/src/layouts/DefaultLayout.vue` 汉堡按钮 `h-9 w-9` → `h-10 w-10`；`web/src/components/Sidebar.vue` 关闭按钮 `h-8 w-8` → `h-10 w-10`、主题按钮 `h-7 w-7` → `h-9 w-9`。
+- `web/src/App.vue`：根容器 `h-screen w-screen` → `h-[100dvh] w-full`，避免移动端地址栏导致底部裁切/横向溢出。
+- `web/src/components/friends/FriendsFriendList.vue`：好友卡信息区加 `min-w-0`，昵称包 `truncate`，徽标 `shrink-0`，长昵称/GID 不再撑破行。
+- `web/src/views/Settings.vue`：通知页头 `flex-wrap gap-3` + 文本块 `min-w-0`。
+
+未改动（已评估）：`BaseButton` 的 sm/md 高度与全站 36px 控件基线一致，单独放大反而破坏一致性；`BaseSwitch` 由 `<label>` 包裹已可点，改高度会牵动大量设置行；`FarmScene/LandCard` 等距视图热区属固有取舍；`Activity` 里 `w-96/w-72` 的星活动 Hero 处于关闭开关后（当前不渲染）。View 侧 `Shop/Illustrated/Pet/Personal` 审查已移动端友好。
+
+验证：`web` 生产构建（`vue-tsc -b && vite build`）通过（357 modules，`✓ built in 18.54s`）。
+
+## 2026-09-13 深度审计后按优先级修复（第1批：误删/崩溃/停摆/泄漏/竞态/逻辑）
+
+用户指定顺序：道具误删 → 进程崩溃 → 调度停摆 → 好友会话泄漏 → startBot 僵尸/sendMsg 竞态 → 商城/施肥/时区。全部已实施。
+
+**1. 道具误删（warehouse.js）**
+`FERTILIZER_RELATED_IDS` 原含 `100005-100012`（晨露/桑榆/桃源/天工种子包、图鉴限定礼包、友谊种子包、天工限定包、爱心宝箱），对照 `gameConfig/ItemInfo.json` 这些均非化肥，会被 `autoOpenFertilizerGiftPacks` 整叠 `batchUseItems` 消耗。
+- 改为 `FERTILIZER_GIFT_PACK_IDS = {100003 化肥礼包, 100004 有机化肥礼包}`，`FERTILIZER_RELATED_IDS` 保留为其别名（兼容旧引用）。
+- `getFertilizerItemTypeAndHours` 新增 `gift` 类型返回；`autoOpenFertilizerGiftPacks` 增加白名单校验：`type` 非 `normal/organic/gift` 一律 `continue`（纵深防御）。
+- 因 `network.js:522` 也用 `isFertilizerRelatedItemId` 做事件驱动触发，收窄后收到种子包不再误触发。
+
+**2. 进程崩溃（client.js + admin.js）**
+- `core/client.js` 顶层新增 `process.on('unhandledRejection'|'uncaughtException')` 兜底：记录 error 日志后继续运行；仅 60s 内异常 >100 次才退出，避免错误风暴。
+- `core/src/controllers/admin.js` 的 `registerRequestTimeoutGuard`：包装 `res.json/res.send`，一旦 `requestTimedOut && headersSent` 即忽略，避免 120s 超时后 handler 二次发送抛 `ERR_HTTP_HEADERS_SENT`。
+
+**3. 调度停摆（worker.js）**
+- `acquireTaskPermit()` 增加 30s 超时与 `PERMIT_TIMEOUT` 哨兵（区别于 `null`=无需许可），授权到达时清除定时器；迟到授权被忽略，无残留。
+- `runUnifiedTick` 收到哨兵则跳过本轮（不在无并发控制下执行），下一 tick 自然重试；`releaseTaskPermit` 忽略哨兵。
+- 覆盖主进程侧 `worker-manager.js` 三种丢包（worker 重启/队列丢弃/send 失败）。
+
+**4. 好友会话泄漏（friend-land-analyzer.js）**
+`getFriendLandsDetail` 用 `entered/left` 标志 + `finally` 保证「进入成功则必定 Leave」，修复 `getUserState()` 为空时 `:443` 抛错导致全局唯一访问会话被占用 2 分钟的问题；且不会在 enter 自身已清理 token 时重复释放。
+
+**5. startBot 僵尸 / sendMsg 竞态**
+- `worker.js`：`startBot` 拆为外层 try/catch + `startBotInner`，失败时复位 `isRunning/loginReady` 并上报，避免 `if (isRunning) return` 吞掉后续启动。
+- `network.js` `sendMsg`：捕获当前 `socket`，在 `await encodeMsg` 后校验 `socket !== ws || readyState !== OPEN`，连接变化则取消发送并回调错误，杜绝「旧消息发到新连接」。
+
+**6. 商城/施肥/时区/成熟判定**
+- `mall.js`：两条购买循环新增 `maxRounds`——价格或点券余额未知且无目标数量时只买 1 轮（原可跑满 100 轮×10=1000 个），并打 `result:'limited'` 日志；有 `targetCount` 时仍由 limit 约束。
+- `farm-fertilizer.js`：organic/both 分支仅在 `explicitIds` 为空时才回退全农场，修复多季补肥/种植后补肥被施到全农场。
+- 新增 `utils.getServerDateKey()`（服务器时间 UTC+8）；`stats.js`/`warehouse.js`/`mall.js`/`worker.js`/`activity.js` 的本地日期键统一改为委托它（`task.js` 本就用 UTC+8，保持）。
+- `capital-mode.js`：成熟判定与 `farm-land-analyzer` 对齐（粗状态 6 / 阶段记录 ID 19 于 `phase` 或 `phase_id`，否则取最后一个剩余阶段），修复部分作物（如“盛开”牵牛花）永不触发“成熟前部署狗”。
+
+**验证**：`node --check` 全部改动文件通过；`node --test test/*.test.js` **390/390 通过**（两次，分别在 1–5 项后与 6 项后）；针对化肥 ID 与日期键的 16 项冒烟断言全通过。
+
+## 2026-09-13 移动端优化：账号功能设置弹窗（AccountFeatureSettings）
+
+用户给出 4 张手机截图（背包与收获 / 土地与补给 / 好友 / 日常与活动），反映该弹窗在移动端的问题。
+
+根因（截图 1 标题被顶部裁掉、截图 3/4 页脚被底部浏览器栏遮住）：
+- 遮罩用 `grid place-items-center` + `overflow-y-auto`。当内容高于可视区时，垂直居中会把内容同时向上下溢出，**溢出到滚动原点之上（顶部）的部分无法滚动到**，于是标题被裁掉。
+- 弹窗用 `max-h-[94vh]`。移动端 `vh` 是「大视口」（含浏览器地址栏/底栏区域），比实际可视高度大，导致弹窗底部超出可视区，页脚被底栏遮挡。
+
+改动：
+- `AccountFeatureSettings.vue`
+  - 遮罩：`grid place-items-center` → `grid justify-items-center items-start overflow-y-auto ... sm:items-center`，内边距 `p-3` → `p-4`（sm 仍 `p-6`）。
+  - 弹窗：`max-h-[94vh]` → `max-h-[calc(100dvh-2rem)] ... sm:max-h-[94vh]`（dvh 跟随地址栏/键盘收缩）。
+  - 页脚：加 `shrink-0`；`py-4` → `pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]`（避开 iPhone 底部安全区）；两个按钮加 `flex-1 sm:flex-none` 便于点按。
+  - 头部：`px-4 py-3.5` + `gap-3`（sm 恢复 `px-6 py-4 gap-4`）；关闭按钮 `p-2` → `h-11 w-11`（44px）。
+  - 内容区：`px-4 py-4 sm:px-6 sm:py-5`；模块卡片 `min-h-[184px]` → `min-h-[150px] sm:min-h-[184px]`。
+- `StrategyTimingPanel.vue`：`grid grid-cols-2 md:grid-cols-2` → `grid-cols-1 sm:grid-cols-2`（截图 3 的「帮助巡查最小/最大(秒)」在手机上不再挤成两列）；静默时段时间输入 `w-20 px-2 py-1 text-xs` → `h-9 w-24 px-2 text-sm`。
+- 同类反模式一并修复（同样的 `vh` 限高 / 无滚动兜底）：`AutomationSettingsTab.vue` 神秘商店设置弹窗、`AccountModal.vue`（加 `p-4`、`max-h-[calc(100dvh-2rem)]`、内容区 `calc(100dvh-6rem)`）、`Friends.vue` GID 列表弹窗。
+
+验证：`npm run build`（`vue-tsc -b && vite build`）通过，357 modules，`✓ built in 16.43s`；并确认产物 CSS 中 `max-h-[calc(100dvh-2rem)]`、`pb-[calc(0.75rem+env(safe-area-inset-bottom))]`、`justify-items-center`、`items-start` 等 arbitrary utilities 均已生成（UnoCSS 会静默丢弃无法解析的类，故需实测产物）。
+补充：构建里 `[unocss] failed to load icon "carbon-view-*"` 是既有误报（UnoCSS 把 `preview-label` 之类的属性名/标识符当成图标名），非真实缺图标——已核对 `i-carbon-view` / `i-carbon-close` / `i-carbon-checkmark` 等真实图标都在产物 CSS 中。
+
+## 2026-09-13 移动端修复续：偷菜 / 神秘商人弹窗「显示在中间」
+
+用户反馈：移动端账号设置里，**偷菜**与**神秘商人**点「配置」时弹窗「不是在上方而是在中间」。
+
+### 定位过程（真组件复现）
+
+这两个模块内容极短（偷菜只有一个说明段、神秘商人只有 3 个开关），是「居中」最显眼的两个。为排除臆测，搭了**真组件探针**：临时 `web/__probe__.html` + `web/src/__probe__.ts` 用项目自己的 Vite dev server 渲染真实 `AccountFeatureSettings.vue`（桩 props），再用 CDP + 无头 Edge 扫宽度测量。
+
+实测（`panelTop` = 弹窗顶边距）：
+
+| 视口宽 | align-items | panelTop | 结论 |
+|---|---|---|---|
+| 360 / 390 / 414 / 430 / 480 / 560 | flex-start | 16 | 贴顶 ✓ |
+| **640 / 641 / 768** | **center** | **≈250** | **居中 ✗** |
+| 1024 / 1440 | center | ≈256 | 居中（桌面预期）✓ |
+
+结论：**手机上（<640px）本来就是贴顶的**；问题出在 `sm:` 断点——只要视口 ≥640px（平板、横屏手机、部分内嵌浏览器/桌面模式）就会切成居中。
+
+### 根因
+
+**用「宽度」断点决定弹窗的「垂直」对齐，本身就是错的设计轴**：横向够宽不代表纵向该居中。
+
+### 改动
+
+- `AccountFeatureSettings.vue`：`sm:items-center` → **`lg:items-center`**，`sm:max-h-[94vh]` → `lg:max-h-[94vh]`。
+- 同源一致性（同类弹窗一并改 `lg:`）：`AutomationSettingsTab.vue` 神秘商店弹窗、`AccountModal.vue`（遮罩 + `max-h-[90vh]` + 内容区 `calc(90vh-80px)`）、`Friends.vue` GID 列表弹窗。
+  → 结果：**≤1023px 一律贴顶**，仅桌面（≥1024px）居中。短确认类弹窗（`ConfirmModal` / `RemarkModal` / 批量新增 GID 等）保持居中，符合小对话框的常规预期，未动。
+- `core/src/controllers/admin.js` `configureStaticAssets`：新增 `Cache-Control` 策略——`index.html` 与未哈希文件 `no-cache`（每次回源校验），`/assets/` 下带内容哈希的产物 `public, max-age=31536000, immutable`。SPA fallback 的 `sendFile(index.html)` 同样补 `no-cache`。
+  → 避免「改了代码但用户手机还是老界面」这类排查噪音，同时让哈希产物真正长缓存。
+
+### 验证
+
+- 宽度扫描（真组件）：390 / 768 / 1023 → `flex-start, panelTop 16–24`；1024 / 1440 → `center, panelTop ≈256`。
+- 缓存头用**真实源码**（从 `admin.js` 取出 `configureStaticAssets` 文本）+ 真实 express 起服务实测：`/index.html` → `no-cache`；`/assets/AccountModal-*.css` → `public, max-age=31536000, immutable`；`/icon.svg` → `no-cache`。
+- `npm run build` 通过（`✓ built in 15.73s`）；产物回读确认新类已进 bundle、旧 `sm:` 组合已消失：`backdrop-blur-[2px] lg:items-center`、`bg-black/50 p-4 lg:items-center`、`lg:max-h-[90vh|80vh|94vh|calc(90vh-80px)]` 全 OK；`sm:` 版本全 gone。
+- 探针文件已删除，产物无 `__probe__` 残留。
+
+## 2026-09-13 更正：弹窗垂直位置要「能放下就居中」（上一轮方向搞反了）
+
+用户指出：偷菜 / 神秘商人点「配置」时弹窗**在顶部**，而**要的是居中**。上一轮把 `sm:items-center` 改成 `lg:items-center`（≤1023px 一律贴顶）是把需求理解反了——用户那句「不是在上方而是在中间显示」是**诉求**，不是现象描述。
+
+### 正确方案：`my-auto`（safe centering），不需要任何断点
+
+遮罩保留 `overflow-y-auto`，弹窗加 **`my-auto`**：
+
+- 有富余空间 → 上下 auto 外边距平分 → **居中**；
+- 空间不够 → auto 外边距归零 → **贴顶且可滚动**，不会重蹈 `place-items-center` 把标题挤出屏幕顶部且滚不到的覆辙。
+
+于是所有**垂直对齐类断点（`items-start` / `lg:items-center`）全部删除**，一个 `my-auto` 同时满足「短内容居中」与「长内容不裁」。
+
+改动：
+
+- `AccountFeatureSettings.vue`：遮罩去掉 `lg:items-center`（保留 `grid justify-items-center items-start overflow-y-auto`），弹窗加 `my-auto`，并把注释改成说明「为什么不用断点」。
+- `AccountModal.vue`、`Friends.vue` GID 列表弹窗：同样处理。
+- `AutomationSettingsTab.vue`（神秘商店设置弹窗）：同样处理，但**该组件在 `src` 中无任何 import，是孤儿文件**，其样式不会进入产物 —— 上一轮把它列为「已修」属**误报**，特此更正。
+
+### 验证（真组件探针：390×844 与 1280×900）
+
+| 视口 | 模块 | gapTop / gapBottom | 面板高 | 内部可滚 |
+|---|---|---|---|---|
+| 390×844 | 偷菜（短） | 250 / 250 | 344 | 否 |
+| 390×844 | 神秘商人（短） | 234 / 234 | 376 | 否 |
+| 390×844 | 种植与收获（长） | 16 / 16 | 812 | 是（670 → 706） |
+| 390×844 | 好友（长） | 16 / 16 | 812 | 是 |
+| 1280×900 | 偷菜 | 284 / 284 | 332 | 否 |
+| 1280×900 | 种植与收获 | 129 / 129 | 642 | 否 |
+
+全部 `centered: true`（gapTop == gapBottom），且 `headerFullyVisible` / `footerFullyVisible` 均为 true —— **居中且零裁切**。
+
+`npm run build` 通过（16.33s）；产物回读确认 `my-auto max-h-[calc(100dvh-2rem)] max-w-{4xl,md,2xl}` 均已进包、`lg:items-center` 组合已清除。探针文件已删除，产物无 `__probe__` 残留。
+
+## 2026-09-13 P1 修复补充：许可重入队 + 超时后二次响应守卫
+
+对第 1 批修复的两处补漏：
+
+**1. `worker-manager.js` `drainPermitQueue` 发送失败重新入队**
+原实现 `proc.send` 抛错只删 `activePermits`、不重入队，请求被丢弃后 worker 侧要白等 30s 超时。改为 catch 中 `permitQueue.unshift(request)` + `break`（同一 proc 连续失败时不原地死循环，下个 drain 触发点立即重试）。
+
+**2. 直发 500 的 catch 补超时守卫（防 `ERR_HTTP_HEADERS_SENT`）**
+`admin.js` 的 `registerRequestTimeoutGuard` 已包装 `res.json/res.send`，但直接调用 `res.status(500).json()` 的 catch 不经过包装，120s 超时守卫先行返回 503 后仍会二次响应抛错（async handler 场景产生 unhandled rejection）。为两处重灾区补 `headersSent/writableEnded/destroyed/requestTimedOut` 守卫（行为不变、仅拦截二次发送）：
+- `admin-account-routes.js`：6 处统一 catch（含账号增删改等）。
+- `admin-settings-routes.js`：9 处 catch（`/api/settings/save`、`auto-code-refresh/run`、`offline-reminder/test` 等含慢外部 I/O 的 async handler）。
+
+验证：6 个改动文件 `node --check` 通过；`node --test test/*.test.js` **390/390 通过**。
+

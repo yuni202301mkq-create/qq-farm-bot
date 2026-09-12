@@ -210,26 +210,43 @@ watch(() => currentAccount.value?.running, () => {
   refresh()
 })
 
+// 注意：倒计时要原地修改 matureInSec，不能用 map 重建整个数组。
+// 重建数组会让每一块地都拿到一个全新的 prop 对象，几十个 LandCard 每秒全量重渲染，
+// 这是移动端农场页卡顿最主要的原因。
 const { pause, resume } = useIntervalFn(() => {
-  if (lands.value) {
-    lands.value = lands.value.map((l: any) =>
-      l.matureInSec > 0 ? { ...l, matureInSec: l.matureInSec - 1 } : l,
-    )
+  const list = lands.value
+  if (!Array.isArray(list) || list.length === 0)
+    return
+  for (let i = 0; i < list.length; i += 1) {
+    const land = list[i] as any
+    if (!land)
+      continue
+    const left = Number(land.matureInSec)
+    if (left > 0)
+      land.matureInSec = left - 1
   }
 }, 1000)
 
 const { pause: pauseRefresh, resume: resumeRefresh } = useIntervalFn(refresh, 60000)
 
+// 后台标签页里 setInterval 会被浏览器降频，倒计时会走慢；回到前台立即拉一次真实数据校准。
+function handleVisibilityChange() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'visible')
+    refresh()
+}
+
 resume()
 resumeRefresh()
 onMounted(() => {
   window.addEventListener('resize', updateFarmStageSize)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   updateFarmStageSize()
 })
 onUnmounted(() => {
   pause()
   pauseRefresh()
   window.removeEventListener('resize', updateFarmStageSize)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 
@@ -290,7 +307,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Summary -->
-      <div class="grid grid-cols-4 gap-2 border-b border-gray-100 bg-gray-50 p-3 text-xs sm:flex sm:flex-wrap sm:gap-4 dark:border-gray-700 dark:bg-gray-900/50 sm:p-4 sm:text-sm">
+      <div class="grid grid-cols-2 justify-items-start gap-2 border-b border-gray-100 bg-gray-50 p-3 text-xs sm:flex sm:flex-wrap sm:gap-4 dark:border-gray-700 dark:bg-gray-900/50 sm:p-4 sm:text-sm">
         <div class="flex items-center gap-1.5 rounded-full bg-orange-100 px-3 py-1 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400">
           <div class="i-carbon-clean" />
           <span class="font-medium">可收: {{ summary?.harvestable || 0 }}</span>

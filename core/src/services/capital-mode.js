@@ -7,14 +7,35 @@ const { deployDog, getPetOverview, withdrawDog } = require('./pets');
 const scheduler = createScheduler('capital-mode');
 const state = { phase: 'idle', autoDogId: 0, lastAttemptAt: 0 };
 
+// 详细阶段记录 ID：成熟阶段除粗状态 6 外，也可能以 phase=19 / phase_id=19 表示
+// （见 farm-land-analyzer 的成熟判定），不能只认粗状态 6。
+const MATURE_PHASE_RECORD_ID = 19;
+
+/** 从服务端剩余 phases 中取成熟阶段的开始时间（秒），取不到返回 0 */
+function findMatureBeginTimeSec(phases) {
+  const list = Array.isArray(phases) ? phases : [];
+  if (list.length === 0) return 0;
+  for (const phase of list) {
+    const coarse = toNum(phase && phase.phase);
+    const recordId = toNum(phase && phase.phase_id);
+    if (coarse === PlantPhase.MATURE ||
+        coarse === MATURE_PHASE_RECORD_ID ||
+        recordId === MATURE_PHASE_RECORD_ID) {
+      return toTimeSec(phase && phase.begin_time);
+    }
+  }
+  // 部分作物（如最后阶段名为“盛开”的牵牛花）成熟时既不返回 6 也不带 19，
+  // 此时成熟阶段即最后一个剩余阶段。
+  return toTimeSec(list[list.length - 1] && list[list.length - 1].begin_time);
+}
+
 function findNearestMatureSeconds(lands, analysis) {
   if (analysis && Array.isArray(analysis.harvestable) && analysis.harvestable.length) return 0;
   const now = getServerTimeSec();
   let nearest = Infinity;
   for (const land of Array.isArray(lands) ? lands : []) {
-    const phases = Array.isArray(land && land.plant && land.plant.phases) ? land.plant.phases : [];
-    const mature = phases.find(phase => toNum(phase && phase.phase) === PlantPhase.MATURE);
-    const at = toTimeSec(mature && mature.begin_time);
+    const phases = land && land.plant && land.plant.phases;
+    const at = findMatureBeginTimeSec(phases);
     if (at > now) nearest = Math.min(nearest, at - now);
   }
   return Number.isFinite(nearest) ? nearest : null;

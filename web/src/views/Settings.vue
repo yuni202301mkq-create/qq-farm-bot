@@ -11,6 +11,7 @@ import AutoCodeRefreshCard from '@/components/settings/AutoCodeRefreshCard.vue'
 import ChangePasswordCard from '@/components/settings/ChangePasswordCard.vue'
 import DeviceProtocolCard from '@/components/settings/DeviceProtocolCard.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
+import PerformanceModeCard from '@/components/settings/PerformanceModeCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useAccountSettings } from '@/composables/settings/useAccountSettings'
 import { useAutomationSettings } from '@/composables/settings/useAutomationSettings'
@@ -24,9 +25,9 @@ const settingStore = useSettingStore()
 const userStore = useUserStore()
 const route = useRoute()
 
-type SettingsTabKey = 'account' | 'account-config' | 'notification' | 'usermgmt' | 'system' | 'cardkey'
+type SettingsTabKey = 'account' | 'account-config' | 'notification' | 'performance' | 'usermgmt' | 'system' | 'cardkey'
 
-const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'account-config', 'notification', 'usermgmt', 'system', 'cardkey']
+const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'account-config', 'notification', 'performance', 'usermgmt', 'system', 'cardkey']
 const LEGACY_SETTINGS_TABS: Record<string, SettingsTabKey> = {
   'strategy': 'account-config',
   'automation': 'account-config',
@@ -74,6 +75,7 @@ const tabs = computed(() => {
     { key: 'account', label: '账号管理', icon: 'i-carbon-user-settings' },
     { key: 'account-config', label: '账号设置', icon: 'i-carbon-settings-adjust' },
     { key: 'notification', label: '通知设置', icon: 'i-carbon-notification' },
+    { key: 'performance', label: '界面性能', icon: 'i-carbon-dashboard' },
     { key: 'usermgmt', label: '用户管理', icon: 'i-carbon-user' },
     { key: 'system', label: '系统配置', icon: 'i-carbon-settings-services' },
     { key: 'cardkey', label: '卡密设置', icon: 'i-carbon-ticket' },
@@ -495,8 +497,8 @@ onMounted(async () => {
         />
 
         <div v-else-if="activeTab === 'notification'" class="space-y-4">
-          <div class="flex items-center justify-between">
-            <div>
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
               <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
                 通知设置
               </h3>
@@ -518,6 +520,18 @@ onMounted(async () => {
             @open-docs="openChannelDocs"
             @test="handleTestOffline"
           />
+        </div>
+
+        <div v-else-if="activeTab === 'performance'" class="space-y-4">
+          <div>
+            <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
+              界面性能
+            </h3>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              控制前端动效强度，用于在低端设备上换取更流畅的操作体验。
+            </p>
+          </div>
+          <PerformanceModeCard />
         </div>
 
         <div v-else-if="activeTab === 'usermgmt'" class="space-y-4">

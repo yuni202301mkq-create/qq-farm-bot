@@ -333,7 +333,9 @@ async function runFertilizerByConfig(explicitLandIds = [], options = {}) {
   // 有机化肥
   if (mode === 'organic' || mode === 'both') {
     let organicTargets = explicitIds;
-    if (allLands.length > 0) {
+    // 仅在未指定地块时才回退到「全农场符合条件地块」；
+    // 否则会忽略调用方显式传入的地块（多季补肥、种植后补肥），把有机肥施到整个农场。
+    if (organicTargets.length === 0 && allLands.length > 0) {
       organicTargets = getOrganicFertilizerTargetsFromLands(allLands);
     }
     if (landTypeMap.size > 0) {

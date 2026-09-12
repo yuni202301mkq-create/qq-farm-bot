@@ -10,6 +10,46 @@ const {
 } = require("./admin-illustrated-purchase-routes");
 const { getNongmePlantData } = require("../services/nongme-plant-data");
 
+// 图鉴列表短时缓存：浏览器整页刷新 / 反复切页会对同一账号同一类型重复请求，
+// 这里在短时间内复用结果，避免重复的 RPC 调用与日志刷屏。显式 refresh=true 会绕过并刷新缓存。
+const ILLUSTRATED_CACHE_TTL_MS = 30 * 1000;
+const illustratedCache = new Map();
+
+function illustratedCacheKey(accountId, illustratedType) {
+  return `${String(accountId || "")}:${Number(illustratedType) || 1}`;
+}
+
+function readIllustratedCache(accountId, illustratedType) {
+  const key = illustratedCacheKey(accountId, illustratedType);
+  const entry = illustratedCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.at > ILLUSTRATED_CACHE_TTL_MS) {
+    illustratedCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function writeIllustratedCache(accountId, illustratedType, data) {
+  illustratedCache.set(illustratedCacheKey(accountId, illustratedType), {
+    at: Date.now(),
+    data,
+  });
+}
+
+/** 失效缓存：不传 illustratedType 时清该账号下所有类型 */
+function invalidateIllustratedCache(accountId, illustratedType) {
+  const type = Number(illustratedType);
+  if (!type) {
+    const prefix = `${String(accountId || "")}:`;
+    for (const key of [...illustratedCache.keys()]) {
+      if (key.startsWith(prefix)) illustratedCache.delete(key);
+    }
+    return;
+  }
+  illustratedCache.delete(illustratedCacheKey(accountId, type));
+}
+
 function getAuthorizedAccountId(req, res, { getAccountIdFromRequest, canAccessAccount }) {
   const accountId = getAccountIdFromRequest(req);
   if (!accountId) {
@@ -45,6 +85,7 @@ function registerAdminIllustratedRoutes({
     getAccountIdFromRequest,
     canAccessAccount,
     sendProviderError,
+    invalidateIllustratedCache,
   };
 
   registerAdminIllustratedPurchaseRoutes({
@@ -59,9 +100,19 @@ function registerAdminIllustratedRoutes({
     try {
       const refresh = req.query.refresh === "true";
       const illustratedType = Number(req.query.illustrated_type) || 1;
+
+      // 非强制刷新时命中短时缓存直接返回，避开浏览器刷新风暴带来的重复请求与日志
+      if (!refresh) {
+        const cached = readIllustratedCache(accountId, illustratedType);
+        if (cached) {
+          res.json({ ok: true, data: cached, cached: true });
+          return;
+        }
+      }
+
       const userLevel = getUserLevel(provider, accountId);
 
-      adminLogger.info("获取图鉴列表请求", {
+      adminLogger.debug("获取图鉴列表请求", {
         accountId,
         refresh,
         illustratedType,
@@ -78,7 +129,7 @@ function registerAdminIllustratedRoutes({
         getNongmePlantData(refresh),
       ]);
 
-      adminLogger.info("图鉴列表数据", {
+      adminLogger.debug("图鉴列表数据", {
         itemsCount: illustratedList?.items?.length || 0,
         hasRaw: !!illustratedList?.__raw,
         rawCount: illustratedList?.__raw?.rawItemCount || 0,
@@ -89,31 +140,35 @@ function registerAdminIllustratedRoutes({
           buildIllustratedItem(item, {
             seedGoodsMap,
             userLevel,
-            adminLogger,
             nongmeFruitMap: nongmeData.byFruitId,
           }),
         ),
       );
       const summary = summarizeIllustratedItems(items);
+      const data = {
+        items,
+        summary,
+        userLevel,
+        level: Number(illustratedList?.level) || 0,
+        currentScore: Number(illustratedList?.current_score) || 0,
+        nextScore: Number(illustratedList?.next_score) || 0,
+      };
 
-      adminLogger.info("图鉴列表返回", {
+      writeIllustratedCache(accountId, illustratedType, data);
+
+      // 被动加载（页面刷新 refresh=false）不打 info，避免刷屏；显式刷新 keep info 便于排查
+      const logSummary = refresh ? adminLogger.info : adminLogger.debug;
+      logSummary.call(adminLogger, "图鉴列表返回", {
+        accountId,
+        illustratedType,
+        refresh,
         total: summary.total,
         unlocked: summary.unlocked,
         canBuy: summary.canBuy,
         userLevel,
       });
 
-      res.json({
-        ok: true,
-        data: {
-          items,
-          summary,
-          userLevel,
-          level: Number(illustratedList?.level) || 0,
-          currentScore: Number(illustratedList?.current_score) || 0,
-          nextScore: Number(illustratedList?.next_score) || 0,
-        },
-      });
+      res.json({ ok: true, data });
     } catch (err) {
       adminLogger.error("获取图鉴列表失败", {
         error: err.message,

@@ -61,8 +61,15 @@ function createWorkerManager(deps) {
             const wrk = workers[request.accountId];
             if (!wrk || wrk.process !== request.proc || wrk.stopping) continue;
             activePermits.set(request.token, request);
-            try { request.proc.send({ type: 'task_permit_granted', token: request.token }); } catch {
+            try {
+                request.proc.send({ type: 'task_permit_granted', token: request.token });
+            } catch {
+                // 发送失败不能把请求直接丢掉：worker 侧虽有超时兜底，但重新入队可以
+                // 让它在下一个 drain 立即重试，而不是白等 30s 超时。
+                // unshift + break：同一 proc 连续失败时避免原地死循环。
                 activePermits.delete(request.token);
+                permitQueue.unshift(request);
+                break;
             }
         }
     }

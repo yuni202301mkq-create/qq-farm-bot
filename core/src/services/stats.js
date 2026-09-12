@@ -1,6 +1,7 @@
 const process = require('node:process');
 const path = require('node:path');
 const { readJsonFile, writeJsonFileAtomic } = require('./json-db');
+const { getServerDateKey } = require('../utils/utils');
 
 // ─── 持久化路径 ───
 
@@ -9,13 +10,9 @@ function getStatsFilePath(accountId) {
   return path.join(baseDir, 'stats', `${accountId  }.json`);
 }
 
-/** 获取 YYYY-MM-DD 格式的当天日期键 */
+/** 获取 YYYY-MM-DD 格式的当天日期键（服务器时间 UTC+8，与游戏日界一致） */
 function getTodayKey() {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  return getServerDateKey();
 }
 
 function loadPersistedStats(accountId) {

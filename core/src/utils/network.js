@@ -19,6 +19,19 @@ const { evaluateGatewayHealth, getOldestPendingAgeMs } = require('./gateway-heal
 const { createRequestGate, getRequestPriority } = require('./request-priority');
 const { TsdkRuntime } = require('./tsdk-runtime');
 
+// warehouse.js 与 network.js 互相依赖；在运行时惰性加载，避免循环依赖导致加载期导出为 undefined
+let _warehouseCache = null;
+function getWarehouseLazy() {
+    if (_warehouseCache === null) {
+        try {
+            _warehouseCache = require('../services/warehouse');
+        } catch {
+            _warehouseCache = false;
+        }
+    }
+    return _warehouseCache || null;
+}
+
 const CLIENT_VERSION_RE = /^\d+(?:\.\d+){2,4}_\d{8}$/;
 
 function extractServerClientVersion(versionInfo) {
@@ -259,20 +272,28 @@ async function encodeMsg(serviceName, methodName, bodyBytes, clientSeqValue) {
 }
 
 async function sendMsg(serviceName, methodName, bodyBytes, callback) {
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
+    // 捕获当前连接：encodeMsg 内含异步加密，期间可能断线重连并被赋予新的 socket，
+    // 若仍用全局 ws 发送，就会把旧消息（旧 gatewayToken/seq）发到新连接上。
+    const socket = ws;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
         log('系统', '[WS] 连接未打开');
         return false;
     }
     const seq = clientSeq;
     clientSeq += 1;
     const encoded = await encodeMsg(serviceName, methodName, bodyBytes, seq);
+    if (socket !== ws || socket.readyState !== WebSocket.OPEN) {
+        log('系统', `[WS] 编码期间连接已变化，取消发送: ${methodName}`);
+        if (callback) callback(new Error(`连接已断开: ${methodName}`));
+        return false;
+    }
     if (callback) {
         pendingCallbacks.set(seq, callback);
         pendingStartedAt.set(seq, Date.now());
     }
     // ws.send(encoded);
     try {
-        ws.send(encoded);
+        socket.send(encoded);
     } catch (err) {
         if (callback) {
             pendingCallbacks.delete(seq);
@@ -502,6 +523,12 @@ function handleNotify(msg) {
                                 count: giftDelta,
                                 dailyTotal: currentCount,
                             });
+                        }
+                    } else if (delta > 0 || count > 0) {
+                        // 背包新增/存在化肥类道具：通知 worker 事件驱动自动开启礼包（不依赖轮询）
+                        const wh = getWarehouseLazy();
+                        if (wh && typeof wh.isFertilizerRelatedItemId === 'function' && wh.isFertilizerRelatedItemId(id)) {
+                            networkEvents.emit('fertilizerItemReceived', { id, count, delta });
                         }
                     }
                 }

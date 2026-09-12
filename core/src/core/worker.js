@@ -105,7 +105,7 @@ const {
 const { nextBusinessBackoffMs } = require('../utils/gateway-health');
 const { runWithRequestPriority } = require('../utils/request-priority');
 const { loadProto } = require('../utils/proto');
-const { setLogHook, log, toNum } = require('../utils/utils');
+const { setLogHook, log, logWarn, toNum, getServerDateKey } = require('../utils/utils');
 const { resourcePolicy, createResourceMonitor } = require('../runtime/resource-policy');
 
 // 设置环境变量中的账号ID
@@ -211,6 +211,7 @@ let harvestSellRunning = false;
 let onWsError = null;
 let onDisconnectHandler = null;
 let onClientVersionUpdate = null;
+let onFertilizerItemReceived = null;
 let wsErrorHandledAt = 0;
 let lastDailyRunDate = '';
 let friendSyncPaused = false;
@@ -222,30 +223,44 @@ let offlinePollDelayMs = resourcePolicy.offlinePollMinMs;
 let nextPermitId = 1;
 const pendingPermits = new Map();
 
+// 许可请求超时：主进程可能因 worker 重启、队列丢弃或 send 失败而永不回包。
+// 若无限等待，统一调度器会永久卡在 await 上、不再重排下一 tick（进程仍显示已连接）。
+const TASK_PERMIT_TIMEOUT_MS = 30000;
+// 超时哨兵：区别于 null（并发上限<=0 时的“无需许可”），表示本轮未拿到许可、应跳过执行。
+const PERMIT_TIMEOUT = Symbol('task-permit-timeout');
+
 function acquireTaskPermit() {
     if (resourcePolicy.globalTaskConcurrency <= 0) return Promise.resolve(null);
     const token = String(nextPermitId++);
     return new Promise(resolve => {
-        pendingPermits.set(token, resolve);
+        const timer = setTimeout(() => {
+            if (!pendingPermits.has(token)) return;
+            pendingPermits.delete(token);
+            logWarn('调度', `获取任务许可超时(${TASK_PERMIT_TIMEOUT_MS}ms)，本轮跳过`, {
+                module: 'scheduler', event: '任务许可', result: 'timeout', token,
+            });
+            resolve(PERMIT_TIMEOUT);
+        }, TASK_PERMIT_TIMEOUT_MS);
+        if (typeof timer.unref === 'function') timer.unref();
+        pendingPermits.set(token, grantedToken => {
+            clearTimeout(timer);
+            resolve(grantedToken);
+        });
         sendToMaster({ type: 'task_permit_request', token });
     });
 }
 
 function releaseTaskPermit(token) {
-    if (!token) return;
+    if (!token || token === PERMIT_TIMEOUT) return;
     sendToMaster({ type: 'task_permit_release', token });
 }
 
 /** 每日任务是否启用 */
 function isDailyRoutineEnabled() { return true; }
 
-/** 获取当天日期键 */
+/** 获取当天日期键（服务器时间 UTC+8，与游戏日界一致） */
 function getLocalDateKey() {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y  }-${  m  }-${  day}`;
+    return getServerDateKey();
 }
 
 // ==================== 每日任务 ====================
@@ -1087,6 +1102,8 @@ async function runUnifiedTick() {
     if (!shouldFarm && !shouldHelp && !shouldSteal) return;
 
     const permit = await acquireTaskPermit();
+    // 许可超时：本轮放弃（不在无并发控制下执行任务），下一 tick 会自然重试
+    if (permit === PERMIT_TIMEOUT) return;
     try {
         const autoConfig = getAutomation();
         if (shouldFarm) await runFarmTick(autoConfig);
@@ -1276,6 +1293,22 @@ function applyRuntimeConfig(config, syncStatusAfter = false) {
                     await runGoldenBugPlacement({ force: true });
                 });
             }
+
+            // 填充化肥从关变开 → 立即开启一次背包内的化肥礼包
+            const prevFertilizerGift = !!(prevAuto && prevAuto.fertilizer_gift);
+            const newFertilizerGift = !!(newAuto && newAuto.fertilizer_gift);
+            if (!prevFertilizerGift && newFertilizerGift) {
+                workerScheduler.setTimeoutTask('fertilizer_gift_immediate', 2000, async () => {
+                    if (!loginReady) return;
+                    try {
+                        await openFertilizerGiftPacksSilently();
+                    } catch (err) {
+                        log('仓库', `开启填充化肥后立即开启礼包失败: ${err.message}`, {
+                            module: 'warehouse', event: '开启化肥礼包', result: 'error'
+                        });
+                    }
+                });
+            }
         }
     }
 
@@ -1315,7 +1348,22 @@ onMasterMessage(async (msg) => {
 async function startBot(config) {
     if (isRunning) return;
     isRunning = true;
+    try {
+        await startBotInner(config);
+    } catch (err) {
+        // 启动流程失败必须复位运行标志：否则后续 start 会被上面的 `if (isRunning)` 直接吞掉，
+        // 进程仍显示在运行、却永远不执行任何任务（僵尸态）。
+        isRunning = false;
+        loginReady = false;
+        const message = err && err.message ? err.message : String(err);
+        logWarn('系统', `启动失败，已复位运行标志: ${message}`, {
+            module: 'system', event: '启动', result: 'error',
+        });
+        sendToMaster({ type: 'error', error: `启动失败: ${message}` });
+    }
+}
 
+async function startBotInner(config) {
     const { code, platform, loginType } = config;
     CONFIG.platform = platform || 'qq';
 
@@ -1416,6 +1464,25 @@ async function startBot(config) {
             require('../services/dog-skill-gifts').checkAndClaimDogSkillGifts(pendingCount).catch(() => null);
         };
         networkEvents.on('dogSkillGiftPending', onDogSkillGiftPending);
+
+        // 背包收到化肥类道具 → 事件驱动自动开启礼包（不再依赖轮询定时器）
+        if (onFertilizerItemReceived) networkEvents.off('fertilizerItemReceived', onFertilizerItemReceived);
+        onFertilizerItemReceived = () => {
+            if (!loginReady) return;
+            if (!getAutomation().fertilizer_gift) return;
+            // 去抖：短时间内连续收到多个化肥道具只触发一次开启
+            workerScheduler.setTimeoutTask('fertilizer_gift_on_item', 1500, async () => {
+                if (!loginReady) return;
+                try {
+                    await openFertilizerGiftPacksSilently();
+                } catch (err) {
+                    log('仓库', `背包收到化肥道具后自动开启失败: ${err.message}`, {
+                        module: 'warehouse', event: '开启化肥礼包', result: 'error'
+                    });
+                }
+            });
+        };
+        networkEvents.on('fertilizerItemReceived', onFertilizerItemReceived);
 
         // 单次背包请求同步点券和金豆豆，避免登录阶段重复并发查询。
         try {
@@ -1548,6 +1615,10 @@ async function stopBot() {
     if (onDogSkillGiftPending) {
         networkEvents.off('dogSkillGiftPending', onDogSkillGiftPending);
         onDogSkillGiftPending = null;
+    }
+    if (onFertilizerItemReceived) {
+        networkEvents.off('fertilizerItemReceived', onFertilizerItemReceived);
+        onFertilizerItemReceived = null;
     }
 
     stopFarmCheckLoop();

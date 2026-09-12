@@ -54,3 +54,47 @@ body {
     0 0 10px var(--theme-primary),
     0 0 5px var(--theme-primary) !important;
 }
+
+/* ==========================================================================
+   流畅模式（perf-lite）
+   由 usePerformanceMode 在 <html> 上切换该类：移动端 / 低端设备 / 系统开启
+   「减少动效」/ 省流量模式时自动降级，也可在设置页手动开关。
+   目标是关掉「持续占用 GPU」的装饰性动画与毛玻璃，静态配色和滤镜全部保留。
+   ========================================================================== */
+
+/* 毛玻璃在移动端非常贵，滚动时几乎必然掉帧，直接换成普通半透明背景 */
+.perf-lite *,
+.perf-lite *::before,
+.perf-lite *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 地块内的变异特效（金色光环/闪光、冰晶、爱心、黑化烟雾、水滴、闪电、七夕羽毛）
+   全部是纯装饰，几十块地同时跑上百个逐帧动画是掉帧主因，降级为静态 */
+.perf-lite .land-card *,
+.perf-lite .land-card *::before,
+.perf-lite .land-card *::after {
+  animation: none !important;
+}
+
+/* 闪电帧靠动画轮流切换透明度，停掉后需要固定显示第一帧，否则效果直接消失 */
+.perf-lite .lightning-mutation-frame-1 {
+  opacity: 1;
+}
+
+/* 农场场景的暴雨 / 雾气 / 闪电全屏动画 */
+.perf-lite .farm-rain-fog,
+.perf-lite .farm-rain-streaks,
+.perf-lite .farm-thunder-flash,
+/* 布局里的悬浮提示与水波纹背景 */
+.perf-lite .warning-modal,
+.perf-lite .ripple {
+  animation: none !important;
+}
+
+/* 登录页三块 520~600px 的 blur(80px) 光斑是纯装饰，
+   在移动端直接省掉，能明显改善输入框聚焦/输入时的合成开销 */
+.perf-lite .bg-blob {
+  display: none !important;
+}
