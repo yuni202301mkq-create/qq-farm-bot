@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import type { ActivityLabels, ActivitySection, ActivitySectionKey } from '@/components/activity/types'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import api from '@/api'
 import CharityFlowerActivityPanel from '@/components/activity/CharityFlowerActivityPanel.vue'
 import HeluExchangePanel from '@/components/activity/HeluExchangePanel.vue'
 import HeluPassportPanel from '@/components/activity/HeluPassportPanel.vue'
 import HeluSolarTermsPanel from '@/components/activity/HeluSolarTermsPanel.vue'
-import PetDiaryActivityPanel from '@/components/activity/PetDiaryActivityPanel.vue'
 import QixiActivityPanel from '@/components/activity/QixiActivityPanel.vue'
 import RainPoemActivityPanel from '@/components/activity/RainPoemActivityPanel.vue'
 import StarRecordPanel from '@/components/activity/StarRecordPanel.vue'
@@ -17,6 +16,8 @@ import { useAccountStore } from '@/stores/account'
 import { useActivityStore } from '@/stores/activity'
 import { useToastStore } from '@/stores/toast'
 import { useUserStore } from '@/stores/user'
+
+const PetDiaryActivityPanel = defineAsyncComponent(() => import('@/components/activity/PetDiaryActivityPanel.vue'))
 
 const L: ActivityLabels = {
   title: '活动中心',
@@ -219,7 +220,7 @@ const activityCards = computed(() => {
         'charity-flower': 'i-carbon-favorite',
         'rain-poem': 'i-carbon-rain-heavy',
       }[adaptedKey || ''] || 'i-carbon-calendar',
-      image: adaptedKey === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.png' : group.imageUrl || (adaptedKey === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : ''),
+      image: adaptedKey === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.webp?v=20260912' : group.imageUrl || (adaptedKey === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : ''),
       imagePosition: adaptedKey === 'pet-diary' ? 'center 64%' : 'center',
       window,
       updatedMs: window.startMs,
