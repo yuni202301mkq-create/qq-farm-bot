@@ -64,6 +64,11 @@ const { registerAdminSettingsRoutes } = require("./admin-settings-routes");
 const { registerAdminShopRoutes } = require("./admin-shop-routes");
 const { createAdminSessionManager } = require("./admin-session-manager");
 const { registerAdminSystemRoutes } = require("./admin-system-routes");
+const {
+  createSecurityHeaders,
+  permissionsPolicyMiddleware,
+  noCacheHtmlMiddleware,
+} = require("./security-headers");
 const userStore = require("../models/user-store");
 
 const adminLogger = createModuleLogger("admin");
@@ -375,6 +380,14 @@ function startAdminServer(dataProvider) {
   provider = dataProvider;
   app = express();
   app.set("trust proxy", true);
+  // 关闭 Express 标识头，少给攻击者指纹
+  app.disable("x-powered-by");
+  // 安全响应头（helmet + Permissions-Policy + no-cache for HTML）——
+  // 必须放在 CORS 与所有路由最前面，这样后续中间件对头部的覆盖（login-assets 的 CSP）
+  // 才能在该响应里生效。
+  app.use(createSecurityHeaders({ hsts: false }));
+  app.use(permissionsPolicyMiddleware);
+  app.use(noCacheHtmlMiddleware);
   app.use(express.json({ limit: "256kb" }));
 
   const adminSessionManager = createAdminSessionManager({

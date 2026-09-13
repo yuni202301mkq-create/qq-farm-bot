@@ -8,7 +8,8 @@ function buildSessionUser(user) {
     card: user.card || null,
     accountLimit: user.accountLimit,
     expiresAt: user.expiresAt || null,
-    mustChangePassword: false,
+    // 出厂初始口令尚未修改：前端据此强制跳到改密页
+    mustChangePassword: user.mustChangePassword === true,
   };
 }
 
@@ -24,7 +25,7 @@ function sendSession(res, createAdminSession, user) {
       accountLimit: sessionUser.accountLimit,
       expiresAt: sessionUser.expiresAt,
       user: { username: sessionUser.username },
-      mustChangePassword: false,
+      mustChangePassword: sessionUser.mustChangePassword,
     },
   });
 }
@@ -35,12 +36,88 @@ const FORGOT_ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
 const FORGOT_LOCKOUT_MS = 10 * 60 * 1000;
 const FORGOT_ATTEMPT_MAX_KEYS = 5000;
 
+// 登录失败限制：同一来源 + 同一用户名 10 分钟内 5 次即锁定 10 分钟；
+// 另设「同一用户名不限来源 20 次」上限，拦住轮换来源地址对单个账号的分布式爆破
+const LOGIN_ATTEMPT_LIMIT = 5;
+const LOGIN_ACCOUNT_LIMIT = 20;
+const LOGIN_ATTEMPT_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_LOCKOUT_MS = 10 * 60 * 1000;
+const LOGIN_ATTEMPT_MAX_KEYS = 5000;
+
 // 两步找回：卡密验证通过后发放的短期重置凭据（内存态，重启即失效）
 const FORGOT_RESET_TOKEN_TTL_MS = 5 * 60 * 1000;
 const FORGOT_RESET_TOKEN_MAX = 1000;
 
+/**
+ * 失败尝试计数器：按 key 累计窗口内失败次数，达到上限后锁定一段时间。
+ * key 由调用方决定；内置过期清理 + 条数硬上限，避免来源被伪造时内存无限增长。
+ */
+function createAttemptLimiter({ limit, windowMs, lockoutMs, maxKeys }) {
+  const attempts = new Map();
+
+  function prune(now) {
+    for (const [key, attempt] of attempts.entries()) {
+      const windowExpired = now - attempt.firstAt > windowMs;
+      const lockExpired = !attempt.lockUntil || attempt.lockUntil <= now;
+      if (windowExpired && lockExpired) attempts.delete(key);
+    }
+    if (attempts.size <= maxKeys) return;
+    // 兜底：仍超上限时丢弃最早的一批
+    const overflow = attempts.size - maxKeys;
+    const oldestFirst = [...attempts.entries()].sort((a, b) => a[1].firstAt - b[1].firstAt);
+    for (let i = 0; i < overflow; i += 1) attempts.delete(oldestFirst[i][0]);
+  }
+
+  function lockRemainingMs(key) {
+    const attempt = attempts.get(key);
+    if (!attempt || !attempt.lockUntil) return 0;
+    return Math.max(0, attempt.lockUntil - Date.now());
+  }
+
+  function recordFailure(key) {
+    const now = Date.now();
+    prune(now);
+    const attempt = attempts.get(key);
+    if (!attempt || now - attempt.firstAt > windowMs) {
+      attempts.set(key, { firstAt: now, count: 1, lockUntil: 0 });
+      return;
+    }
+    attempt.count += 1;
+    if (attempt.count >= limit) attempt.lockUntil = now + lockoutMs;
+    attempts.set(key, attempt);
+  }
+
+  function clear(key) {
+    attempts.delete(key);
+  }
+
+  return { clear, lockRemainingMs, recordFailure };
+}
+
+function lockMessage(lockedMs, prefix) {
+  const minutes = Math.max(1, Math.ceil(lockedMs / 60000));
+  return `${prefix}，请约 ${minutes} 分钟后再试`;
+}
+
 function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions, invalidateAdminSessions }) {
-  const forgotAttempts = new Map();
+  const forgotLimiter = createAttemptLimiter({
+    limit: FORGOT_ATTEMPT_LIMIT,
+    windowMs: FORGOT_ATTEMPT_WINDOW_MS,
+    lockoutMs: FORGOT_LOCKOUT_MS,
+    maxKeys: FORGOT_ATTEMPT_MAX_KEYS,
+  });
+  const loginAddressLimiter = createAttemptLimiter({
+    limit: LOGIN_ATTEMPT_LIMIT,
+    windowMs: LOGIN_ATTEMPT_WINDOW_MS,
+    lockoutMs: LOGIN_LOCKOUT_MS,
+    maxKeys: LOGIN_ATTEMPT_MAX_KEYS,
+  });
+  const loginAccountLimiter = createAttemptLimiter({
+    limit: LOGIN_ACCOUNT_LIMIT,
+    windowMs: LOGIN_ATTEMPT_WINDOW_MS,
+    lockoutMs: LOGIN_LOCKOUT_MS,
+    maxKeys: LOGIN_ATTEMPT_MAX_KEYS,
+  });
 
   function normalizeClientAddress(address) {
     // IPv4-mapped IPv6 归一化，避免 ::ffff:1.2.3.4 和 1.2.3.4 变成两个互不影响的桶。
@@ -54,42 +131,15 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
     return `${normalizeClientAddress(req.socket?.remoteAddress)}::${String(username || '').trim().toLowerCase()}`;
   }
 
-  function pruneForgotAttempts(now) {
-    for (const [key, attempt] of forgotAttempts.entries()) {
-      const windowExpired = now - attempt.firstAt > FORGOT_ATTEMPT_WINDOW_MS;
-      const lockExpired = !attempt.lockUntil || attempt.lockUntil <= now;
-      if (windowExpired && lockExpired) forgotAttempts.delete(key);
-    }
-    if (forgotAttempts.size <= FORGOT_ATTEMPT_MAX_KEYS) return;
-    // 兜底：仍超上限时丢弃最早的一批，避免来源被伪造时内存无限增长
-    const overflow = forgotAttempts.size - FORGOT_ATTEMPT_MAX_KEYS;
-    const oldestFirst = [...forgotAttempts.entries()].sort((a, b) => a[1].firstAt - b[1].firstAt);
-    for (let i = 0; i < overflow; i += 1) forgotAttempts.delete(oldestFirst[i][0]);
-  }
-
-  function forgotLockRemainingMs(key) {
-    const attempt = forgotAttempts.get(key);
-    if (!attempt || !attempt.lockUntil) return 0;
-    return Math.max(0, attempt.lockUntil - Date.now());
-  }
-
-  function recordForgotFailure(key) {
-    const now = Date.now();
-    pruneForgotAttempts(now);
-    const attempt = forgotAttempts.get(key);
-    if (!attempt || now - attempt.firstAt > FORGOT_ATTEMPT_WINDOW_MS) {
-      forgotAttempts.set(key, { firstAt: now, count: 1, lockUntil: 0 });
-      return;
-    }
-    attempt.count += 1;
-    if (attempt.count >= FORGOT_ATTEMPT_LIMIT) {
-      attempt.lockUntil = now + FORGOT_LOCKOUT_MS;
-    }
-    forgotAttempts.set(key, attempt);
-  }
-
-  function clearForgotFailures(key) {
-    forgotAttempts.delete(key);
+  /** 登录失败的两个计数维度：来源+用户名（拦单点爆破）、用户名（拦换 IP 的分布式爆破） */
+  function loginAttemptKeys(req, username) {
+    const address = normalizeClientAddress(req.socket?.remoteAddress);
+    const name = String(username || '').trim().toLowerCase();
+    return {
+      pairKey: `${address}::${name}`,
+      // 用户名为空时没有可归集的账号，不启用账号维度
+      accountKey: name ? `@account::${name}` : '',
+    };
   }
 
   /** 卡密是否曾被该用户使用（注册卡在用户档案，续费卡记录在卡密库 usedBy） */
@@ -166,10 +216,26 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
   app.post('/api/login', (req, res) => {
     try {
       const { username, password } = req.body || {};
+      const { pairKey, accountKey } = loginAttemptKeys(req, username);
+
+      // 先看是否处于锁定期，避免锁定期间仍然消耗 scrypt 算力
+      const lockedMs = Math.max(
+        loginAddressLimiter.lockRemainingMs(pairKey),
+        accountKey ? loginAccountLimiter.lockRemainingMs(accountKey) : 0,
+      );
+      if (lockedMs > 0)
+        return res.status(429).json({ ok: false, error: lockMessage(lockedMs, '登录尝试次数过多') });
+
       const user = userStore.verifyPassword(username, password);
       if (!user) {
+        loginAddressLimiter.recordFailure(pairKey);
+        if (accountKey) loginAccountLimiter.recordFailure(accountKey);
         return res.status(401).json({ ok: false, error: '用户名或密码错误' });
       }
+      // 密码正确即清空计数，正常用户不会因为历史输错被后续一次失误带进锁定
+      loginAddressLimiter.clear(pairKey);
+      if (accountKey) loginAccountLimiter.clear(accountKey);
+
       if (user.disabled) {
         return res.status(403).json({ ok: false, error: '账号已被禁用，请联系管理员' });
       }
@@ -283,13 +349,10 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
       const code = String(cardKey || '').trim().toUpperCase();
       const attemptKey = forgotAttemptKey(req, name);
 
-      const lockedMs = forgotLockRemainingMs(attemptKey);
-      if (lockedMs > 0) {
-        const minutes = Math.max(1, Math.ceil(lockedMs / 60000));
-        return res.status(429).json({ ok: false, error: `尝试次数过多，请约 ${minutes} 分钟后再试` });
-      }
-      if (!name || !code || !newPassword) {
-        return res.status(400).json({ ok: false, error: '请填写用户名、绑定卡密和新密码' });
+      const lockedMs = forgotLimiter.lockRemainingMs(attemptKey);
+      if (lockedMs > 0)
+        return res.status(429).json({ ok: false, error: lockMessage(lockedMs, '尝试次数过多') });
+      if (!name || !code || !newPassword) {        return res.status(400).json({ ok: false, error: '请填写用户名、绑定卡密和新密码' });
       }
       if (String(newPassword).length < 6) {
         return res.status(400).json({ ok: false, error: '新密码至少 6 位' });
@@ -303,11 +366,11 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
           && (String(user.card || '').trim().toUpperCase() === code || isCardBoundToUser(code, name)),
       );
       if (!identityMatched) {
-        recordForgotFailure(attemptKey);
+        forgotLimiter.recordFailure(attemptKey);
         return res.status(400).json({ ok: false, error: '用户名或绑定卡密不匹配' });
       }
 
-      clearForgotFailures(attemptKey);
+      forgotLimiter.clear(attemptKey);
       userStore.updateUser(user.username, { password: newPassword });
       // 重置后踢掉该账号的在线会话，必须用新密码重新登录
       if (typeof invalidateAdminSessions === 'function') {
@@ -324,21 +387,19 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
     try {
       const code = String(req.body?.cardKey || '').trim().toUpperCase();
       const attemptKey = forgotVerifyAttemptKey(req);
-      const lockedMs = forgotLockRemainingMs(attemptKey);
-      if (lockedMs > 0) {
-        const minutes = Math.max(1, Math.ceil(lockedMs / 60000));
-        return res.status(429).json({ ok: false, error: `尝试次数过多，请约 ${minutes} 分钟后再试` });
-      }
+      const lockedMs = forgotLimiter.lockRemainingMs(attemptKey);
+      if (lockedMs > 0)
+        return res.status(429).json({ ok: false, error: lockMessage(lockedMs, '尝试次数过多') });
       if (!code) {
         return res.status(400).json({ ok: false, error: '请输入卡密' });
       }
       const user = findUserByCardCode(code);
       if (!user) {
-        recordForgotFailure(attemptKey);
+        forgotLimiter.recordFailure(attemptKey);
         // 统一报错：不区分「卡密不存在 / 未绑定账号 / 账号被禁用」，避免被用来探测
         return res.status(400).json({ ok: false, error: '卡密不正确或未绑定任何账号' });
       }
-      clearForgotFailures(attemptKey);
+      forgotLimiter.clear(attemptKey);
       const { token, expiresAt } = issueForgotResetToken(user.username);
       return res.json({
         ok: true,
@@ -358,11 +419,9 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
     try {
       const { resetToken, newPassword } = req.body || {};
       const attemptKey = forgotVerifyAttemptKey(req);
-      const lockedMs = forgotLockRemainingMs(attemptKey);
-      if (lockedMs > 0) {
-        const minutes = Math.max(1, Math.ceil(lockedMs / 60000));
-        return res.status(429).json({ ok: false, error: `尝试次数过多，请约 ${minutes} 分钟后再试` });
-      }
+      const lockedMs = forgotLimiter.lockRemainingMs(attemptKey);
+      if (lockedMs > 0)
+        return res.status(429).json({ ok: false, error: lockMessage(lockedMs, '尝试次数过多') });
       if (!resetToken || !newPassword) {
         return res.status(400).json({ ok: false, error: '重置凭据已失效，请重新验证卡密' });
       }
@@ -371,14 +430,14 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
       }
       const entry = consumeForgotResetToken(resetToken);
       if (!entry) {
-        recordForgotFailure(attemptKey);
+        forgotLimiter.recordFailure(attemptKey);
         return res.status(400).json({ ok: false, error: '重置凭据已失效，请重新验证卡密' });
       }
       const user = userStore.findUser(entry.username);
       if (!user || user.role === 'super_admin') {
         return res.status(400).json({ ok: false, error: '账号不存在或无权重置，请重新验证卡密' });
       }
-      clearForgotFailures(attemptKey);
+      forgotLimiter.clear(attemptKey);
       userStore.updateUser(user.username, { password: newPassword });
       // 重置后踢掉该账号的在线会话，必须用新密码重新登录
       if (typeof invalidateAdminSessions === 'function') {

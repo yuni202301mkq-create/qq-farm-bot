@@ -121,7 +121,7 @@ function getQixiDewLimitStateKey() {
 
 function getRainPoemSummonUsageFile() {
   const state = getUserState();
-  const accountKey = String(state?.gid || 'current').replace(/[^\w-]/gi, '_');
+  const accountKey = String(state?.gid || 'current').replace(/[^\w-]/g, '_');
   return path.join(getDataDir(), 'rain_poem_summon_usage', `${accountKey}.json`);
 }
 

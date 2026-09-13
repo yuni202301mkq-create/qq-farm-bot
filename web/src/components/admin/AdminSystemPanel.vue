@@ -99,7 +99,7 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
             v-model="localSystemConfig.clientVersion"
             label="客户端版本"
             type="text"
-            placeholder="1.13.0.5_20260723"
+            placeholder="1.14.0.4_20260911"
             class="col-span-2"
           />
           <div class="flex flex-col gap-1.5">
@@ -209,6 +209,7 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
               type="text"
               placeholder="http://127.0.0.1:8450"
               class="col-span-2"
+              autocomplete="off"
             />
             <BaseInput
               v-model="localCaptureConfig.apiToken"
@@ -216,6 +217,7 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
               type="password"
               :placeholder="localCaptureConfig.tokenConfigured ? '已配置，留空保持不变' : '请输入抓包服务 API Token'"
               class="col-span-2"
+              autocomplete="new-password"
             />
           </template>
           <div class="col-span-2">

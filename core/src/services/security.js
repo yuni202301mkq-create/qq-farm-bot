@@ -15,8 +15,6 @@ const SECURITY_CONFIG = {
     minPasswordLength: 4,
     maxPasswordLength: 64,
     enablePasswordStrengthCheck: true,
-    maxLoginAttempts: 5,
-    lockoutDuration: 300000,
 };
 
 function getClientIp(req) {
@@ -46,8 +44,6 @@ function getClientIp(req) {
     
     return 'unknown';
 }
-
-const loginAttempts = new Map();
 
 const useBcrypt = true;
 
@@ -177,37 +173,6 @@ function checkPasswordStrength(password) {
     };
 }
 
-function recordLoginAttempts(identifier) {
-    const key = String(identifier || '').toLowerCase();
-    const now = Date.now();
-    
-    const attempts = loginAttempts.get(key) || { count: 0, firstAttempt: now, lockedUntil: 0 };
-    
-    if (attempts.lockedUntil > now) {
-        const remaining = Math.ceil((attempts.lockedUntil - now) / 1000);
-        throw new Error(`账号已锁定，请${remaining}秒后重试`);
-    }
-    
-    attempts.count += 1;
-    attempts.lastAttempt = now;
-    
-    if (attempts.count >= SECURITY_CONFIG.maxLoginAttempts) {
-        attempts.lockedUntil = now + SECURITY_CONFIG.lockoutDuration;
-        logger.warn('登录尝试过多，账号已锁定', { identifier: key });
-        throw new Error(`登录尝试过多，账号已锁定${SECURITY_CONFIG.lockoutDuration / 60000}分钟`);
-    }
-    
-    loginAttempts.set(key, attempts);
-    return {
-        attemptsLeft: SECURITY_CONFIG.maxLoginAttempts - attempts.count
-    };
-}
-
-function clearLoginAttempts(identifier) {
-    const key = String(identifier || '').toLowerCase();
-    loginAttempts.delete(key);
-}
-
 function generateToken(length = 32) {
     return crypto.randomBytes(length).toString('hex');
 }
@@ -295,8 +260,6 @@ module.exports = {
     hashPassword,
     verifyPassword,
     checkPasswordStrength,
-    recordLoginAttempts,
-    clearLoginAttempts,
     generateToken,
     generateSessionToken,
     verifySessionToken,

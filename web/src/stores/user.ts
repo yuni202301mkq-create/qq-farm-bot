@@ -12,6 +12,8 @@ export interface AdminUser {
   accountLimit: number
   expiresAt?: number | null
   avatar?: string
+  /** 仍在使用出厂初始口令，必须先改密才能使用面板 */
+  mustChangePassword?: boolean
 }
 
 export const useUserStore = defineStore('user', () => {
@@ -29,10 +31,17 @@ export const useUserStore = defineStore('user', () => {
   const expiresAt = computed(() => userInfo.value?.expiresAt || null)
   const isExpired = computed(() =>
     !isSuperAdmin.value && Boolean(expiresAt.value && Date.now() > Number(expiresAt.value)))
+  const mustChangePassword = computed(() => userInfo.value?.mustChangePassword === true)
 
   function clearSession() {
     token.value = ''
     userInfo.value = null
+  }
+
+  /** 改密成功后本地同步，避免路由守卫再次把用户送回强制改密页 */
+  function markPasswordChanged() {
+    if (userInfo.value)
+      userInfo.value = { ...userInfo.value, mustChangePassword: false }
   }
 
   async function fetchUserInfo() {
@@ -45,6 +54,7 @@ export const useUserStore = defineStore('user', () => {
           card: data.data.card ?? null,
           accountLimit: data.data.accountLimit ?? 2,
           expiresAt: data.data.expiresAt ?? null,
+          mustChangePassword: data.data.mustChangePassword === true,
         }
       }
       return data
@@ -65,7 +75,9 @@ export const useUserStore = defineStore('user', () => {
     accountLimit,
     expiresAt,
     isExpired,
+    mustChangePassword,
     clearSession,
+    markPasswordChanged,
     fetchUserInfo,
   }
 })

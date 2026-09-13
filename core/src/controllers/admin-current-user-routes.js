@@ -19,6 +19,8 @@ function registerAdminCurrentUserRoutes({
       const currentUser = requireCurrentUser(req, res);
       if (!currentUser) return;
 
+      // 强制改密标记以用户档案为准，避免会话快照在改密后仍是旧值
+      const profile = userStore.findUser(currentUser.username);
       res.json({
         ok: true,
         data: {
@@ -28,6 +30,7 @@ function registerAdminCurrentUserRoutes({
           accountLimit:
             currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2,
           expiresAt: currentUser.expiresAt || null,
+          mustChangePassword: profile ? profile.mustChangePassword === true : false,
         },
       });
     } catch (error) {
@@ -48,7 +51,17 @@ function registerAdminCurrentUserRoutes({
       if (!newPassword || String(newPassword).length < 6) {
         return res.status(400).json({ ok: false, error: "新密码至少 6 位" });
       }
-      userStore.updateUser(currentUser.username, { password: newPassword });
+      if (String(newPassword) === String(oldPassword)) {
+        return res.status(400).json({ ok: false, error: "新密码不能与原密码相同" });
+      }
+      const updated = userStore.updateUser(currentUser.username, { password: newPassword });
+      // 同步会话快照：updateUser 已清掉 mustChangePassword，这里保持一致
+      if (typeof updateAdminSessions === "function") {
+        updateAdminSessions(
+          session => session.username === updated.username,
+          session => Object.assign(session, { mustChangePassword: false }),
+        );
+      }
       res.json({ ok: true });
     } catch (error) {
       res.status(500).json({ ok: false, error: error.message });

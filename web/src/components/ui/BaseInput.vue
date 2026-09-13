@@ -7,6 +7,7 @@ const props = defineProps<{
   label?: string
   disabled?: boolean
   clearable?: boolean
+  autocomplete?: string
   min?: string | number
   max?: string | number
   step?: string | number
@@ -42,6 +43,7 @@ function updateModel(event: Event) {
         :type="inputType"
         :placeholder="placeholder"
         :disabled="disabled"
+        :autocomplete="autocomplete"
         :min="min"
         :max="max"
         :step="step"

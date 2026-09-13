@@ -85,7 +85,6 @@ function handleEnterSubmit() {
 
 // ============ 更新日志 ============
 const DEFAULT_CHANGELOG_VERSION = 'V2.5.4'
-const CHANGELOG_SEEN_KEY = 'qq-farm-bot:changelog-seen'
 
 const showUpdateLog = ref(false)
 const changelogContent = ref('')
@@ -95,45 +94,15 @@ const changelogVersion = ref('')
 
 // 日志里的版本号，例如「# 2026/08/26 V2.5.5」→ V2.5.5
 const VERSION_PATTERN = /v?\d+(?:\.\d+)+[a-z0-9]*/i
-
-function hashText(text: string) {
-  let hash = 5381
-  for (let i = 0; i < text.length; i += 1)
-    hash = ((hash << 5) + hash + text.charCodeAt(i)) | 0
-  return (hash >>> 0).toString(36)
-}
+const HEADING_LINE_PATTERN = /^\s*#{1,6}\s+\S/
 
 // 取第一个带版本号的标题，跳过纯标题行（如「# QQ经典农场更新日志」）
 function extractVersion(markdown: string) {
   const heading = markdown
     .split('\n')
-    .find(line => /^\s*#{1,6}\s+\S/.test(line) && VERSION_PATTERN.test(line)) || ''
+    .find(line => HEADING_LINE_PATTERN.test(line) && VERSION_PATTERN.test(line)) || ''
   const matched = heading.match(VERSION_PATTERN)
   return matched ? matched[0].toUpperCase() : ''
-}
-
-// 已读指纹：版本号 + 内容摘要，版本或内容任一项变化都会重新弹一次
-function changelogFingerprint(markdown: string) {
-  const version = extractVersion(markdown)
-  return version ? `${version}#${hashText(markdown)}` : hashText(markdown)
-}
-
-function readSeenChangelog() {
-  try {
-    return localStorage.getItem(CHANGELOG_SEEN_KEY) || ''
-  }
-  catch {
-    return ''
-  }
-}
-
-function markChangelogSeen() {
-  try {
-    localStorage.setItem(CHANGELOG_SEEN_KEY, changelogFingerprint(changelogContent.value))
-  }
-  catch {
-    void 0
-  }
 }
 
 async function loadChangelog(autoOpen = false) {
@@ -147,12 +116,14 @@ async function loadChangelog(autoOpen = false) {
       throw new Error(data?.error || '获取更新日志失败')
     changelogContent.value = String(data.data || '')
     changelogVersion.value = changelogContent.value ? extractVersion(changelogContent.value) : ''
-    if (autoOpen && changelogContent.value && readSeenChangelog() !== changelogFingerprint(changelogContent.value))
-      showUpdateLog.value = true
   }
   catch (error: any) {
-    if (autoOpen)
+    // 自动弹出时接口失败：静默收起，避免每次刷新都顶一个错误框；手动打开仍展示错误并可重试
+    if (autoOpen) {
+      if (!changelogContent.value)
+        showUpdateLog.value = false
       return
+    }
     changelogError.value = error?.response?.data?.error || error?.message || '获取更新日志失败'
   }
   finally {
@@ -167,12 +138,7 @@ function openUpdateLog() {
 }
 
 function closeUpdateLog() {
-  // 只有弹窗真的打开过才算已读，避免未弹出时误记导致新版不再提醒
-  if (!showUpdateLog.value)
-    return
   showUpdateLog.value = false
-  if (changelogContent.value)
-    markChangelogSeen()
 }
 
 // ============ 找回密码（两步式弹窗） ============
@@ -192,6 +158,8 @@ function onResetSuccess(resetUsername: string) {
 }
 
 onMounted(() => {
+  // 每次进入/刷新登录页都弹出更新日志：先开弹窗（自带加载态），再异步取内容，避免弹出延迟
+  showUpdateLog.value = true
   loadChangelog(true)
   // 分享链接 /login?mode=forgot 直接唤起找回弹窗，页面本身仍按登录态呈现
   if (String(route.query.mode) === 'forgot')
@@ -565,7 +533,7 @@ async function submit() {
             <span>更新日志 · {{ changelogVersion || DEFAULT_CHANGELOG_VERSION }}</span>
           </button>
           <div class="form-side__build">
-            游戏版本 1.13.3.11, 20260826
+            游戏版本 1.14.0.4_20260911
           </div>
         </div>
       </section>

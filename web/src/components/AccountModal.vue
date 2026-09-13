@@ -815,32 +815,6 @@ watch(activeTab, (tab) => {
               </div>
             </div>
 
-            <div v-if="captureFlow.publicInfo.addresses?.length > 1" class="border border-gray-200 rounded-lg p-3 text-sm dark:border-gray-700">
-              <div class="mb-2 text-xs opacity-60" :style="{ color: 'var(--theme-text)' }">
-                全部可用地址（按当前网络环境选择，代理端口相同）
-              </div>
-              <div class="space-y-1.5">
-                <div
-                  v-for="item in captureFlow.publicInfo.addresses"
-                  :key="item.address"
-                  class="flex items-center justify-between gap-2"
-                >
-                  <span class="min-w-0 break-all text-xs font-mono" :style="{ color: 'var(--theme-text)' }">
-                    {{ item.address }}:{{ captureFlow.publicInfo.mitmPort }}
-                  </span>
-                  <span
-                    class="flex-none rounded px-1.5 py-0.5 text-[10px] font-medium"
-                    :style="{
-                      color: item.kind === 'tailscale' ? '#0ea5e9' : item.kind === 'lan' ? '#10b981' : 'var(--theme-text)',
-                      background: 'color-mix(in srgb, currentColor 10%, transparent)',
-                    }"
-                  >
-                    {{ item.kind === 'tailscale' ? 'Tailscale' : item.kind === 'lan' ? '局域网' : '其他' }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
             <div class="rounded-lg bg-gray-50 p-3 text-sm dark:bg-gray-800">
               <div class="flex items-center justify-between gap-3">
                 <span :style="{ color: 'var(--theme-text)' }">Code</span>

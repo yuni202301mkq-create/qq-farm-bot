@@ -488,5 +488,3 @@
 - 手机端收紧版本条目间距：h1 `margin: 14px 0 6px; font-size: 1.2rem`、h2 `margin: 16px 0 8px`，一屏多显示约一个版本。
 
 验证：`npm run build` 通过；产物 `AuthView-*.css` 回读确认 `max-height:calc(100dvh - 1rem)`、`env(safe-area-inset-bottom)`、遮罩 `overflow-y:auto`、90vh 回退均已进包。
-
-

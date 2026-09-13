@@ -58,7 +58,7 @@ export function useStrategySettings({
     bagSeedExcludedIds: [] as number[],
     bagSeedFallbackStrategy: 'level',
     intervals: { farmMin: 2, farmMax: 5, helpMin: 10, helpMax: 15 },
-    friendQuietHours: { enabled: true, start: '23:00', end: '07:00' },
+    friendQuietHours: { enabled: false, start: '23:00', end: '07:00' },
   })
 
   const plantingStrategyOptions = [

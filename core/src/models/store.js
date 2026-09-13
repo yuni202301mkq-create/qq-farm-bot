@@ -411,9 +411,9 @@ const DEFAULT_INTERVALS = {
     helpMax: 35
 };
 
-/** 默认静默时段 */
+/** 默认静默时段（默认关闭，需要时由用户在策略设置里自行开启） */
 const DEFAULT_QUIET_HOURS = {
-    enabled: true,
+    enabled: false,
     start: '01:00',
     end: '07:30'
 };

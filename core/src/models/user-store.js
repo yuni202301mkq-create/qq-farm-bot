@@ -4,6 +4,8 @@ const { getDataFile, ensureDataDir } = require('../config/runtime-paths');
 
 const DEFAULT_ACCOUNT_LIMIT = 2;
 const SUPER_ADMIN_USERNAME = 'admin';
+// 出厂初始口令：仅用于首次登录，登录后必须立刻改掉（由 mustChangePassword 强制）
+const DEFAULT_SUPER_ADMIN_PASSWORD = 'admin';
 const USERS_FILE = getDataFile('users.json');
 const CARD_KEYS_FILE = getDataFile('card-keys.json');
 // 免费试用卡密领取记录：同一来源地址只能领一次
@@ -65,6 +67,22 @@ function publicUser(user) {
   return rest;
 }
 
+/** 是否仍在使用出厂初始口令（只有超管初始账号会命中） */
+function isUsingDefaultPassword(user) {
+  if (!user || !user.passwordHash || !user.salt) return false;
+  return hashPassword(DEFAULT_SUPER_ADMIN_PASSWORD, user.salt) === user.passwordHash;
+}
+
+function warnDefaultPasswordStillInUse() {
+  console.warn(
+    '\n' +
+    '============================================================\n' +
+    `[安全警告] 超级管理员 ${SUPER_ADMIN_USERNAME} 仍在使用出厂初始口令。\n` +
+    '  登录后会强制要求修改密码；请勿在改密前把面板暴露到公网。\n' +
+    '============================================================\n',
+  );
+}
+
 function ensureSuperAdmin() {
   const users = loadUsers();
   const existing = users.find(user => user.username === SUPER_ADMIN_USERNAME);
@@ -77,17 +95,28 @@ function ensureSuperAdmin() {
       expiresAt: null,
       disabled: false,
       createdAt: Date.now(),
-      ...makePasswordFields('admin'),
+      // 强制首次登录改密，避免出厂口令长期有效
+      mustChangePassword: true,
+      ...makePasswordFields(DEFAULT_SUPER_ADMIN_PASSWORD),
     });
     saveUsers(users);
+    warnDefaultPasswordStillInUse();
     return;
   }
+  let dirty = false;
   if (existing.role !== 'super_admin') {
     existing.role = 'super_admin';
     existing.accountLimit = Number.MAX_SAFE_INTEGER;
     existing.expiresAt = null;
-    saveUsers(users);
+    dirty = true;
   }
+  // 老版本升级上来的实例：口令仍是出厂值时补上强制改密标记，否则这个修复只对新装生效
+  if (existing.mustChangePassword !== true && isUsingDefaultPassword(existing)) {
+    existing.mustChangePassword = true;
+    dirty = true;
+  }
+  if (dirty) saveUsers(users);
+  if (existing.mustChangePassword === true) warnDefaultPasswordStillInUse();
 }
 
 ensureSuperAdmin();
@@ -110,7 +139,7 @@ function verifyPassword(username, password) {
 }
 
 function usernameValid(username) {
-  return /^[a-zA-Z0-9_\u4e00-\u9fa5]{2,24}$/.test(String(username || ''));
+  return /^[\w\u4E00-\u9FA5]{2,24}$/.test(String(username || ''));
 }
 
 function createUser({
@@ -160,6 +189,8 @@ function updateUser(username, patch = {}) {
   }
   if (patch.password) {
     Object.assign(user, makePasswordFields(patch.password));
+    // 已自行设置新密码，解除「必须修改初始口令」的限制
+    user.mustChangePassword = false;
   }
   if (patch.role !== undefined && user.role !== 'super_admin') {
     user.role = patch.role === 'super_admin' ? 'super_admin' : 'user';
@@ -318,6 +349,7 @@ function resetFreeCardClaims(address) {
 
 module.exports = {
   DEFAULT_ACCOUNT_LIMIT,
+  DEFAULT_SUPER_ADMIN_PASSWORD,
   SUPER_ADMIN_USERNAME,
   getAllUsers,
   findUser,

@@ -95,6 +95,7 @@ const config = defineModel<OfflineReminderConfig>('config', { required: true })
             label="邮箱账号"
             type="text"
             placeholder="发件人邮箱地址"
+            autocomplete="off"
           />
         </div>
 
@@ -104,6 +105,7 @@ const config = defineModel<OfflineReminderConfig>('config', { required: true })
             label="授权码"
             type="password"
             placeholder="SMTP 授权码"
+            autocomplete="new-password"
           />
           <BaseInput
             v-model="config.recipientEmail"

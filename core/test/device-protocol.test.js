@@ -8,6 +8,7 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qq-farm-device-protocol-'
 process.env.FARM_DATA_DIR = dataDir;
 
 const store = require('../src/models/store');
+const { CONFIG } = require('../src/config/config');
 const {
     buildLoginDeviceInfo,
     buildTsdkDeviceInfo,
@@ -87,20 +88,30 @@ test('an enabled custom protocol is passed through to the TSDK identity', () => 
 });
 
 test('an empty custom user agent is preserved and omitted from the QQ handshake', () => {
-    store.setUserDeviceProtocol({
-        enabled: true,
-        userAgent: '',
-        deviceBrand: 'Apple',
-        deviceModel: 'iPhone 17',
-        deviceId: 'stable-alice-device',
-    }, 'alice');
+    // Referer 里的资源版本取自 CONFIG.clientVersion 下划线前的部分，
+    // 这里固定成测试值，断言就不会跟着 config 的默认版本一起漂
+    const previousClientVersion = CONFIG.clientVersion;
+    CONFIG.clientVersion = '9.9.9_20990101';
 
-    const protocol = store.getUserDeviceProtocol('alice');
-    const headers = buildWebSocketHeaders(protocol);
-    assert.equal(protocol.userAgent, '');
-    assert.equal(headers['User-Agent'], undefined);
-    assert.equal(headers.Origin, 'https://gate-obt.nqf.qq.com');
-    assert.equal(headers.Referer, 'https://appservice.qq.com/1112386029/1.13.0.5/page-frame.html');
+    try {
+        store.setUserDeviceProtocol({
+            enabled: true,
+            userAgent: '',
+            deviceBrand: 'Apple',
+            deviceModel: 'iPhone 17',
+            deviceId: 'stable-alice-device',
+        }, 'alice');
+
+        const protocol = store.getUserDeviceProtocol('alice');
+        const headers = buildWebSocketHeaders(protocol);
+        assert.equal(protocol.userAgent, '');
+        assert.equal(headers['User-Agent'], undefined);
+        assert.equal(headers.Origin, 'https://gate-obt.nqf.qq.com');
+        assert.equal(headers.Referer, 'https://appservice.qq.com/1112386029/9.9.9/page-frame.html');
+    }
+    finally {
+        CONFIG.clientVersion = previousClientVersion;
+    }
 });
 
 test('custom device protocol rejects incomplete or contradictory fingerprints', () => {

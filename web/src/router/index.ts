@@ -11,6 +11,8 @@ const adminToken = useStorage('admin_token', '')
 const userInfo = useStorage<Record<string, any> | null>('user_info', null, undefined, { serializer: StorageSerializers.object })
 
 const PUBLIC_PATHS = new Set(['/login'])
+// 强制改密页：登录后必须完成改密才能去别的页面
+const FORCE_PASSWORD_PATH = '/force-password'
 
 function clearSession() {
   adminToken.value = ''
@@ -35,7 +37,7 @@ async function verifySession(): Promise<boolean> {
       card: data.data.card ?? null,
       accountLimit: data.data.accountLimit ?? 2,
       expiresAt: data.data.expiresAt ?? null,
-      mustChangePassword: false,
+      mustChangePassword: data.data.mustChangePassword === true,
     }
     return true
   }
@@ -60,6 +62,11 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/AuthView.vue'),
+    },
+    {
+      path: FORCE_PASSWORD_PATH,
+      name: 'force-password',
+      component: () => import('@/views/ForcePasswordView.vue'),
     },
     { path: '/admin', redirect: '/settings?tab=system' },
     { path: '/renewal', redirect: '/login?mode=renew' },
@@ -88,6 +95,17 @@ router.beforeEach(async (to) => {
     clearSession()
     return '/login'
   }
+
+  // 仍在使用出厂初始口令：只允许停留在强制改密页
+  if (userInfo.value?.mustChangePassword === true) {
+    if (to.path !== FORCE_PASSWORD_PATH)
+      return FORCE_PASSWORD_PATH
+    return true
+  }
+  // 已改过密码就不必再停在改密页
+  if (to.path === FORCE_PASSWORD_PATH)
+    return '/'
+
   return true
 })
 
