@@ -68,12 +68,46 @@ test('同一来源地址只能领取一次', async () => {
 
   const second = await post('/api/free-card', { username: 'user_b' }, '198.51.100.2');
   assert.equal(second.status, 400);
-  assert.match(second.body.error, /已领取过/);
+  assert.match(second.body.error, /仅可领取一次/);
 
   // 其它来源地址不受影响
   const other = await post('/api/free-card', { username: 'user_b' }, '198.51.100.3');
   assert.equal(other.status, 200);
   assert.notEqual(other.body.data.cardKey, first.body.data.cardKey);
+});
+
+test('同一设备换 IP 也只能领取一次', async () => {
+  const deviceId = 'device-aaa-1111';
+  const first = await post('/api/free-card', { deviceId }, '198.51.100.21');
+  assert.equal(first.status, 200);
+
+  // 同一设备换来源地址 → 拒绝
+  const second = await post('/api/free-card', { deviceId }, '198.51.100.22');
+  assert.equal(second.status, 400);
+  assert.match(second.body.error, /仅可领取一次/);
+
+  // 领取记录里存了设备标识
+  const claim = userStore.findFreeCardClaimByDevice(deviceId);
+  assert.ok(claim);
+  assert.equal(claim.address, '198.51.100.21');
+});
+
+test('同一 IP 换设备同样只能领取一次', async () => {
+  const first = await post('/api/free-card', { deviceId: 'device-bbb-2222' }, '198.51.100.23');
+  assert.equal(first.status, 200);
+
+  const second = await post('/api/free-card', { deviceId: 'device-ccc-3333' }, '198.51.100.23');
+  assert.equal(second.status, 400);
+  assert.match(second.body.error, /仅可领取一次/);
+});
+
+test('未带 deviceId 的旧客户端退化为仅按 IP 限制', async () => {
+  const first = await post('/api/free-card', {}, '198.51.100.24');
+  assert.equal(first.status, 200);
+  assert.equal(userStore.findFreeCardClaimByDevice(''), null);
+
+  const second = await post('/api/free-card', {}, '198.51.100.24');
+  assert.equal(second.status, 400);
 });
 
 test('IPv4-mapped IPv6 与纯 IPv4 视为同一来源', async () => {
@@ -82,7 +116,7 @@ test('IPv4-mapped IPv6 与纯 IPv4 视为同一来源', async () => {
 
   const second = await post('/api/free-card', {}, '198.51.100.4');
   assert.equal(second.status, 400);
-  assert.match(second.body.error, /已领取过/);
+  assert.match(second.body.error, /仅可领取一次/);
 });
 
 test('伪造 X-Forwarded-For 不能重复领取', async () => {
@@ -92,13 +126,21 @@ test('伪造 X-Forwarded-For 不能重复领取', async () => {
   // 换伪造头、来源地址不变 → 仍视为同一网络
   const spoofed = await post('/api/free-card', {}, '198.51.100.5', '8.8.8.8');
   assert.equal(spoofed.status, 400);
-  assert.match(spoofed.body.error, /已领取过/);
+  assert.match(spoofed.body.error, /仅可领取一次/);
 });
 
-test('缺少来源地址时拒绝领取', async () => {
+test('缺少来源地址和设备标识时拒绝领取', async () => {
   const result = await post('/api/free-card', {}, '');
   assert.equal(result.status, 400);
   assert.match(result.body.error, /无法识别来源地址/);
+});
+
+test('缺少来源地址但带设备标识时可领取', async () => {
+  const result = await post('/api/free-card', { deviceId: 'device-ddd-4444' }, '');
+  assert.equal(result.status, 200);
+  const claim = userStore.findFreeCardClaimByDevice('device-ddd-4444');
+  assert.ok(claim);
+  assert.equal(claim.address, '');
 });
 
 test('领取到的卡密可以直接用于注册', async () => {

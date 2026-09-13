@@ -8,7 +8,7 @@ const SUPER_ADMIN_USERNAME = 'admin';
 const DEFAULT_SUPER_ADMIN_PASSWORD = 'admin';
 const USERS_FILE = getDataFile('users.json');
 const CARD_KEYS_FILE = getDataFile('card-keys.json');
-// 免费试用卡密领取记录：同一来源地址只能领一次
+// 免费试用卡密领取记录：同一来源地址或同一设备只能领一次
 const FREE_CARD_CLAIMS_FILE = getDataFile('free-card-claims.json');
 const FREE_CARD_DAYS = 7;
 const FREE_CARD_NOTE = '免费试用7天';
@@ -298,6 +298,11 @@ function normalizeClaimAddress(address) {
   return String(address || '').trim().toLowerCase().replace(/^::ffff:/, '');
 }
 
+/** 统一设备标识格式：前端生成的持久化随机 ID，截断防脏数据撑大记录 */
+function normalizeDeviceId(deviceId) {
+  return String(deviceId || '').trim().toLowerCase().slice(0, 64);
+}
+
 function loadFreeCardClaims() {
   const data = readJson(FREE_CARD_CLAIMS_FILE, { claims: [] });
   return Array.isArray(data.claims) ? data.claims : [];
@@ -313,19 +318,30 @@ function listFreeCardClaims() {
 
 function findFreeCardClaim(address) {
   const target = normalizeClaimAddress(address);
+  if (!target) return null;
   return loadFreeCardClaims().find(claim => claim.address === target) || null;
 }
 
-/** 领取免费试用卡密：同一来源地址只能领一次 */
-function claimFreeCard({ address, username = '', days = FREE_CARD_DAYS, accountLimit = DEFAULT_ACCOUNT_LIMIT } = {}) {
+function findFreeCardClaimByDevice(deviceId) {
+  const target = normalizeDeviceId(deviceId);
+  if (!target) return null;
+  return loadFreeCardClaims().find(claim => claim.deviceId === target) || null;
+}
+
+/** 领取免费试用卡密：同一来源地址或同一设备都只能领一次 */
+function claimFreeCard({ address, deviceId, username = '', days = FREE_CARD_DAYS, accountLimit = DEFAULT_ACCOUNT_LIMIT } = {}) {
   const target = normalizeClaimAddress(address);
-  if (!target) throw new Error('无法识别来源地址，请稍后重试');
-  if (findFreeCardClaim(target)) throw new Error('该网络已领取过免费卡密，请使用卡密注册');
+  const device = normalizeDeviceId(deviceId);
+  // IP 与设备是两个独立限制维度：换设备刷 IP、换 IP 刷设备都拦住
+  if (!target && !device) throw new Error('无法识别来源地址，请稍后重试');
+  if (target && findFreeCardClaim(target)) throw new Error('每个IP/设备仅可领取一次免费卡密，感谢您的使用！');
+  if (device && findFreeCardClaimByDevice(device)) throw new Error('每个IP/设备仅可领取一次免费卡密，感谢您的使用！');
 
   const [card] = createCardKeys({ count: 1, days, accountLimit, note: FREE_CARD_NOTE });
   const claims = loadFreeCardClaims();
   claims.push({
     address: target,
+    deviceId: device,
     username: String(username || '').trim(),
     card: card.code,
     days: Number(card.days),
@@ -368,7 +384,9 @@ module.exports = {
   FREE_CARD_DAYS,
   listFreeCardClaims,
   findFreeCardClaim,
+  findFreeCardClaimByDevice,
   claimFreeCard,
   resetFreeCardClaims,
   normalizeClaimAddress,
+  normalizeDeviceId,
 };

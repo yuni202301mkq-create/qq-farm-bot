@@ -3,6 +3,7 @@ import AccountModal from '@/components/AccountModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { getPlatformClass, getPlatformLabel } from '@/stores/account'
+import { accountAvatarUrl, remoteAvatarUrl } from '@/utils/avatar'
 
 defineProps<{
   accounts: any[]
@@ -45,13 +46,12 @@ const emit = defineEmits<{
 }>()
 
 function accountAvatar(acc: any) {
-  const direct = String(acc?.avatar || acc?.avatarUrl || acc?.avatar_url || '').trim()
-  if (direct)
-    return direct
-  const qq = String(acc?.uin || acc?.qq || '').trim()
-  if (/^\d+$/.test(qq))
-    return `https://q1.qlogo.cn/g?b=qq&nk=${qq}&s=100`
-  return ''
+  // 账号头像走按 id 的代理（后端有 uin 兜底）；其它来源 URL 编码后走代理，
+  // 直连 qlogo 会被 CSP/防盗链拦成空图
+  const byId = accountAvatarUrl(acc)
+  if (byId)
+    return byId
+  return remoteAvatarUrl(acc?.avatarUrl || acc?.avatar_url)
 }
 </script>
 

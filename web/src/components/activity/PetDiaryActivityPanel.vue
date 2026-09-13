@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import { useAccountStore } from '@/stores/account'
 import { useFriendStore } from '@/stores/friend'
 import { usePetDiaryStore } from '@/stores/pet-diary'
+import { resolveAvatarUrl } from '@/utils/avatar'
 import PetTreasurePanel from './PetTreasurePanel.vue'
 
 const emit = defineEmits<{ back: [] }>()
@@ -23,7 +24,8 @@ const selectedFriend = computed(() => friends.friends.find(f => String(f.gid) ==
 function friendAvatar(f: any) {
   if (!f || avatarErrors.value[String(f.gid)])
     return ''
-  return String(f.avatarUrl || f.avatar_url || (f.uin ? `https://q1.qlogo.cn/g?b=qq&nk=${f.uin}&s=100` : ''))
+  // 头像统一走后端代理，直连 qlogo 会被 CSP/防盗链拦成空图
+  return resolveAvatarUrl({ avatarUrl: f.avatarUrl || f.avatar_url, uin: f.uin })
 }
 function closeFriendPicker(event: FocusEvent) {
   if (!(event.relatedTarget instanceof Node) || !friendPicker.value?.contains(event.relatedTarget))

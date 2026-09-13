@@ -18,6 +18,8 @@ export interface AdminUser {
 
 export const useUserStore = defineStore('user', () => {
   const token = useStorage('admin_token', '')
+  // 长期登录用的 refresh token（服务端落盘），bot 重启后凭它换新的 session token
+  const refreshToken = useStorage('admin_refresh_token', '')
   const userInfo = useStorage<AdminUser | null>('user_info', null, undefined, { serializer: StorageSerializers.object })
   const isLoggedIn = computed(() => !!token.value)
   // 超级管理员
@@ -35,6 +37,7 @@ export const useUserStore = defineStore('user', () => {
 
   function clearSession() {
     token.value = ''
+    refreshToken.value = ''
     userInfo.value = null
   }
 
@@ -66,6 +69,7 @@ export const useUserStore = defineStore('user', () => {
 
   return {
     token,
+    refreshToken,
     userInfo,
     isLoggedIn,
     isAdmin,

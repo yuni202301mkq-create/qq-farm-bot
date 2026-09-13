@@ -635,7 +635,7 @@ useIntervalFn(updateCountdowns, 1000)
               <img src="/game-config/resource-icons/gold.png" alt="金币" class="h-5 w-5 shrink-0 object-contain">
               金币
             </div>
-            <div class="text-xl text-yellow-600 font-bold sm:text-2xl dark:text-yellow-500">
+            <div class="text-lg text-yellow-600 font-bold sm:text-xl dark:text-yellow-500">
               {{ formatGoldAmount(status?.status?.gold || 0) }}
             </div>
             <div
@@ -651,7 +651,7 @@ useIntervalFn(updateCountdowns, 1000)
               <img src="/game-config/resource-icons/coupon.png" alt="点券" class="h-5 w-5 shrink-0 object-contain">
               点券
             </div>
-            <div class="text-xl text-emerald-500 font-bold sm:text-2xl dark:text-emerald-400">
+            <div class="text-lg text-emerald-500 font-bold sm:text-xl dark:text-emerald-400">
               {{ formatCouponAmount(status?.status?.coupon || 0) }}
             </div>
             <div
@@ -667,7 +667,7 @@ useIntervalFn(updateCountdowns, 1000)
               <img src="/game-config/resource-icons/diamond.png" alt="钻石" class="h-5 w-5 shrink-0 object-contain">
               钻石
             </div>
-            <div class="text-xl text-cyan-600 font-bold sm:text-2xl dark:text-cyan-400">
+            <div class="text-lg text-cyan-600 font-bold sm:text-xl dark:text-cyan-400">
               {{ formatCouponAmount(status?.status?.diamond || 0) }}
             </div>
           </div>
@@ -676,7 +676,7 @@ useIntervalFn(updateCountdowns, 1000)
               <img src="/game-config/resource-icons/gold-bean.png" alt="金豆豆" class="h-5 w-5 shrink-0 object-contain">
               金豆
             </div>
-            <div class="text-xl text-amber-500 font-bold sm:text-2xl dark:text-amber-400">
+            <div class="text-lg text-amber-500 font-bold sm:text-xl dark:text-amber-400">
               {{ formatGoldBeanAmount(status?.status?.goldBean || 0) }}
             </div>
           </div>

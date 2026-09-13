@@ -376,7 +376,10 @@ async function fetchFriendsDogInfo() {
     name: f.name || `GID:${toNum(f.gid)}`,
   }));
 
-  const syncResult = await runWithRequestPriority('background', () => batchGetFriendDogInfo(dogTargets));
+  // 页面手动触发的批量查狗：用前台优先级排队。
+  // 之前用 background 会排在农场自动化循环的所有请求之后，用户点按钮后光等排队就要很久；
+  // 只调整本服务内部的排队顺序，好友访问的随机间隔节奏保持不变（防风控）。
+  const syncResult = await runWithRequestPriority('foreground', () => batchGetFriendDogInfo(dogTargets));
   const { map: dogMap, failCount, blacklistCount } = syncResult;
 
   const guardDogFriends = {};

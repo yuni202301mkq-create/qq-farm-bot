@@ -3,7 +3,6 @@ import type { FriendTabKey } from '@/components/friends/FriendsTabs.vue'
 import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import api from '@/api'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import FriendsFriendList from '@/components/friends/FriendsFriendList.vue'
 import FriendsPageHeader from '@/components/friends/FriendsPageHeader.vue'
@@ -13,6 +12,7 @@ import { useAccountStore } from '@/stores/account'
 import { useFriendStore } from '@/stores/friend'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
+import { resolveAvatarUrl } from '@/utils/avatar'
 import { formatGoldAmount } from '@/utils/number-format'
 
 const GID_BATCH_SEPARATOR_RE = /[,，\s]+/
@@ -292,14 +292,8 @@ watch(() => [currentAccount.value?.id, currentAccount.value?.running] as const, 
 async function handleRefreshFriends() {
   if (!currentAccountId.value)
     return
-  try {
-    await api.post('/api/friends/clear-cache', {}, {
-      headers: { 'x-account-id': currentAccountId.value },
-    })
-  }
-  catch {
-    // ignore
-  }
+  // forceSync=true 时后端会绕过缓存全量重拉并回写缓存，
+  // 不再先调 clear-cache：那是白白多一轮 HTTP + worker 往返，拉长等待时间
   await friendStore.fetchFriends(currentAccountId.value, true)
 }
 
@@ -422,13 +416,11 @@ function formatFriendGold(value: unknown) {
 }
 
 function getFriendAvatar(friend: any) {
-  const direct = String(friend?.avatarUrl || friend?.avatar_url || '').trim()
-  if (direct)
-    return direct
-  const uin = String(friend?.uin || '').trim()
-  if (uin)
-    return `https://q1.qlogo.cn/g?b=qq&nk=${uin}&s=100`
-  return ''
+  // 头像统一走后端代理，直连 qlogo 会被 CSP/防盗链拦成空图
+  return resolveAvatarUrl({
+    avatarUrl: friend?.avatarUrl || friend?.avatar_url,
+    uin: friend?.uin,
+  })
 }
 
 function getFriendAvatarKey(friend: any) {

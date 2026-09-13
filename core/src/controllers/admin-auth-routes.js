@@ -13,13 +13,25 @@ function buildSessionUser(user) {
   };
 }
 
-function sendSession(res, createAdminSession, user) {
+function sendSession(res, createAdminSession, user, refreshTokens) {
   const sessionUser = buildSessionUser(user);
   const token = createAdminSession(sessionUser);
+  // 长期 refresh token（落盘保存）：bot 重启后前端凭它换一个新的 session token，
+  // 这样用户不会每次重启都被踢去重新登录。
+  let refreshToken = '';
+  if (refreshTokens) {
+    try {
+      refreshToken = refreshTokens.issue({ username: sessionUser.username }).token;
+    } catch {
+      // 落盘失败不应该让登录本身失败，退化为「重启后需要重新登录」
+      refreshToken = '';
+    }
+  }
   return res.json({
     ok: true,
     data: {
       token,
+      refreshToken,
       role: sessionUser.role,
       card: sessionUser.card,
       accountLimit: sessionUser.accountLimit,
@@ -99,7 +111,7 @@ function lockMessage(lockedMs, prefix) {
   return `${prefix}，请约 ${minutes} 分钟后再试`;
 }
 
-function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions, invalidateAdminSessions }) {
+function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions, invalidateAdminSessions, refreshTokens }) {
   const forgotLimiter = createAttemptLimiter({
     limit: FORGOT_ATTEMPT_LIMIT,
     windowMs: FORGOT_ATTEMPT_WINDOW_MS,
@@ -242,7 +254,50 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
       if (userStore.isUserExpired(user)) {
         return res.status(403).json({ ok: false, error: '账号已过期，请使用卡密续费后重新登录' });
       }
-      return sendSession(res, createAdminSession, user);
+      return sendSession(res, createAdminSession, user, refreshTokens);
+    } catch (error) {
+      return res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
+  // 用长期 refresh token 换一个新的 session token。
+  // 场景：bot 重启后内存里的 session token 全没了，前端拿落盘的 refresh token
+  // 静默换一个新的，用户无需重新登录。refresh token 单次使用（用完即轮换）。
+  app.post('/api/auth/refresh', (req, res) => {
+    try {
+      if (!refreshTokens) {
+        return res.status(404).json({ ok: false, error: '未启用长期登录，请重新登录' });
+      }
+      const raw = req.body && req.body.refreshToken;
+      if (!raw) {
+        return res.status(400).json({ ok: false, error: '缺少 refreshToken' });
+      }
+      const rotated = refreshTokens.rotate(String(raw));
+      if (!rotated) {
+        return res.status(401).json({ ok: false, error: '登录已失效，请重新登录' });
+      }
+      // 重新查一次用户：禁用 / 过期 / 改密后立即生效，而不是沿用旧快照
+      const user = userStore.findUser(rotated.username);
+      if (!user || user.disabled || userStore.isUserExpired(user)) {
+        refreshTokens.revokeUser(rotated.username);
+        return res.status(401).json({ ok: false, error: '账号不可用，请重新登录' });
+      }
+      const sessionUser = buildSessionUser(user);
+      const token = createAdminSession(sessionUser);
+      return res.json({
+        ok: true,
+        data: {
+          token,
+          // 直接复用 rotate 已经签发好的新 refresh token，不重复签发
+          refreshToken: rotated.token,
+          role: sessionUser.role,
+          card: sessionUser.card,
+          accountLimit: sessionUser.accountLimit,
+          expiresAt: sessionUser.expiresAt,
+          user: { username: sessionUser.username },
+          mustChangePassword: sessionUser.mustChangePassword,
+        },
+      });
     } catch (error) {
       return res.status(500).json({ ok: false, error: error.message });
     }
@@ -272,7 +327,7 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
         accountLimit: key.accountLimit,
         expiresAt,
       });
-      return sendSession(res, createAdminSession, user);
+      return sendSession(res, createAdminSession, user, refreshTokens);
     } catch (error) {
       return res.status(400).json({ ok: false, error: error.message });
     }
@@ -321,13 +376,14 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
     }
   });
 
-  // 注册前免费领取试用卡密：同一来源地址只能领一次
+  // 注册前免费领取试用卡密：同一来源地址或同一设备只能领一次
   app.post('/api/free-card', (req, res) => {
     try {
-      const { username } = req.body || {};
-      // 与找回密码限流一致：用 TCP 对端地址，req.ip 可被 X-Forwarded-For 伪造
+      const { username, deviceId } = req.body || {};
+      // 与找回密码限流一致：用 TCP 对端地址，req.ip 可被 X-Forwarded-For 伪造；
+      // deviceId 由前端本地持久化生成，作为与 IP 并行的第二个限制维度
       const address = normalizeClientAddress(req.socket?.remoteAddress);
-      const card = userStore.claimFreeCard({ address, username });
+      const card = userStore.claimFreeCard({ address, deviceId, username });
       return res.json({
         ok: true,
         data: {
@@ -375,6 +431,10 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
       // 重置后踢掉该账号的在线会话，必须用新密码重新登录
       if (typeof invalidateAdminSessions === 'function') {
         invalidateAdminSessions(session => session.username === user.username);
+      }
+      // 同时作废该账号的长期 refresh token，否则旧 token 还能换出新的 session
+      if (refreshTokens && typeof refreshTokens.revokeUser === 'function') {
+        refreshTokens.revokeUser(user.username);
       }
       return res.json({ ok: true, data: { username: user.username } });
     } catch (error) {
@@ -442,6 +502,10 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
       // 重置后踢掉该账号的在线会话，必须用新密码重新登录
       if (typeof invalidateAdminSessions === 'function') {
         invalidateAdminSessions(session => session.username === user.username);
+      }
+      // 同时作废该账号的长期 refresh token，否则旧 token 还能换出新的 session
+      if (refreshTokens && typeof refreshTokens.revokeUser === 'function') {
+        refreshTokens.revokeUser(user.username);
       }
       return res.json({ ok: true, data: { username: user.username } });
     } catch (error) {

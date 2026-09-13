@@ -13,6 +13,7 @@ function registerAdminCurrentUserRoutes({
   userStore,
   store,
   updateAdminSessions,
+  refreshTokens,
 }) {
   app.get("/api/user/me", requireAdminToken, (req, res) => {
     try {
@@ -61,6 +62,11 @@ function registerAdminCurrentUserRoutes({
           session => session.username === updated.username,
           session => Object.assign(session, { mustChangePassword: false }),
         );
+      }
+      // 改密后作废该账号的长期 refresh token：其它设备（以及泄露的旧 token）
+      // 无法再换出 session，必须重新登录
+      if (refreshTokens && typeof refreshTokens.revokeUser === "function") {
+        refreshTokens.revokeUser(updated.username);
       }
       res.json({ ok: true });
     } catch (error) {

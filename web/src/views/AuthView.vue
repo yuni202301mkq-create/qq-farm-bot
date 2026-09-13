@@ -186,6 +186,8 @@ function switchTo(next: Mode) {
 
 function applySession(data: any) {
   userStore.token = String(data.token || '')
+  // 长期登录：存下 refresh token，bot 重启后可静默换新的 session token
+  userStore.refreshToken = String(data.refreshToken || '')
   userStore.userInfo = {
     username: String(data.user?.username || ''),
     role: (data.role === 'super_admin' ? 'super_admin' : 'user') as UserRole,
@@ -195,7 +197,27 @@ function applySession(data: any) {
   }
 }
 
-// 免费领取 7 天试用卡密：自动填入卡密输入框，同一网络只能领一次
+// 免费领取 7 天试用卡密：自动填入卡密输入框，每个 IP/设备仅可领取一次
+// 设备标识：本地持久化的随机 ID，与来源 IP 并行作为领取限制维度；
+// localStorage 不可用（隐私模式等）时返回空串，服务端退化为仅按 IP 限制
+const DEVICE_ID_STORAGE_KEY = 'qqfarm-device-id'
+
+function getDeviceId() {
+  try {
+    let id = localStorage.getItem(DEVICE_ID_STORAGE_KEY)
+    if (!id) {
+      id = globalThis.crypto?.randomUUID
+        ? globalThis.crypto.randomUUID()
+        : `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`
+      localStorage.setItem(DEVICE_ID_STORAGE_KEY, id)
+    }
+    return id
+  }
+  catch {
+    return ''
+  }
+}
+
 async function claimFreeCard() {
   if (freeCardLoading.value)
     return
@@ -205,6 +227,7 @@ async function claimFreeCard() {
   try {
     const { data } = await axios.post('/api/free-card', {
       username: username.value.trim(),
+      deviceId: getDeviceId(),
     })
     if (!data?.ok)
       throw new Error(data?.error || '领取失败')
@@ -453,6 +476,9 @@ async function submit() {
               <span v-else class="i-carbon-gift" />
               <span>免费领取 7 天卡密</span>
             </button>
+            <p v-if="mode === 'register'" class="form-side__hint">
+              每个IP/设备仅可领取一次卡密，感谢您的使用！
+            </p>
           </div>
 
           <p v-if="errorMsg" class="form-side__alert form-side__alert--error">

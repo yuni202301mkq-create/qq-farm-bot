@@ -36,6 +36,7 @@ const { registerAdminAccountRoutes } = require("./admin-account-routes");
 const { registerAdminAnalyticsRoutes } = require("./admin-analytics-routes");
 const { createAdminAccountAccess } = require("./admin-account-access");
 const { registerAdminAuthRoutes } = require("./admin-auth-routes");
+const { createAdminRefreshTokenStore } = require("../services/admin-refresh-tokens");
 const { registerAdminCardKeyRoutes } = require("./admin-card-key-routes");
 const { registerAdminBagRoutes } = require("./admin-bag-routes");
 const { registerAdminCareerRoutes } = require("./admin-career-routes");
@@ -86,6 +87,8 @@ const PUBLIC_API_PATHS = new Set([
   "/public/login-links",
   "/changelog",
   "/health",
+  // 长期登录：用落盘的 refresh token 换新 session token（此时没有有效 session）
+  "/auth/refresh",
 ]);
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const ONE_MINUTE_MS = 60 * 1000;
@@ -183,15 +186,20 @@ function registerAuthGate(expressApp, requireAdminToken) {
     if (
       PUBLIC_API_PATHS.has(req.path)
       || req.path.startsWith("/public/capture-certificate/")
+      // 头像代理是 <img> 加载用的，浏览器没法带 x-admin-token，放行
+      || req.path.startsWith("/avatar/")
     ) return next();
     return requireAdminToken(req, res, next);
   });
 }
 
-function registerLogoutRoute(expressApp, invalidateAdminSessionAndDisconnect) {
+function registerLogoutRoute(expressApp, invalidateAdminSessionAndDisconnect, refreshTokens) {
   expressApp.post("/api/logout", (req, res) => {
     const token = req.adminToken;
     if (token) invalidateAdminSessionAndDisconnect(token);
+    // 登出时一并作废这个长期 refresh token（前端带上才撤销，避免影响其它设备）
+    const rawRefresh = req.body && req.body.refreshToken;
+    if (refreshTokens && rawRefresh) refreshTokens.revokeToken(String(rawRefresh));
     res.json({ ok: true });
   });
 }
@@ -204,6 +212,130 @@ function registerHealthRoute(expressApp) {
       uptime: process.uptime(),
       timestamp: Date.now(),
     });
+  });
+}
+
+// 头像代理：腾讯 qlogo.cn 对非 QQ 来源 Referer 返回 0 字节占位图，
+// 直接让浏览器拉会全部变成灰色字母（生产 CSP img-src 也只放行同源）。
+// 统一改成后端代理，服务端带 Referer: https://im.qq.com/ 拉真实图片后吐给前端。
+// 三种入口：
+//   GET /api/avatar/:accountId  按账号 id（账号存的 avatar，或 uin 拼 q1.qlogo.cn 兜底）
+//   GET /api/avatar/qq/:uin     按 QQ 号（纯数字校验）
+//   GET /api/avatar/u/:urlB64   按 base64url 编码的图片 URL（好友列表等远程 avatarUrl）
+// SSRF 护栏：所有入口最终都只放行腾讯头像域，且 URL 只来自服务端数据或白名单域校验。
+const AVATAR_PROXY_ALLOWED_HOSTS = new Set([
+  "thirdqq.qlogo.cn",
+  "thirdwx.qlogo.cn",
+  "q1.qlogo.cn",
+  "q2.qlogo.cn",
+  "q3.qlogo.cn",
+  "q4.qlogo.cn",
+  "wx.qlogo.cn",
+  "qlogo.cn",
+]);
+
+async function serveProxiedAvatar(res, url) {
+  // SSRF 护栏：只放行腾讯头像域
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    res.status(400).end();
+    return;
+  }
+  if (parsed.protocol !== "https:" || !AVATAR_PROXY_ALLOWED_HOSTS.has(parsed.hostname)) {
+    res.status(400).end();
+    return;
+  }
+
+  // 关键：Referer 必须带 QQ 域，否则腾讯返回 0 字节占位图
+  try {
+    const upstream = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        Referer: "https://im.qq.com/",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!upstream.ok) {
+      res.status(upstream.status).end();
+      return;
+    }
+    const contentType = upstream.headers.get("content-type") || "image/jpeg";
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    // 0 字节 = 腾讯的占位图（被防盗链挡了），按 502 报回去让前端走 fallback
+    if (!buf.length) {
+      res.status(502).end();
+      return;
+    }
+    res.set("Content-Type", contentType);
+    res.set("Cache-Control", "public, max-age=3600");
+    res.set("Access-Control-Allow-Origin", "*");
+    res.end(buf);
+  } catch {
+    res.status(502).end();
+  }
+}
+
+/** 账号头像 URL：优先账号里存的 avatar；没存但有 QQ 号时用 q1.qlogo.cn 兜底 */
+function resolveAccountAvatarUrl(acc) {
+  const url = String(acc.avatar || "").trim();
+  if (url) return url;
+  const qq = String(acc.uin || acc.qq || "").trim();
+  if (/^\d+$/.test(qq)) {
+    return `https://q1.qlogo.cn/g?b=qq&nk=${qq}&s=100`;
+  }
+  return "";
+}
+
+function registerAvatarProxyRoute(expressApp, provider) {
+  expressApp.get("/api/avatar/qq/:uin", (req, res) => {
+    const uin = String(req.params.uin || "").trim();
+    // 纯数字校验后直接拼 q1.qlogo.cn，不接受任何客户端传入的完整 URL
+    if (!/^\d{4,12}$/.test(uin)) {
+      res.status(400).end();
+      return;
+    }
+    return serveProxiedAvatar(res, `https://q1.qlogo.cn/g?b=qq&nk=${uin}&s=100`);
+  });
+
+  expressApp.get("/api/avatar/u/:urlB64", (req, res) => {
+    const raw = String(req.params.urlB64 || "");
+    let url = "";
+    try {
+      // base64url（无填充），兼容传入标准 base64
+      const b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+      url = Buffer.from(b64, "base64").toString("utf-8");
+    } catch {
+      url = "";
+    }
+    return serveProxiedAvatar(res, String(url).trim());
+  });
+
+  expressApp.get("/api/avatar/:accountId", (req, res) => {
+    try {
+      const accountId = String(req.params.accountId || "").trim();
+      if (!accountId) {
+        res.status(400).end();
+        return;
+      }
+      const accounts = provider.getAccounts();
+      const acc = (accounts && Array.isArray(accounts.accounts) ? accounts.accounts : [])
+        .find((a) => String(a.id) === accountId);
+      if (!acc) {
+        res.status(404).end();
+        return;
+      }
+      const url = resolveAccountAvatarUrl(acc);
+      if (!url) {
+        res.status(404).end();
+        return;
+      }
+      return serveProxiedAvatar(res, url);
+    } catch {
+      res.status(502).end();
+    }
   });
 }
 
@@ -457,6 +589,16 @@ function startAdminServer(dataProvider) {
     preventOverlap: true,
   });
 
+  // 长期 refresh token：落盘保存，bot 重启后前端可凭它换新的 session token，
+  // 用户不用每次重启都重新登录（短期 session token 仍在内存，重启即失效）。
+  const adminRefreshTokens = createAdminRefreshTokenStore({
+    filePath: getDataFile("admin-refresh-tokens.json"),
+    log: (level, message) => {
+      const fn = adminLogger[level] || adminLogger.info;
+      fn.call(adminLogger, message);
+    },
+  });
+
   registerAdminAuthRoutes({
     app,
     logger: adminLogger,
@@ -465,6 +607,7 @@ function startAdminServer(dataProvider) {
     createAdminSession,
     updateAdminSessions,
     invalidateAdminSessions,
+    refreshTokens: adminRefreshTokens,
   });
   registerAdminCardKeyRoutes({
     app,
@@ -485,7 +628,8 @@ function startAdminServer(dataProvider) {
     canAccessAccount,
     sendProviderError,
   });
-  registerLogoutRoute(app, invalidateAdminSessionAndDisconnect);
+  registerLogoutRoute(app, invalidateAdminSessionAndDisconnect, adminRefreshTokens);
+  registerAvatarProxyRoute(app, provider);
 
   registerAdminFarmResourceRoutes({
     app,
@@ -627,6 +771,7 @@ function startAdminServer(dataProvider) {
     userStore,
     store,
     updateAdminSessions,
+    refreshTokens: adminRefreshTokens,
   });
   registerAdminAccountRoutes({
     app,

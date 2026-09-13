@@ -11,6 +11,7 @@ import RenewCardModal from '@/components/RenewCardModal.vue'
 import { getPlatformClass, getPlatformLabel, useAccountStore } from '@/stores/account'
 import { useStatusStore } from '@/stores/status'
 import { useUserStore } from '@/stores/user'
+import { accountAvatarUrl } from '@/utils/avatar'
 
 const accountStore = useAccountStore()
 const statusStore = useStatusStore()
@@ -69,16 +70,6 @@ function liveAccountName() {
   return name && name !== '未登录' ? name : ''
 }
 
-function liveAccountAvatar() {
-  if (!currentStatusReady.value)
-    return ''
-  return cleanText(
-    status.value?.status?.avatar
-    || status.value?.status?.avatarUrl
-    || status.value?.status?.avatar_url,
-  )
-}
-
 function accountDisplayName(acc?: Account | null) {
   if (!acc)
     return '选择账号'
@@ -101,18 +92,11 @@ function accountSubtitle(acc?: Account | null) {
   return cleanText(acc.uin || acc.qq || acc.id)
 }
 
+// 头像统一走后端代理（同源 /api/avatar/:id）：腾讯 qlogo.cn 对非 QQ 来源 Referer
+// 返回 0 字节占位图，生产 CSP img-src 也只放行同源；代理会带 Referer: https://im.qq.com/。
+// uin 兜底也由后端做（acc.uin / acc.qq → q1.qlogo.cn）。
 function avatarSource(acc?: Account | null) {
-  if (!acc)
-    return ''
-  const explicit = currentAccount.value?.id === acc.id
-    ? cleanText(liveAccountAvatar() || acc.avatar)
-    : cleanText(acc.avatar)
-  if (explicit)
-    return explicit
-  const qq = cleanText(acc.uin || acc.qq)
-  if (qq && /^\d+$/.test(qq))
-    return `https://q1.qlogo.cn/g?b=qq&nk=${qq}&s=100`
-  return ''
+  return accountAvatarUrl(acc)
 }
 
 function avatarKey(acc?: Account | null) {
@@ -238,6 +222,12 @@ async function handleAccountSaved() {
 
 function handleLogout() {
   closeDropdown()
+  const refreshToken = userStore.refreshToken
+  // 通知服务端撤销 session 与长期 refresh token；
+  // 接口失败也要退出本地，所以不 await、不阻塞跳转
+  api
+    .post('/api/logout', refreshToken ? { refreshToken } : {}, { skipErrorToast: true } as any)
+    .catch(() => {})
   userStore.clearSession()
   router.replace('/login')
 }

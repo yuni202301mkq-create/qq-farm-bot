@@ -38,13 +38,6 @@ onUnmounted(() => {
           >
             <div class="i-carbon-menu text-xl" />
           </button>
-          <div class="h-8 w-8 flex flex-none items-center justify-center overflow-hidden rounded-full ring-1 ring-gray-200 dark:ring-gray-700">
-            <img
-              src="/icon.png"
-              :alt="`${loginPageConfig.title || 'QQ农场智能助手'}图标`"
-              class="h-full w-full object-cover"
-            >
-          </div>
           <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
             {{ loginPageConfig.title || 'QQ农场智能助手' }}
           </div>
