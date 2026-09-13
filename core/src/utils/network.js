@@ -22,14 +22,15 @@ const { TsdkRuntime } = require('./tsdk-runtime');
 // warehouse.js 与 network.js 互相依赖；在运行时惰性加载，避免循环依赖导致加载期导出为 undefined
 let _warehouseCache = null;
 function getWarehouseLazy() {
-    if (_warehouseCache === null) {
-        try {
-            _warehouseCache = require('../services/warehouse');
-        } catch {
-            _warehouseCache = false;
-        }
+    if (_warehouseCache) return _warehouseCache;
+    try {
+        _warehouseCache = require('../services/warehouse');
+        return _warehouseCache;
+    } catch {
+        // 失败不缓存：加载顺序造成的失败是暂时的，下次事件再试一次即可。
+        // 若是真失败，重复 require 也只是走模块缓存，无额外开销。
+        return null;
     }
-    return _warehouseCache || null;
 }
 
 const CLIENT_VERSION_RE = /^\d+(?:\.\d+){2,4}_\d{8}$/;

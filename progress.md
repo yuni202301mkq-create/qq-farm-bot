@@ -465,3 +465,28 @@
 
 验证：6 个改动文件 `node --check` 通过；`node --test test/*.test.js` **390/390 通过**。
 
+## 2026-09-13 B 组低风险小修（6 项）
+
+1. **图鉴缓存收敛**（`core/src/controllers/admin-illustrated-routes.js`）：`illustrated_type` 用 `normalizeIllustratedType` 收敛到 1–4（实际只有 1 作物/2 变异），防止任意值生成无限缓存键；缓存加 `ILLUSTRATED_CACHE_MAX_ENTRIES=200` 上限，写入时先清过期再淘汰最旧；`invalidateIllustratedCache` 与写入侧共用同一归一化（否则非法类型删不到键）。
+2. **状态串台**（`web/src/stores/status.ts` `handleRealtimeStatus`）：未选择账号时（`currentRealtimeAccountId` 为空）拒收所有 `status:update`——服务端此时以 'all' 广播所有账号，原守卫空串短路导致任一账号状态写进全局、Dashboard/侧边栏显示他人昵称与在线态。
+3. **好友页每秒全量重渲染**（`web/src/views/Friends.vue`）：定时器从 `map + {...l}` 重建数组改为原地 `land.matureInSec -= 1`（friendLands 是深层响应式 ref，原地改字段只触发最小更新）。
+4. **`web/index.html` 补 `viewport-fit=cover`**：否则 iOS 上 `env(safe-area-inset-*)` 恒为 0，DefaultLayout 与各弹窗的安全区 padding 全部失效。
+5. **`custom-scrollbar` 提升为全局**（`web/src/style.css`）：之前在 `Analytics.vue`/`FriendsTabs.vue` 引用的类是 scoped-only 空类；现定义全局细滚动条（4px + Firefox `scrollbar-width: thin`，含 dark 变体），并注释说明必须放全局。
+6. **`getWarehouseLazy` 失败不再永久负缓存**（`core/src/utils/network.js`）：require 失败原来缓存 `false` 后永不再试；改为失败返回 null、下次调用重试（加载顺序类失败是暂时的，成功后仍走模块缓存）。
+
+验证：2 个后端文件 `node --check` 通过；`node --test test/*.test.js` **390/390 通过**；`npm run build`（vue-tsc + vite）通过（359 modules，18.83s），产物 CSS 确认 `.custom-scrollbar` 规则与 `viewport-fit=cover` 已进包。
+
+## 2026-09-13 移动端优化：登录页更新日志弹窗（UpdateLogModal）
+
+用户手机截图：标题「更新日志」被浏览器地址栏裁掉一半，底部「关闭」贴着 Home 指示条。根因与之前修的弹窗同源：移动端面板 `max-height: 90vh`（大视口，比 iOS 可视区高）+ 遮罩 `align-items: flex-end` 且无滚动 → 顶部溢出不可达。
+
+改动（`web/src/components/login/UpdateLogModal.vue`）：
+- 面板 `max-height: 90vh` → 双声明回退 `90vh; max-height: calc(100dvh - 1rem)`（dvh 跟随地址栏收缩）。
+- 遮罩加 `overflow-y: auto` 兜底：即使面板再超高也从顶部可滚到，不会再出现「标题被裁且滚不到」。
+- 页脚 `padding-bottom: calc(14px + env(safe-area-inset-bottom))`（配合 index.html 的 `viewport-fit=cover`）避开 Home 指示条。
+- 关闭按钮 36px → 44px 触控标准（`margin: -6px -6px 0 0` 抵消头部增高）。
+- 手机端收紧版本条目间距：h1 `margin: 14px 0 6px; font-size: 1.2rem`、h2 `margin: 16px 0 8px`，一屏多显示约一个版本。
+
+验证：`npm run build` 通过；产物 `AuthView-*.css` 回读确认 `max-height:calc(100dvh - 1rem)`、`env(safe-area-inset-bottom)`、遮罩 `overflow-y:auto`、90vh 回退均已进包。
+
+

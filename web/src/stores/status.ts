@@ -130,7 +130,11 @@ export const useStatusStore = defineStore('status', () => {
   function handleRealtimeStatus(payload: any) {
     const body = (payload && typeof payload === 'object') ? payload : {}
     const accountId = String(body.accountId || '')
-    if (currentRealtimeAccountId.value && accountId !== currentRealtimeAccountId.value)
+    // 未选择账号时服务端会以 'all' 广播所有账号的状态，这里必须拒收：
+    // 否则 Dashboard / 侧边栏会显示成别人账号的昵称与在线状态（串台）。
+    if (!currentRealtimeAccountId.value)
+      return
+    if (accountId && accountId !== currentRealtimeAccountId.value)
       return
     if (body.status && typeof body.status === 'object') {
       status.value = normalizeStatusPayload(body.status)

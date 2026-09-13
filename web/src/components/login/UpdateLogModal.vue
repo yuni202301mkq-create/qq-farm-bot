@@ -138,11 +138,12 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 
 .update-log-close {
   display: inline-flex;
-  flex: 0 0 36px;
+  flex: 0 0 44px;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
+  margin: -6px -6px 0 0;
   padding: 0;
   color: #64748b;
   cursor: pointer;
@@ -289,12 +290,18 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
 @media (max-width: 640px) {
   .update-log-overlay {
     align-items: flex-end;
+    /* 面板一旦高于遮罩，flex-end 会把溢出部分顶出遮罩顶部且滚不到（标题被裁的根因之一），
+       遮罩自身可滚作为兜底 */
+    overflow-y: auto;
     padding: 0;
   }
 
   .update-log-panel {
     width: 100%;
+    /* 90vh 是「大视口」（含 iOS 地址栏/底栏后面的区域），面板会比可视区高、
+       标题被顶出屏幕外。dvh 跟随可视高度收缩；老浏览器回退到 90vh。 */
     max-height: 90vh;
+    max-height: calc(100dvh - 1rem);
     border-right: 0;
     border-bottom: 0;
     border-left: 0;
@@ -307,9 +314,24 @@ onBeforeUnmount(() => window.removeEventListener('keydown', handleKeydown))
     padding-left: 18px;
   }
 
+  .update-log-footer {
+    /* 避开 iPhone Home 指示条（viewport-fit=cover 后 env() 才生效） */
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+  }
+
   .update-log-body {
     padding-right: 18px;
     padding-left: 18px;
+  }
+
+  /* 手机上收紧版本条目的间距，一屏能多看一到两个版本 */
+  .markdown-content :deep(h1) {
+    margin: 14px 0 6px;
+    font-size: 1.2rem;
+  }
+
+  .markdown-content :deep(h2) {
+    margin: 16px 0 8px;
   }
 }
 </style>

@@ -255,12 +255,16 @@ async function loadData() {
   }
 }
 
+// 原地递减，而不是 map + {...l} 重建数组/对象：
+// 后者每秒都会生成全新引用，导致所有好友卡片整棵子树每秒全量 diff 重渲染。
 useIntervalFn(() => {
   for (const gid in friendLands.value) {
-    if (friendLands.value[gid]) {
-      friendLands.value[gid] = friendLands.value[gid].map((l: any) =>
-        l.matureInSec > 0 ? { ...l, matureInSec: l.matureInSec - 1 } : l,
-      )
+    const lands = friendLands.value[gid]
+    if (!lands)
+      continue
+    for (const land of lands) {
+      if (land && land.matureInSec > 0)
+        land.matureInSec -= 1
     }
   }
 }, 1000)

@@ -382,7 +382,8 @@ function formatGrowTime(seconds: any) {
         请选择账号后查看数据分析
       </div>
 
-      <div v-else-if="list.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
+      <!-- 只在作物页显示空态：黑名单/策略面板是独立的 v-if，否则三者会同时渲染 -->
+      <div v-else-if="activeTab === 'crops' && list.length === 0" class="rounded-lg bg-white p-8 text-center text-gray-500 shadow dark:bg-gray-800">
         暂无数据
       </div>
 

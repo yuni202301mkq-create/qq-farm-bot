@@ -28,6 +28,35 @@
   background-color: #64748b; /* slate-500 */
 }
 
+/* 细滚动条：用于标签栏等横向滚动区域（默认 8px 在这些位置偏粗、占位明显）。
+   注意这个类必须在全局样式里定义——放在组件的 <style scoped> 中不会生效。 */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1; /* slate-300 */
+  border-radius: 9999px;
+}
+
+.dark .custom-scrollbar {
+  scrollbar-color: #475569 transparent;
+}
+
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #475569; /* slate-600 */
+}
+
 /* Base styles to reset some defaults if needed, though UnoCSS reset handles most */
 html,
 body {
