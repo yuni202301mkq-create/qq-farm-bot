@@ -4,6 +4,7 @@ import { useIntervalFn } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
+import ConsumptionModal from '@/components/ConsumptionModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -38,6 +39,9 @@ const clearingLogs = ref(false)
 const refreshingLogs = ref(false)
 const pendingLogCount = ref(0)
 const logScrollStates = new Map<string, { top: number, atBottom: boolean }>()
+// 消费明细弹窗：条数来自状态轮询里的 consumptionCount
+const showConsumption = ref(false)
+const consumptionCount = computed(() => Number(status.value?.consumptionCount || 0))
 
 const filter = reactive({
   module: '',
@@ -681,6 +685,45 @@ useIntervalFn(updateCountdowns, 1000)
             </div>
           </div>
         </div>
+        <!-- 查看消费明细入口：条数随状态轮询自动刷新 -->
+        <button
+          type="button"
+          class="mt-4 w-full flex items-center gap-3 border rounded-full px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50"
+          :style="{
+            borderColor: 'color-mix(in srgb, var(--theme-primary) 45%, transparent)',
+            backgroundColor: 'color-mix(in srgb, var(--theme-primary) 7%, transparent)',
+          }"
+          :disabled="!currentAccountId"
+          title="查看消费明细"
+          @click="showConsumption = true"
+        >
+          <span
+            class="h-8 w-8 flex shrink-0 items-center justify-center rounded-lg text-white"
+            :style="{ backgroundColor: 'var(--theme-primary)' }"
+          >
+            <div class="i-carbon-receipt text-lg" />
+          </span>
+          <span
+            class="flex-1 truncate text-sm font-semibold"
+            :style="{ color: 'color-mix(in srgb, var(--theme-primary) 85%, var(--theme-text))' }"
+          >
+            查看消费明细
+          </span>
+          <span
+            class="rounded-full px-2 py-0.5 text-xs font-medium"
+            :style="{
+              color: 'var(--theme-primary)',
+              backgroundColor: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)',
+            }"
+          >
+            {{ consumptionCount }} 条
+          </span>
+          <span
+            class="i-carbon-chevron-right shrink-0 text-base opacity-60"
+            :style="{ color: 'var(--theme-primary)' }"
+          />
+        </button>
+
         <div class="mt-4 border-t border-gray-100/80 pt-3 dark:border-gray-700/80">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
@@ -945,5 +988,11 @@ useIntervalFn(updateCountdowns, 1000)
         </div>
       </div>
     </div>
+
+    <ConsumptionModal
+      :show="showConsumption"
+      :account-id="currentAccountId"
+      @close="showConsumption = false"
+    />
   </div>
 </template>

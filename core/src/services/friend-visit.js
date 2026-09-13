@@ -2,7 +2,7 @@ const { PlantPhase } = require('../config/config');
 const { getPlantBlacklist, isAutomationOn } = require('../models/store');
 const { getUserState } = require('../utils/network');
 const { toNum, log, logWarn, randomDelay } = require('../utils/utils');
-const { recordOperation } = require('./stats');
+const { recordOperation, markPendingSpend } = require('./stats');
 const { sellAllFruits } = require('./warehouse');
 const {
   enterFriendFarm,
@@ -116,6 +116,14 @@ async function doFriendOperation(gid, opType) {
         ? canOp.canStealNum
         : analysis.stealable.length;
       const targetLands = analysis.stealable.slice(0, stealCount);
+      // 归因上下文：手动偷菜若随后金币下降（被护主犬扣款），消费记录带作物明细
+      markPendingSpend({
+        type: 'steal_dog_fine',
+        friend: '',
+        crop: [...new Set(targetLands
+          .map(landId => (analysis.stealableInfo.find(s => s.landId === landId) || {}).name)
+          .filter(Boolean))].join('/'),
+      });
 
       okCount = await runBatchWithFallback(
         targetLands,
@@ -403,6 +411,14 @@ async function visitFriend(friend, tally, myGid, accountId) {
         ? canOp.canStealNum
         : analysis.stealable.length;
       const targetLands = analysis.stealable.slice(0, stealCount);
+      // 归因上下文：若随后金币下降（被护主犬扣款），消费记录带上好友与作物
+      markPendingSpend({
+        type: 'steal_dog_fine',
+        friend: name || '',
+        crop: [...new Set(targetLands
+          .map(landId => (analysis.stealableInfo.find(s => s.landId === landId) || {}).name)
+          .filter(Boolean))].join('/'),
+      });
       let stolen = 0;
       const stolenNames = [];
 
@@ -576,6 +592,14 @@ async function visitFriendForSteal(friend, tally, myGid, accountId) {
         ? canOp.canStealNum
         : analysis.stealable.length;
       const targetLands = analysis.stealable.slice(0, stealCount);
+      // 归因上下文：若随后金币下降（被护主犬扣款），消费记录带上好友与作物
+      markPendingSpend({
+        type: 'steal_dog_fine',
+        friend: name || '',
+        crop: [...new Set(targetLands
+          .map(landId => (analysis.stealableInfo.find(s => s.landId === landId) || {}).name)
+          .filter(Boolean))].join('/'),
+      });
       let stolen = 0;
       const stolenNames = [];
 

@@ -72,7 +72,8 @@ const {
     resetSessionGains,
     recordOperation,
     initStatsWithPersistence,
-    saveStats
+    saveStats,
+    getConsumptionRecords
 } = require('../services/stats');
 const {
     initStatusBar,
@@ -1733,6 +1734,9 @@ async function handleApiCall(msg) {
                 result = { pendingCount: dogGifts.getPendingGiftCount(await dogGifts.getDogInfo()) };
                 break;
             }
+            case 'getConsumptionRecords':
+                result = { records: getConsumptionRecords() };
+                break;
             case 'claimDogSkillGifts':
                 result = await require('../services/dog-skill-gifts').checkAndClaimDogSkillGifts();
                 break;

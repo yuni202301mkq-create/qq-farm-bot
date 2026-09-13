@@ -183,6 +183,7 @@ function createDataProvider(deps) {
         getBag,
         getBagSeeds: (ref) => callWorkerApi(resolveAccountId(ref), 'getBagSeeds'),
         getDogSkillGiftStatus: (ref) => callWorkerApi(resolveAccountId(ref), 'getDogSkillGiftStatus'),
+        getConsumptionRecords: (ref) => callWorkerApi(resolveAccountId(ref), 'getConsumptionRecords'),
         claimDogSkillGifts: (ref) => callWorkerApi(resolveAccountId(ref), 'claimDogSkillGifts'),
         getPetOverview: (ref) => callWorkerApi(resolveAccountId(ref), 'getPetOverview'),
         deployDog: (ref, dogId) => callWorkerApi(resolveAccountId(ref), 'deployDog', dogId),

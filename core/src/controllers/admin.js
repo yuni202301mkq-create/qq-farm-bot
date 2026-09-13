@@ -40,6 +40,7 @@ const { createAdminRefreshTokenStore } = require("../services/admin-refresh-toke
 const { registerAdminCardKeyRoutes } = require("./admin-card-key-routes");
 const { registerAdminBagRoutes } = require("./admin-bag-routes");
 const { registerAdminCareerRoutes } = require("./admin-career-routes");
+const { registerAdminConsumptionRoutes } = require("./admin-consumption-routes");
 const { registerAdminCaptureRoutes, setEmbeddedCapture } = require("./admin-capture-routes");
 const { createCaptureCore } = require("../capture/index");
 const { registerAdminCurrentUserRoutes } = require("./admin-current-user-routes");
@@ -696,6 +697,13 @@ function startAdminServer(dataProvider) {
     sendProviderError,
   });
   registerAdminCareerRoutes({
+    app,
+    provider,
+    getAccountIdFromRequest,
+    canAccessAccount,
+    sendProviderError,
+  });
+  registerAdminConsumptionRoutes({
     app,
     provider,
     getAccountIdFromRequest,

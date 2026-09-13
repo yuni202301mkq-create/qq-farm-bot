@@ -79,8 +79,111 @@ const session = {
   lastGoldGain: 0
 };
 
+// ─── 会话消费记录 ───
+// “本次在线”语义：仅保存在内存里，账号启动（initStatsWithPersistence）时清零。
+// 金币下降在 updateStats 里被观察到时落一条记录；若有“待归因消费上下文”
+// （如刚偷菜 → 被护主犬扣款），则带上好友/作物明细，否则记为通用消耗。
+const CONSUMPTION_RECORD_MAX = 200;
+const PENDING_SPEND_TTL_MS = 2 * 60 * 1000;
+const PENDING_SPEND_MAX = 20;
+
+function normalizePendingSpendEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const type = String(entry.type || '').trim();
+  if (!type) return null;
+  return {
+    type,
+    title: String(entry.title || '').trim(),
+    detail: String(entry.detail || '').trim(),
+    friend: String(entry.friend || '').trim(),
+    crop: String(entry.crop || '').trim(),
+    currency: String(entry.currency || 'gold').trim() || 'gold',
+    at: Number.isFinite(Number(entry.at)) ? Number(entry.at) : Date.now(),
+  };
+}
+
+function prunePendingSpends(now = Date.now()) {
+  while (pendingSpends.length > 0 && now - pendingSpends[0].at > PENDING_SPEND_TTL_MS) {
+    pendingSpends.shift();
+  }
+}
+
+/**
+ * 标记一笔“即将发生/刚发生”的消费上下文，供金币下降时归因。
+ * 例：偷菜前标记 { type: 'steal_dog_fine', friend, crop }，若随后金币减少，
+ * 记录为「偷菜被看护犬扣款」并带好友/作物明细。
+ */
+function markPendingSpend(entry) {
+  const normalized = normalizePendingSpendEntry(entry);
+  if (!normalized) return;
+  pendingSpends.push(normalized);
+  while (pendingSpends.length > PENDING_SPEND_MAX) pendingSpends.shift();
+}
+
+/** 取最匹配的待归因上下文：优先同类最近一笔，否则最近一笔 */
+function takeMatchingPendingSpend(now = Date.now()) {
+  prunePendingSpends(now);
+  if (pendingSpends.length === 0) return null;
+  return pendingSpends.pop();
+}
+
+function buildConsumptionTitle(context) {
+  if (context && context.type === 'steal_dog_fine') {
+    return '偷菜被看护犬扣款';
+  }
+  if (context && context.title) return context.title;
+  return '金币消耗';
+}
+
+function buildConsumptionDetail(context) {
+  if (!context) return '';
+  const parts = [];
+  if (context.friend) parts.push(`好友：${context.friend}`);
+  if (context.crop) parts.push(`作物：${context.crop}`);
+  if (context.detail) parts.push(context.detail);
+  return parts.join(' · ');
+}
+
+function pushConsumptionRecord(delta, context) {
+  const amount = Math.abs(Number(delta) || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  const currency = (context && context.currency) || 'gold';
+  const currencyLabel = currency === 'gold' ? '金币' : currency;
+  consumptionRecords.push({
+    id: `${Date.now()}-${consumptionSeq++}`,
+    title: buildConsumptionTitle(context),
+    detail: buildConsumptionDetail(context),
+    amount,
+    currency,
+    currencyLabel,
+    ts: Date.now(),
+  });
+  if (consumptionRecords.length > CONSUMPTION_RECORD_MAX) {
+    consumptionRecords.splice(0, consumptionRecords.length - CONSUMPTION_RECORD_MAX);
+  }
+}
+
+/** 本次在线的消费记录（最新在前） */
+function getConsumptionRecords() {
+  return [...consumptionRecords].reverse();
+}
+
+function getConsumptionCount() {
+  return consumptionRecords.length;
+}
+
+function clearConsumptionRecords() {
+  consumptionRecords.length = 0;
+  pendingSpends.length = 0;
+}
+
 let currentAccountId = null;
 let saveTimer = null;
+/** 会话消费记录（旧→新），内存态 */
+const consumptionRecords = [];
+/** 待归因消费上下文队列 */
+const pendingSpends = [];
+let consumptionSeq = 0;
 
 // ─── 公开 API ───
 
@@ -194,6 +297,7 @@ function initStatsWithPersistence(accountId, gold, exp, coupon = 0) {
   session.couponGained = 0;
   session.lastExpGain = 0;
   session.lastGoldGain = 0;
+  clearConsumptionRecords();
 
   // 尝试恢复今日持久化数据
   const persisted = loadPersistedStats(accountId);
@@ -228,6 +332,8 @@ function updateStats(gold, exp) {
     session.lastGoldGain = gold - lastState.gold;
   } else if (gold < lastState.gold) {
     session.lastGoldGain = 0;
+    // 金币下降 → 记一笔消费（有偷菜上下文时归因为被护主犬扣款）
+    pushConsumptionRecord(gold - lastState.gold, takeMatchingPendingSpend());
   }
   lastState.gold = gold;
 
@@ -334,6 +440,7 @@ function getStats(farmUser, userState, connected, limits) {
     sessionCouponGained: session.couponGained,
     lastExpGain: session.lastExpGain,
     lastGoldGain: session.lastGoldGain,
+    consumptionCount: consumptionRecords.length,
     limits
   };
 }
@@ -357,5 +464,9 @@ module.exports = {
   saveStats,
   getTodayKey,
   loadPersistedStats,
-  checkAndResetDailyStats
+  checkAndResetDailyStats,
+  markPendingSpend,
+  getConsumptionRecords,
+  getConsumptionCount,
+  clearConsumptionRecords
 };
