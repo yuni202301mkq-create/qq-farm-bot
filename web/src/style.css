@@ -72,6 +72,16 @@ body {
   box-sizing: border-box;
 }
 
+/* Edge/IE 会在密码输入框右侧注入浏览器自带的“显示密码”小眼睛，
+   和页面自定义的眼睛按钮重复出现两个。全局隐藏浏览器原生图标，
+   各密码框统一只用页面自己的显示/隐藏按钮。 */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear,
+input[type="text"]::-ms-reveal,
+input[type="text"]::-ms-clear {
+  display: none;
+}
+
 /* NProgress Customization */
 #nprogress .bar {
   background: var(--theme-gradient) !important;
