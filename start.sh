@@ -7,6 +7,11 @@ BOT_PORT="${ADMIN_PORT:-3007}"
 
 cd "$ROOT_DIR"
 
+# 中文日志为 UTF-8 输出；部分最小化安装的 Ubuntu/Debian locale 不是 UTF-8，
+# 会把日志显示成乱码（如 å®‰æŽ'）。这里强制声明，用户无需手动 export。
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL="C.UTF-8"
+
 # 优先使用 Corepack，以遵循 package.json 中锁定的 pnpm 版本。
 if command -v corepack >/dev/null 2>&1; then
   PNPM=(corepack pnpm)
