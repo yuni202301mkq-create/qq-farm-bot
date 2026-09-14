@@ -95,10 +95,15 @@ onBeforeUnmount(() => {
 <template>
   <Transition name="career-fade">
     <div v-if="show" class="fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm" @click.self="emit('close')">
-      <section class="career-panel max-h-[72vh] w-[min(84vw,380px)] flex flex-col overflow-hidden rounded-3xl bg-[#f7f5ef] shadow-2xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:bg-gray-900">
-        <header class="relative flex flex-none items-center gap-3 border-b border-amber-100 px-4 py-3 dark:border-gray-700 sm:px-7 sm:py-5">
+      <section class="career-panel relative max-h-[72vh] w-[min(84vw,380px)] flex flex-col overflow-hidden rounded-3xl bg-gradient-to-b from-[#fdfaf2] to-[#f4eddc] shadow-2xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:border dark:border-amber-500/15 dark:from-[#232030] dark:via-[#1c1928] dark:to-gray-900">
+        <!-- 顶部氛围光 -->
+        <div class="pointer-events-none absolute -top-20 left-1/2 h-44 w-72 -translate-x-1/2 rounded-full bg-amber-400/15 blur-3xl sm:h-56 sm:w-96" />
+        <div class="pointer-events-none absolute -left-16 top-24 h-36 w-36 rounded-full bg-orange-400/10 blur-3xl" />
+        <div class="pointer-events-none absolute -right-16 top-32 h-36 w-36 rounded-full bg-rose-400/10 blur-3xl" />
+
+        <header class="relative flex flex-none items-center gap-3 border-b border-amber-100/80 bg-gradient-to-r from-amber-400/10 via-transparent to-rose-400/10 px-4 py-3 dark:border-gray-700/80 sm:px-7 sm:py-5">
           <div
-            class="h-11 w-11 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 ring-2 ring-white transition sm:h-16 sm:w-16 dark:bg-gray-700 dark:ring-gray-600"
+            class="h-11 w-11 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 shadow-lg shadow-amber-500/20 ring-2 ring-white transition sm:h-16 sm:w-16 dark:bg-gray-700 dark:shadow-black/40 dark:ring-gray-600"
             :class="avatar ? 'cursor-zoom-in hover:ring-amber-300' : ''"
             :title="avatar ? '点击查看大图' : ''"
             @click="avatar && (avatarPreview = true)"
@@ -111,7 +116,7 @@ onBeforeUnmount(() => {
               {{ name }}
             </h2>
             <div class="mt-1 flex flex-wrap items-center gap-1.5 text-xs sm:mt-2 sm:gap-2 sm:text-sm">
-              <span class="rounded-lg bg-amber-100 px-2 py-1 text-amber-700 font-semibold dark:bg-amber-900/30 dark:text-amber-300">Lv.{{ level }}</span>
+              <span class="rounded-lg bg-gradient-to-r from-amber-400/25 to-orange-400/25 px-2 py-1 text-amber-700 font-semibold dark:bg-gradient-to-r dark:from-amber-500/25 dark:to-orange-500/25 dark:text-amber-300">Lv.{{ level }}</span>
               <span class="rounded-lg bg-blue-50 px-2 py-1 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">经验 {{ formatNumber(exp) }}</span>
             </div>
             <p v-if="gid" class="mt-1 text-xs text-gray-400 sm:mt-2">
@@ -123,9 +128,11 @@ onBeforeUnmount(() => {
           </button>
         </header>
 
-        <div class="custom-scrollbar min-h-0 flex-1 overflow-y-auto p-4 md:p-7 sm:p-5">
-          <div class="mb-3 text-center text-lg text-amber-700 font-bold sm:mb-4 sm:text-2xl dark:text-amber-300">
-            生涯
+        <div class="custom-scrollbar relative min-h-0 flex-1 overflow-y-auto p-4 md:p-7 sm:p-5">
+          <div class="mb-3 flex items-center justify-center gap-3 sm:mb-4">
+            <span class="h-px w-10 bg-gradient-to-r from-transparent to-amber-400/60 sm:w-16" />
+            <span class="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-lg font-extrabold tracking-widest text-transparent sm:text-2xl dark:from-amber-300 dark:to-orange-300">生涯</span>
+            <span class="h-px w-10 bg-gradient-to-l from-transparent to-amber-400/60 sm:w-16" />
           </div>
 
           <div v-if="loading" class="h-56 flex flex-col items-center justify-center gap-3 text-gray-400">
