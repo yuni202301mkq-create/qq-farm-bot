@@ -3,6 +3,7 @@ import type { UserRole } from '@/stores/user'
 import axios from 'axios'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 import ResetPasswordModal from '@/components/login/ResetPasswordModal.vue'
 import UpdateLogModal from '@/components/login/UpdateLogModal.vue'
 import { useAppStore } from '@/stores/app'
@@ -59,7 +60,6 @@ const loading = ref(false)
 const freeCardLoading = ref(false)
 const errorMsg = ref('')
 const renewResult = ref('')
-const freeCardResult = ref('')
 const passwordRef = ref<HTMLInputElement | null>(null)
 
 // 用户名输入回车后自动聚焦到密码框，提升移动端流畅度
@@ -180,7 +180,6 @@ function switchTo(next: Mode) {
   mode.value = next
   errorMsg.value = ''
   renewResult.value = ''
-  freeCardResult.value = ''
   router.replace({ path: '/login', query: next === 'login' ? {} : { mode: next } })
 }
 
@@ -218,12 +217,30 @@ function getDeviceId() {
   }
 }
 
-async function claimFreeCard() {
+// 免费领取走弹窗流程：先确认（弹窗内说明每个 IP/设备仅可领取一次），再请求；
+// 成功/失败结果也用弹窗呈现，不再往表单里插提示条
+const freeCardModal = ref({
+  show: false,
+  step: 'confirm' as 'confirm' | 'success' | 'error',
+  message: '',
+  loading: false,
+})
+
+function openFreeCardModal() {
+  if (freeCardLoading.value)
+    return
+  freeCardModal.value = { show: true, step: 'confirm', message: '', loading: false }
+}
+
+function closeFreeCardModal() {
+  freeCardModal.value.show = false
+}
+
+async function confirmFreeCardClaim() {
   if (freeCardLoading.value)
     return
   freeCardLoading.value = true
-  errorMsg.value = ''
-  freeCardResult.value = ''
+  freeCardModal.value.loading = true
   try {
     const { data } = await axios.post('/api/free-card', {
       username: username.value.trim(),
@@ -232,14 +249,31 @@ async function claimFreeCard() {
     if (!data?.ok)
       throw new Error(data?.error || '领取失败')
     cardKey.value = String(data.data?.cardKey || '')
-    freeCardResult.value = `已领取 ${data.data?.days || 7} 天免费卡密，已自动填入上方，完成注册即可生效`
+    freeCardModal.value = {
+      show: true,
+      step: 'success',
+      message: `已领取 ${data.data?.days || 7} 天免费卡密，已自动填入上方，完成注册即可生效`,
+      loading: false,
+    }
   }
   catch (error: any) {
-    errorMsg.value = error?.response?.data?.error || error?.message || '领取失败，请稍后重试'
+    freeCardModal.value = {
+      show: true,
+      step: 'error',
+      message: error?.response?.data?.error || error?.message || '领取失败，请稍后重试',
+      loading: false,
+    }
   }
   finally {
     freeCardLoading.value = false
   }
+}
+
+function onFreeCardModalConfirm() {
+  if (freeCardModal.value.step === 'confirm')
+    void confirmFreeCardClaim()
+  else
+    closeFreeCardModal()
 }
 
 async function submit() {
@@ -247,7 +281,6 @@ async function submit() {
     return
   errorMsg.value = ''
   renewResult.value = ''
-  freeCardResult.value = ''
 
   if (mode.value === 'renew') {
     if (!username.value.trim() || !cardKey.value.trim()) {
@@ -470,15 +503,12 @@ async function submit() {
               type="button"
               class="form-side__free-card"
               :disabled="freeCardLoading"
-              @click="claimFreeCard"
+              @click="openFreeCardModal"
             >
               <span v-if="freeCardLoading" class="i-svg-spinners-90-ring-with-bg" />
               <span v-else class="i-carbon-gift" />
               <span>免费领取 7 天卡密</span>
             </button>
-            <p v-if="mode === 'register'" class="form-side__hint">
-              每个IP/设备仅可领取一次卡密，感谢您的使用！
-            </p>
           </div>
 
           <p v-if="errorMsg" class="form-side__alert form-side__alert--error">
@@ -488,10 +518,6 @@ async function submit() {
           <p v-if="renewResult" class="form-side__alert form-side__alert--success">
             <span class="i-carbon-checkmark-filled" />
             <span>{{ renewResult }}</span>
-          </p>
-          <p v-if="freeCardResult" class="form-side__alert form-side__alert--success">
-            <span class="i-carbon-checkmark-filled" />
-            <span>{{ freeCardResult }}</span>
           </p>
 
           <button
@@ -580,6 +606,24 @@ async function submit() {
       :show="showResetModal"
       @close="showResetModal = false"
       @success="onResetSuccess"
+    />
+
+    <!-- 免费领取卡密弹窗：确认领取 / 成功 / 失败共用一个弹窗 -->
+    <ConfirmModal
+      :show="freeCardModal.show"
+      :title="freeCardModal.step === 'confirm'
+        ? '免费领取 7 天卡密'
+        : freeCardModal.step === 'success' ? '领取成功' : '无法领取'"
+      :message="freeCardModal.step === 'confirm'
+        ? '每个IP/设备仅可领取一次卡密，感谢您的使用！\n确定领取？成功后将自动填入卡密输入框。'
+        : freeCardModal.message"
+      :type="freeCardModal.step === 'error' ? 'danger' : 'primary'"
+      :is-alert="freeCardModal.step !== 'confirm'"
+      :loading="freeCardModal.loading"
+      :confirm-text="freeCardModal.step === 'confirm' ? '确认领取' : '我知道了'"
+      @confirm="onFreeCardModalConfirm"
+      @close="closeFreeCardModal"
+      @cancel="closeFreeCardModal"
     />
   </div>
 </template>
