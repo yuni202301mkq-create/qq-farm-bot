@@ -692,7 +692,7 @@ useIntervalFn(updateCountdowns, 1000)
         <!-- 查看消费明细入口：条数随状态轮询自动刷新 -->
         <button
           type="button"
-          class="mt-4 w-full flex items-center gap-3 border rounded-full px-3 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50"
+          class="mt-3 w-full flex items-center gap-2.5 border rounded-full px-2.5 py-1.5 text-left transition disabled:cursor-not-allowed disabled:opacity-50"
           :style="{
             borderColor: 'color-mix(in srgb, var(--theme-primary) 45%, transparent)',
             backgroundColor: 'color-mix(in srgb, var(--theme-primary) 7%, transparent)',
@@ -702,10 +702,10 @@ useIntervalFn(updateCountdowns, 1000)
           @click="showConsumption = true"
         >
           <span
-            class="h-8 w-8 flex shrink-0 items-center justify-center rounded-lg text-white"
+            class="h-7 w-7 flex shrink-0 items-center justify-center rounded-full text-white"
             :style="{ backgroundColor: 'var(--theme-primary)' }"
           >
-            <div class="i-carbon-receipt text-lg" />
+            <div class="i-carbon-receipt text-base" />
           </span>
           <span
             class="flex-1 truncate text-sm font-semibold"
@@ -714,7 +714,7 @@ useIntervalFn(updateCountdowns, 1000)
             查看消费明细
           </span>
           <span
-            class="rounded-full px-2 py-0.5 text-xs font-medium"
+            class="rounded-full px-1.5 py-0.5 text-[11px] leading-none font-medium"
             :style="{
               color: 'var(--theme-primary)',
               backgroundColor: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)',
@@ -723,7 +723,7 @@ useIntervalFn(updateCountdowns, 1000)
             {{ consumptionCount }} 条
           </span>
           <span
-            class="i-carbon-chevron-right shrink-0 text-base opacity-60"
+            class="i-carbon-chevron-right shrink-0 text-sm opacity-60"
             :style="{ color: 'var(--theme-primary)' }"
           />
         </button>
