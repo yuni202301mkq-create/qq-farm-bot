@@ -221,23 +221,27 @@ function getCountdownRingStyle(remain: number, total: number, color: string) {
   }
 }
 
-const OP_META: Record<string, { label: string, icon: string, color: string }> = {
-  harvest: { label: '收获', icon: 'i-carbon-crop-growth', color: 'text-green-500' },
-  water: { label: '浇水', icon: 'i-carbon-rain-drop', color: 'text-blue-400' },
-  weed: { label: '除草', icon: 'i-carbon-cut', color: 'text-yellow-500' },
-  bug: { label: '除虫', icon: 'i-carbon-pest', color: 'text-red-400' },
-  farming: { label: '一键务农', icon: 'i-carbon-clean', color: 'text-teal-500' },
-  fertilize: { label: '施肥', icon: 'i-carbon-chemistry', color: 'text-emerald-500' },
-  plant: { label: '种植', icon: 'i-carbon-tree', color: 'text-lime-500' },
-  steal: { label: '偷菜', icon: 'i-carbon-run', color: 'text-orange-500' },
-  helpWater: { label: '帮浇水', icon: 'i-carbon-rain-drop', color: 'text-blue-300' },
-  goldenBugClear: { label: '清黄金虫', icon: 'i-carbon-clean', color: 'text-amber-500' },
-  goldenBugPut: { label: '放黄金虫', icon: 'i-carbon-pest', color: 'text-yellow-500' },
-  helpWeed: { label: '帮除草', icon: 'i-carbon-cut', color: 'text-yellow-400' },
-  helpBug: { label: '帮除虫', icon: 'i-carbon-pest', color: 'text-red-300' },
-  taskClaim: { label: '任务', icon: 'i-carbon-task-complete', color: 'text-indigo-500' },
-  sell: { label: '出售', icon: 'i-carbon-shopping-cart', color: 'text-pink-500' },
-  tongQiGift: { label: '同气礼包', icon: 'i-carbon-gift', color: 'text-rose-500' },
+const OP_META: Record<string, { label: string, icon: string, color: string, badge: string }> = {
+  harvest: { label: '收获', icon: 'i-carbon-crop-growth', color: 'text-green-500', badge: 'bg-green-500/15' },
+  water: { label: '浇水', icon: 'i-carbon-rain-drop', color: 'text-blue-400', badge: 'bg-blue-400/15' },
+  weed: { label: '除草', icon: 'i-carbon-cut', color: 'text-yellow-500', badge: 'bg-yellow-500/15' },
+  bug: { label: '除虫', icon: 'i-carbon-pest', color: 'text-red-400', badge: 'bg-red-400/15' },
+  farming: { label: '一键务农', icon: 'i-carbon-clean', color: 'text-teal-500', badge: 'bg-teal-500/15' },
+  fertilize: { label: '施肥', icon: 'i-carbon-chemistry', color: 'text-emerald-500', badge: 'bg-emerald-500/15' },
+  plant: { label: '种植', icon: 'i-carbon-tree', color: 'text-lime-500', badge: 'bg-lime-500/15' },
+  steal: { label: '偷菜', icon: 'i-carbon-run', color: 'text-orange-500', badge: 'bg-orange-500/15' },
+  helpWater: { label: '帮浇水', icon: 'i-carbon-rain-drop', color: 'text-blue-300', badge: 'bg-blue-300/15' },
+  goldenBugClear: { label: '清黄金虫', icon: 'i-carbon-clean', color: 'text-amber-500', badge: 'bg-amber-500/15' },
+  goldenBugPut: { label: '放黄金虫', icon: 'i-carbon-pest', color: 'text-yellow-500', badge: 'bg-yellow-500/15' },
+  helpWeed: { label: '帮除草', icon: 'i-carbon-cut', color: 'text-yellow-400', badge: 'bg-yellow-400/15' },
+  helpBug: { label: '帮除虫', icon: 'i-carbon-pest', color: 'text-red-300', badge: 'bg-red-300/15' },
+  taskClaim: { label: '任务', icon: 'i-carbon-task-complete', color: 'text-indigo-500', badge: 'bg-indigo-500/15' },
+  sell: { label: '出售', icon: 'i-carbon-shopping-cart', color: 'text-pink-500', badge: 'bg-pink-500/15' },
+  tongQiGift: { label: '同气礼包', icon: 'i-carbon-gift', color: 'text-rose-500', badge: 'bg-rose-500/15' },
+}
+
+function getOpBadge(key: string) {
+  return OP_META[key]?.badge || 'bg-gray-500/15'
 }
 
 const filteredOperations = computed(() => {
@@ -972,15 +976,23 @@ useIntervalFn(updateCountdowns, 1000)
             <div
               v-for="(val, key) in filteredOperations"
               :key="key"
-              class="ui-subtle-panel min-w-0 flex items-center justify-between rounded-lg px-2 py-1.5"
+              class="group min-w-0 flex items-center justify-between rounded-xl border border-gray-200/60 bg-white/50 px-2 py-1.5 transition-all duration-200 hover:-translate-y-px hover:border-gray-300 hover:shadow-md dark:border-gray-700/50 dark:bg-gray-800/40 dark:hover:border-gray-600 2xl:px-2.5"
             >
-              <div class="min-w-0 flex items-center gap-1.5">
-                <div class="text-base 2xl:text-lg" :class="[getOpIcon(key), getOpColor(key)]" />
+              <div class="min-w-0 flex items-center gap-2">
+                <span
+                  class="h-6 w-6 flex flex-none items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 2xl:h-7 2xl:w-7 2xl:text-base"
+                  :class="getOpBadge(key)"
+                >
+                  <div class="text-sm 2xl:text-base" :class="[getOpIcon(key), getOpColor(key)]" />
+                </span>
                 <div class="truncate text-xs text-gray-500 2xl:text-sm" :title="getOpName(key)">
                   {{ getOpName(key) }}
                 </div>
               </div>
-              <div class="text-sm font-bold 2xl:text-base">
+              <div
+                class="text-sm font-bold tabular-nums transition-colors 2xl:text-base"
+                :class="val > 0 ? 'text-gray-900 dark:text-white' : 'text-gray-300 dark:text-gray-600'"
+              >
                 {{ val }}
               </div>
             </div>
