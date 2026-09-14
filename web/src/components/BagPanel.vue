@@ -112,12 +112,14 @@ function canUse(item: any) {
   return Boolean(item?.usable) || Number(item?.itemType || 0) === 11
 }
 
-function isSeedItem(item: any) {
-  return getItemCategory(item) === 'seed'
+// 锁定对种子和果实都生效：锁定的果实同样不参与批量出售
+function isLockableItem(item: any) {
+  const category = getItemCategory(item)
+  return category === 'seed' || category === 'fruit'
 }
 
 function isItemLocked(item: any) {
-  return isSeedItem(item) && seedLockStore.isLocked(Number(item.id))
+  return seedLockStore.isLocked(Number(item.id))
 }
 
 async function toggleSeedLock(item: any) {
@@ -322,13 +324,13 @@ function toggleLockBatchMode() {
 function selectAllSeeds() {
   selectedForLock.value.clear()
   for (const item of filteredItems.value) {
-    if (isSeedItem(item))
+    if (isLockableItem(item))
       selectedForLock.value.add(Number(item.id))
   }
 }
 
 function handleLockClick(item: any) {
-  if (!isSeedItem(item))
+  if (!isLockableItem(item))
     return
   if (lockBatchMode.value) {
     const id = Number(item.id)
@@ -511,9 +513,9 @@ useIntervalFn(loadBag, 60000)
 
         <div class="flex-1" />
 
-        <template v-if="selectedCategory === 'fruit' || selectedCategory === 'all'">
+        <template v-if="selectedCategory === 'fruit' || selectedCategory === 'seed' || selectedCategory === 'all'">
           <button
-            class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+            class="w-28 rounded-lg px-3 py-1.5 text-center text-sm font-medium transition"
             :class="batchMode
               ? 'bg-orange-500 text-white dark:bg-orange-600'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
@@ -542,17 +544,16 @@ useIntervalFn(loadBag, 60000)
           </template>
         </template>
 
-        <template v-if="selectedCategory === 'seed' || selectedCategory === 'all'">
+        <template v-if="selectedCategory === 'seed' || selectedCategory === 'fruit' || selectedCategory === 'all'">
           <button
-            class="rounded-lg px-3 py-1.5 text-sm font-medium transition"
+            class="w-28 rounded-lg px-3 py-1.5 text-center text-sm font-medium transition"
             :class="lockBatchMode
               ? 'bg-amber-500 text-white dark:bg-amber-600'
               : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'"
             @click="toggleLockBatchMode"
           >
             <div v-if="lockBatchMode" class="i-carbon-close mr-1 inline-block" />
-            <div v-else class="i-carbon-locked mr-1 inline-block" />
-            {{ lockBatchMode ? '取消锁种' : '批量锁种' }}
+            {{ lockBatchMode ? (selectedCategory === 'fruit' ? '取消锁住' : '取消锁种') : (selectedCategory === 'fruit' ? '批量锁住' : '批量锁种') }}
           </button>
           <template v-if="lockBatchMode">
             <button
@@ -596,10 +597,10 @@ useIntervalFn(loadBag, 60000)
             'ring-2 ring-orange-500 dark:ring-orange-400': batchMode && selectedForBatch.has(Number(item.id)),
             'opacity-50': batchMode && canBatchSell(item) && !selectedForBatch.has(Number(item.id)),
             'ring-2 ring-amber-400 dark:ring-amber-500': isItemLocked(item),
-            'ring-2 ring-amber-500 dark:ring-amber-400': lockBatchMode && isSeedItem(item) && selectedForLock.has(Number(item.id)),
+            'ring-2 ring-amber-500 dark:ring-amber-400': lockBatchMode && isLockableItem(item) && selectedForLock.has(Number(item.id)),
           }"
           @click="lockBatchMode
-            ? (isSeedItem(item) && handleLockClick(item))
+            ? (isLockableItem(item) && handleLockClick(item))
             : (batchMode && canBatchSell(item) && handleSellClick(item))"
         >
           <div class="absolute left-2 top-2 hidden text-xs text-gray-400 font-mono sm:block">
@@ -607,10 +608,10 @@ useIntervalFn(loadBag, 60000)
           </div>
 
           <div class="absolute right-1 top-1 flex gap-1">
-            <!-- 批量锁种模式：种子显示勾选框 -->
+            <!-- 批量锁种模式：种子和果实显示勾选框 -->
             <template v-if="lockBatchMode">
               <div
-                v-if="isSeedItem(item)"
+                v-if="isLockableItem(item)"
                 class="h-5 w-5 flex items-center justify-center border-2 rounded transition"
                 :class="selectedForLock.has(Number(item.id))
                   ? 'border-amber-500 bg-amber-500 text-white'
@@ -622,7 +623,7 @@ useIntervalFn(loadBag, 60000)
             <!-- 普通模式 -->
             <template v-else-if="!batchMode">
               <button
-                v-if="isSeedItem(item)"
+                v-if="isLockableItem(item)"
                 class="flex items-center justify-center rounded px-1 py-0.5 text-[10px] transition"
                 :class="isItemLocked(item)
                   ? 'bg-amber-400 text-white opacity-90 hover:opacity-100 dark:bg-amber-500'
