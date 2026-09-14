@@ -5,6 +5,7 @@ export interface MenuItem {
   icon: string
   component: () => Promise<any>
   adminOnly?: boolean
+  normalUserOnly?: boolean
   showInNav?: boolean
 }
 
@@ -15,6 +16,14 @@ export const menuRoutes: MenuItem[] = [
     label: '概览',
     icon: 'i-carbon-chart-pie',
     component: () => import('@/views/Dashboard.vue'),
+  },
+  {
+    path: 'cardkey',
+    name: 'cardkey',
+    label: '我的卡密信息',
+    icon: 'i-carbon-ticket',
+    component: () => import('@/views/MyCardKey.vue'),
+    normalUserOnly: true,
   },
   {
     path: 'personal',

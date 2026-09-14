@@ -5,7 +5,6 @@ import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
 import ConsumptionModal from '@/components/ConsumptionModal.vue'
-import MyCardKeyCard from '@/components/MyCardKeyCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -13,13 +12,11 @@ import { useAccountStore } from '@/stores/account'
 import { useBagStore } from '@/stores/bag'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
-import { useUserStore } from '@/stores/user'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
 import { compactRuntimeLogs, matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
 
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
-const userStore = useUserStore()
 const bagStore = useBagStore()
 const toastStore = useToastStore()
 
@@ -600,7 +597,6 @@ useIntervalFn(updateCountdowns, 1000)
 
 <template>
   <div class="flex flex-col gap-5 pt-1 md:h-full md:min-h-0 md:overflow-hidden md:pt-2">
-    <MyCardKeyCard v-if="!userStore.isSuperAdmin" class="shrink-0" />
     <div class="grid grid-cols-1 shrink-0 gap-4 lg:grid-cols-3 sm:grid-cols-2">
       <div class="ui-card metric-card min-h-[168px] flex flex-col rounded-lg p-5">
         <div class="mb-2 flex items-start justify-between">

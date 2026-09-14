@@ -145,7 +145,9 @@ const connectionStatus = computed(() => {
 const navItems = computed(() => {
   const isAdmin = userStore.isAdmin
   return menuRoutes
-    .filter(item => item.showInNav !== false && (!item.adminOnly || isAdmin))
+    .filter(item => item.showInNav !== false
+      && (!item.adminOnly || isAdmin)
+      && (!item.normalUserOnly || !isAdmin))
     .map(item => ({
       path: item.path ? `/${item.path}` : '/',
       label: item.label,
