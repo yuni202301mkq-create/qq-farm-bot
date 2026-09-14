@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Account } from '@/stores/account'
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 interface CareerItem {
   seedId: number
@@ -22,6 +22,8 @@ const emit = defineEmits<{
   (e: 'close'): void
   (e: 'refresh'): void
 }>()
+
+const avatarPreview = ref(false)
 
 const harvestedItems = computed(() => (props.items || [])
   .filter(item => Number(item.harvestCount) > 0)
@@ -63,12 +65,18 @@ function formatCompactNumber(value: number) {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && props.show)
-    emit('close')
+  if (event.key === 'Escape' && props.show) {
+    if (avatarPreview.value)
+      avatarPreview.value = false
+    else
+      emit('close')
+  }
 }
 
 watch(() => props.show, (show) => {
   document.body.style.overflow = show ? 'hidden' : ''
+  if (!show)
+    avatarPreview.value = false
   if (show)
     window.addEventListener('keydown', onKeydown)
   else
@@ -86,7 +94,12 @@ onBeforeUnmount(() => {
     <div v-if="show" class="fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm" @click.self="emit('close')">
       <section class="career-panel max-h-[72vh] w-[min(84vw,380px)] flex flex-col overflow-hidden rounded-3xl bg-[#f7f5ef] shadow-2xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:bg-gray-900">
         <header class="relative flex flex-none items-center gap-3 border-b border-amber-100 px-4 py-3 dark:border-gray-700 sm:px-7 sm:py-5">
-          <div class="h-11 w-11 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 ring-2 ring-white sm:h-16 sm:w-16 dark:bg-gray-700 dark:ring-gray-600">
+          <div
+            class="h-11 w-11 flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-amber-100 ring-2 ring-white transition sm:h-16 sm:w-16 dark:bg-gray-700 dark:ring-gray-600"
+            :class="avatar ? 'cursor-zoom-in hover:ring-amber-300' : ''"
+            :title="avatar ? '点击查看大图' : ''"
+            @click="avatar && (avatarPreview = true)"
+          >
             <img v-if="avatar" :src="avatar" :alt="name" class="h-full w-full object-cover">
             <span v-else class="text-xl text-amber-700 font-bold">{{ name.slice(0, 1) }}</span>
           </div>
@@ -196,6 +209,22 @@ onBeforeUnmount(() => {
           </template>
         </div>
       </section>
+
+      <!-- 头像大图预览 -->
+      <div
+        v-if="avatarPreview && avatar"
+        class="fixed inset-0 z-[10030] flex items-center justify-center bg-black/75 p-6"
+        @click="avatarPreview = false"
+      >
+        <img :src="avatar" :alt="name" class="max-h-full max-w-full rounded-2xl object-contain shadow-2xl">
+        <button
+          class="absolute right-4 top-4 h-10 w-10 flex items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20"
+          aria-label="关闭预览"
+          @click.stop="avatarPreview = false"
+        >
+          <div class="i-carbon-close text-2xl" />
+        </button>
+      </div>
     </div>
   </Transition>
 </template>
