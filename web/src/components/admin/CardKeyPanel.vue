@@ -130,15 +130,33 @@ async function copyAll() {
 function downloadTxt() {
   if (!lastGenerated.value.length)
     return
-  const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-')
-  const blob = new Blob([lastGenerated.value.join('\n')], { type: 'text/plain;charset=utf-8' })
+  saveTxt(`卡密_${timestamp()}.txt`, lastGenerated.value)
+  toastStore.success(`已下载 ${lastGenerated.value.length} 个卡密`)
+}
+
+/** 导出卡密列表里全部未使用的卡密（已使用的没有分发价值，不导出） */
+function downloadKeysTxt() {
+  const unused = keys.value.filter(key => !key.used).map(key => key.code)
+  if (!unused.length) {
+    toastStore.warning('没有未使用的卡密可导出')
+    return
+  }
+  saveTxt(`卡密导出_${timestamp()}.txt`, unused)
+  toastStore.success(`已导出 ${unused.length} 个未使用卡密`)
+}
+
+function timestamp() {
+  return new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-')
+}
+
+function saveTxt(filename: string, lines: string[]) {
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `卡密_${stamp}.txt`
+  link.download = filename
   link.click()
   URL.revokeObjectURL(url)
-  toastStore.success(`已下载 ${lastGenerated.value.length} 个卡密`)
 }
 
 async function removeKey(code: string) {
@@ -260,9 +278,14 @@ onMounted(refresh)
           <div class="i-carbon-list" />
           卡密列表（{{ keys.length }}）
         </h4>
-        <BaseButton variant="ghost" size="sm" :loading="keysLoading" @click="loadKeys">
-          刷新
-        </BaseButton>
+        <div class="flex items-center gap-2">
+          <BaseButton variant="ghost" size="sm" :disabled="!keys.length" @click="downloadKeysTxt">
+            导出 TXT
+          </BaseButton>
+          <BaseButton variant="ghost" size="sm" :loading="keysLoading" @click="loadKeys">
+            刷新
+          </BaseButton>
+        </div>
       </div>
       <div class="custom-scrollbar max-h-72 overflow-auto">
         <table class="w-full text-left text-sm">
