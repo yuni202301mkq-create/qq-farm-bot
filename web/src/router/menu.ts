@@ -11,19 +11,19 @@ export interface MenuItem {
 
 export const menuRoutes: MenuItem[] = [
   {
-    path: '',
-    name: 'dashboard',
-    label: '概览',
-    icon: 'i-carbon-chart-pie',
-    component: () => import('@/views/Dashboard.vue'),
-  },
-  {
     path: 'cardkey',
     name: 'cardkey',
     label: '我的卡密信息',
     icon: 'i-carbon-ticket',
     component: () => import('@/views/MyCardKey.vue'),
     normalUserOnly: true,
+  },
+  {
+    path: '',
+    name: 'dashboard',
+    label: '概览',
+    icon: 'i-carbon-chart-pie',
+    component: () => import('@/views/Dashboard.vue'),
   },
   {
     path: 'personal',
