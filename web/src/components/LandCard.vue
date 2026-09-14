@@ -2,11 +2,7 @@
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { useSharedClock } from '@/composables/useSharedClock'
 import OfficialCrystalMutation from './OfficialCrystalMutation.vue'
-<<<<<<< HEAD
-=======
 import OfficialBichonMutation from './OfficialBichonMutation.vue'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
->>>>>>> upstream/main
 
 const props = withDefaults(defineProps<{
   land: any
