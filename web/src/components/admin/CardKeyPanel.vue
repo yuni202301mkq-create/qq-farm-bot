@@ -308,13 +308,11 @@ onMounted(refresh)
               </td>
               <td class="py-2">
                 <button
-                  v-if="!key.used"
                   class="text-xs text-red-500 hover:underline"
                   @click="removeKey(key.code)"
                 >
                   删除
                 </button>
-                <span v-else class="text-xs text-gray-300">-</span>
               </td>
             </tr>
             <tr v-if="!keys.length">

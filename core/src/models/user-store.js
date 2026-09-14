@@ -287,7 +287,7 @@ function deleteCardKey(code) {
   const target = String(code || '').trim().toUpperCase();
   const key = keys.find(item => item.code === target);
   if (!key) throw new Error('卡密不存在');
-  if (key.usedBy) throw new Error('已使用的卡密不能删除');
+  // 已使用的卡密仅作为领取记录，删除不影响已注册账号
   saveCardKeys(keys.filter(item => item.code !== target));
 }
 
