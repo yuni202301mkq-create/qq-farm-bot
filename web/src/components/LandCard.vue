@@ -576,49 +576,49 @@ function getIsometricBubbleClass(targetLand: any) {
         </div>
 
         <div class="grid grid-cols-2 mt-2.5 gap-2 text-xs">
-          <div class="rounded-xl border border-orange-400/20 bg-gradient-to-br from-orange-500/10 to-transparent p-2 dark:border-orange-400/15">
-            <div class="flex items-center gap-1 text-[10px] text-orange-500/90 dark:text-orange-300/80">
+          <div class="rounded-xl border-l-4 border-orange-400 bg-orange-50 p-2 dark:border-orange-500 dark:bg-orange-500/15">
+            <div class="flex items-center gap-1 text-[10px] text-orange-600 font-semibold dark:text-orange-300">
               <span class="i-carbon-timer" />
               成熟倒计时
             </div>
-            <div class="mt-0.5 text-sm text-gray-900 font-bold tabular-nums dark:text-gray-100">
+            <div class="mt-0.5 text-sm text-orange-700 font-extrabold tabular-nums dark:text-orange-200">
               {{ land.matureInSec > 0 ? formatTime(land.matureInSec) : '—' }}
             </div>
           </div>
-          <div class="rounded-xl border border-sky-400/20 bg-gradient-to-br from-sky-500/10 to-transparent p-2 dark:border-sky-400/15">
-            <div class="flex items-center gap-1 text-[10px] text-sky-500/90 dark:text-sky-300/80">
+          <div class="rounded-xl border-l-4 border-sky-400 bg-sky-50 p-2 dark:border-sky-500 dark:bg-sky-500/15">
+            <div class="flex items-center gap-1 text-[10px] text-sky-600 font-semibold dark:text-sky-300">
               <span class="i-carbon-renew" />
               生长季数
             </div>
-            <div class="mt-0.5 text-sm text-gray-900 font-bold tabular-nums dark:text-gray-100">
+            <div class="mt-0.5 text-sm text-sky-700 font-extrabold tabular-nums dark:text-sky-200">
               {{ land.totalSeason > 0 ? `${land.currentSeason}/${land.totalSeason}` : '—' }}
             </div>
           </div>
         </div>
 
-        <div v-if="phaseProgress" class="mt-2.5 rounded-xl border border-emerald-400/20 bg-gradient-to-br from-emerald-500/12 to-transparent p-2 dark:border-emerald-400/15">
+        <div v-if="phaseProgress" class="mt-2.5 rounded-xl border border-emerald-300/70 bg-emerald-50 p-2 dark:border-emerald-500/40 dark:bg-emerald-500/12">
           <div class="flex items-center justify-between gap-2 text-[11px]">
-            <span class="truncate text-emerald-700 font-medium dark:text-emerald-300">
+            <span class="truncate text-emerald-700 font-bold dark:text-emerald-300">
               {{ land.phaseName || '当前阶段' }}
             </span>
-            <span class="shrink-0 rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-emerald-600 font-bold tabular-nums dark:text-emerald-300">
+            <span class="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] text-white font-extrabold tabular-nums shadow-sm dark:bg-emerald-400 dark:text-emerald-950">
               {{ phaseProgress.percent }}%
             </span>
           </div>
-          <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-emerald-500/15 dark:bg-emerald-900/50">
+          <div class="mt-1.5 h-2.5 overflow-hidden rounded-full bg-emerald-500/20 ring-1 ring-emerald-500/20 dark:bg-emerald-900/60">
             <div
-              class="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-400 shadow-[0_0_8px_rgba(52,211,153,0.5)] transition-[width] duration-300"
+              class="h-full rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.7)] transition-[width] duration-300"
               :style="{ width: `${phaseProgress.percent}%` }"
             />
           </div>
-          <div v-if="phaseProgress.duration > 0" class="mt-1 flex justify-between text-[10px] text-gray-400 tabular-nums">
+          <div v-if="phaseProgress.duration > 0" class="mt-1 flex justify-between text-[10px] text-emerald-700/70 font-medium tabular-nums dark:text-emerald-300/70">
             <span>已进行 {{ formatTime(phaseProgress.elapsed) }}</span>
             <span>本阶段 {{ formatTime(phaseProgress.duration) }}</span>
           </div>
         </div>
 
-        <div v-if="mutantEffects.length > 0" class="mt-2.5 rounded-xl border border-pink-400/25 bg-gradient-to-br from-pink-500/12 to-transparent p-2 dark:border-pink-400/20">
-          <div class="mb-1 text-[10px] text-pink-500 font-medium dark:text-pink-300">
+        <div v-if="mutantEffects.length > 0" class="mt-2.5 rounded-xl border-l-4 border-pink-400 bg-pink-50 p-2 dark:border-pink-500 dark:bg-pink-500/15">
+          <div class="mb-1 text-[10px] text-pink-600 font-bold dark:text-pink-300">
             变异效果
           </div>
           <div class="flex flex-wrap gap-1.5">
@@ -646,10 +646,10 @@ function getIsometricBubbleClass(targetLand: any) {
         </div>
 
         <div v-if="isFertilizable || isRemovable" class="mt-2.5 grid grid-cols-2 gap-2">
-          <button type="button" class="bubble-action bubble-action-fertilize border-emerald-500/40 text-emerald-700 dark:text-emerald-300" :disabled="!isFertilizable" @click="handleBubbleAction('fertilize')">
+          <button type="button" class="bubble-action bubble-action-fertilize" :disabled="!isFertilizable" @click="handleBubbleAction('fertilize')">
             <span class="i-carbon-growth" />催熟
           </button>
-          <button type="button" class="bubble-action bubble-action-remove border-red-500/40 text-red-600 dark:text-red-300" :disabled="!isRemovable" @click="handleBubbleAction('remove')">
+          <button type="button" class="bubble-action bubble-action-remove" :disabled="!isRemovable" @click="handleBubbleAction('remove')">
             <span class="i-carbon-trash-can" />铲除
           </button>
         </div>
@@ -1312,17 +1312,15 @@ function getIsometricBubbleClass(targetLand: any) {
   width: min(264px, calc(100vw - 32px));
   display: none;
   padding: 14px;
-  border: 1px solid rgb(255 255 255 / 0.65);
+  border: 1px solid rgb(255 255 255 / 0.9);
   border-radius: 16px;
-  background: linear-gradient(165deg, rgb(255 254 250 / 0.92), rgb(250 246 238 / 0.88));
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
-  color: #334155;
+  background: linear-gradient(170deg, #fffdf8 0%, #faf4e8 100%);
+  color: #1e293b;
   text-align: left;
   box-shadow:
-    0 4px 12px rgb(15 23 42 / 0.08),
-    0 18px 40px rgb(15 23 42 / 0.22),
-    inset 0 1px 0 rgb(255 255 255 / 0.7);
+    0 6px 16px rgb(15 23 42 / 0.16),
+    0 20px 44px rgb(15 23 42 / 0.32),
+    inset 0 1px 0 rgb(255 255 255 / 0.9);
   transform: translateX(-50%);
 }
 
@@ -1333,11 +1331,9 @@ function getIsometricBubbleClass(targetLand: any) {
   width: 12px;
   height: 12px;
   content: '';
-  border-left: 1px solid rgb(255 255 255 / 0.65);
-  border-top: 1px solid rgb(255 255 255 / 0.65);
-  background: inherit;
-  backdrop-filter: blur(14px) saturate(1.3);
-  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  border-left: 1px solid rgb(255 255 255 / 0.9);
+  border-top: 1px solid rgb(255 255 255 / 0.9);
+  background: #fffdf8;
   transform: translateX(-50%) rotate(45deg);
 }
 
@@ -1449,32 +1445,35 @@ function getIsometricBubbleClass(targetLand: any) {
   justify-content: center;
   gap: 4px;
   min-height: 32px;
-  border-width: 1px;
+  border: 0;
   border-radius: 10px;
-  background: rgb(255 255 255 / 0.6);
+  color: #fff;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   transition:
-    background-color 0.15s ease,
     transform 0.15s ease,
-    box-shadow 0.15s ease;
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+
+.bubble-action-fertilize {
+  background: linear-gradient(135deg, #10b981, #0d9488);
+  box-shadow: 0 3px 8px rgb(16 185 129 / 0.35);
+}
+
+.bubble-action-remove {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  box-shadow: 0 3px 8px rgb(239 68 68 / 0.35);
 }
 
 .bubble-action:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgb(15 23 42 / 0.12);
+  filter: brightness(1.08);
+  box-shadow: 0 5px 12px rgb(15 23 42 / 0.25);
 }
 
 .bubble-action:active:not(:disabled) {
   transform: translateY(0);
-}
-
-.bubble-action-fertilize:hover:not(:disabled) {
-  background: rgb(16 185 129 / 0.12);
-}
-
-.bubble-action-remove:hover:not(:disabled) {
-  background: rgb(239 68 68 / 0.1);
 }
 
 .bubble-action:disabled {
@@ -1483,22 +1482,20 @@ function getIsometricBubbleClass(targetLand: any) {
 }
 
 :global(.dark) .land-bubble {
-  border-color: rgb(148 163 184 / 0.25);
-  background: linear-gradient(165deg, rgb(30 41 59 / 0.92), rgb(15 23 42 / 0.9));
-  color: #e5e7eb;
+  border-color: rgb(71 85 105 / 0.8);
+  background: linear-gradient(170deg, #263248 0%, #131c2e 100%);
+  color: #f1f5f9;
   box-shadow:
-    0 4px 12px rgb(0 0 0 / 0.3),
-    0 18px 40px rgb(0 0 0 / 0.5),
-    inset 0 1px 0 rgb(255 255 255 / 0.08);
+    0 6px 16px rgb(0 0 0 / 0.4),
+    0 20px 44px rgb(0 0 0 / 0.6),
+    inset 0 1px 0 rgb(255 255 255 / 0.1);
 }
 
 :global(.dark) .land-bubble::before {
-  border-color: rgb(148 163 184 / 0.25);
+  border-color: rgb(71 85 105 / 0.8);
+  background: #263248;
 }
 
-:global(.dark) .bubble-action {
-  background: rgb(255 255 255 / 0.06);
-}
 
 .land-ground-single {
   position: absolute;
