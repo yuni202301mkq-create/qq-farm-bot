@@ -188,7 +188,13 @@ const showThemeDropdown = ref(false)
   >
     <!-- Brand -->
     <div class="relative h-16 flex flex-none items-center justify-between px-2">
-      <div class="min-w-0 flex items-center gap-3">
+      <div class="flex min-w-0 items-center gap-3">
+        <div
+          class="h-11 w-11 flex flex-none items-center justify-center rounded-2xl text-white shadow-lg"
+          style="background: linear-gradient(135deg, #f472b6 0%, #a855f7 55%, #6366f1 100%); box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);"
+        >
+          <div class="i-carbon-sprout text-2xl" />
+        </div>
         <div class="min-w-0">
           <div class="truncate text-[15px] font-bold tracking-tight" style="color: var(--theme-text);">
             {{ loginPageConfig.title || 'QQ农场智能助手' }}

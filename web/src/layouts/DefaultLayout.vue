@@ -38,8 +38,13 @@ onUnmounted(() => {
           >
             <div class="i-carbon-menu text-xl" />
           </button>
-          <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
-            {{ loginPageConfig.title || 'QQ农场智能助手' }}
+          <div class="min-w-0">
+            <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
+              {{ loginPageConfig.title || 'QQ农场智能助手' }}
+            </div>
+            <div class="hidden truncate text-xs text-gray-500 sm:block dark:text-gray-400">
+              自动化工作台 · 账号状态、策略、日志与后台管理集中处理
+            </div>
           </div>
         </div>
 
