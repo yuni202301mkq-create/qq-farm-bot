@@ -127,6 +127,20 @@ async function copyAll() {
   }
 }
 
+function downloadTxt() {
+  if (!lastGenerated.value.length)
+    return
+  const stamp = new Date().toISOString().slice(0, 19).replace('T', '_').replace(/:/g, '-')
+  const blob = new Blob([lastGenerated.value.join('\n')], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `卡密_${stamp}.txt`
+  link.click()
+  URL.revokeObjectURL(url)
+  toastStore.success(`已下载 ${lastGenerated.value.length} 个卡密`)
+}
+
 async function removeKey(code: string) {
   try {
     const { data } = await api.delete(`/api/card-keys/${encodeURIComponent(code)}`)
@@ -222,6 +236,9 @@ onMounted(refresh)
         </BaseButton>
         <BaseButton v-if="lastGenerated.length" variant="ghost" size="sm" @click="copyAll">
           复制全部（{{ lastGenerated.length }}）
+        </BaseButton>
+        <BaseButton v-if="lastGenerated.length" variant="ghost" size="sm" @click="downloadTxt">
+          下载 TXT
         </BaseButton>
       </div>
       <div v-if="lastGenerated.length" class="mt-3 rounded-xl bg-emerald-50 p-3 dark:bg-emerald-900/20">
