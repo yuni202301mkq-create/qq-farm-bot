@@ -144,48 +144,90 @@ onBeforeUnmount(() => {
           </div>
 
           <template v-else>
-            <div class="grid grid-cols-2 gap-2 sm:gap-3">
-              <div class="rounded-2xl bg-white p-3 text-center shadow-sm dark:bg-gray-800 sm:p-4" :title="`精确数量：${formatNumber(totalHarvest)}`">
-                <div class="flex items-center justify-center gap-2 text-xs text-orange-600 sm:text-sm dark:text-orange-300">
-                  <img src="/game-config/career/harvest.png" alt="" class="h-7 w-6 object-contain sm:h-9 sm:w-8">
-                  <span>历史累计收获</span>
+            <!-- 核心统计 -->
+            <div class="grid grid-cols-2 gap-2 sm:gap-4">
+              <div
+                class="relative overflow-hidden rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-500/15 via-orange-500/8 to-transparent p-3 sm:p-5"
+                :title="`精确数量：${formatNumber(totalHarvest)}`"
+              >
+                <div class="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-amber-400/20 blur-2xl sm:h-24 sm:w-24" />
+                <div class="flex items-center gap-2">
+                  <div class="h-8 w-8 flex flex-none items-center justify-center rounded-xl bg-amber-400/20 sm:h-10 sm:w-10">
+                    <img src="/game-config/career/harvest.png" alt="" class="h-6 w-5 object-contain sm:h-8 sm:w-7">
+                  </div>
+                  <span class="text-xs text-amber-600/90 font-medium sm:text-sm dark:text-amber-300/90">历史累计收获</span>
                 </div>
-                <div class="mt-1 text-xl text-orange-600 font-bold sm:text-2xl">
+                <div class="mt-2 bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-right text-2xl font-extrabold text-transparent tabular-nums sm:mt-3 sm:text-3xl">
                   {{ formatCompactNumber(totalHarvest) }}
                 </div>
               </div>
-              <div class="rounded-2xl bg-white p-3 text-center shadow-sm dark:bg-gray-800 sm:p-4" :title="`精确数量：${formatNumber(totalStealCount)}`">
-                <div class="flex items-center justify-center gap-2 text-xs text-rose-600 sm:text-sm dark:text-rose-300">
-                  <img src="/game-config/career/steal.png" alt="" class="h-7 w-7 object-contain sm:h-9 sm:w-9">
-                  <span>摘取好友作物</span>
+              <div
+                class="relative overflow-hidden rounded-2xl border border-rose-400/25 bg-gradient-to-br from-rose-500/15 via-pink-500/8 to-transparent p-3 sm:p-5"
+                :title="`精确数量：${formatNumber(totalStealCount)}`"
+              >
+                <div class="absolute -right-4 -top-4 h-16 w-16 rounded-full bg-rose-400/20 blur-2xl sm:h-24 sm:w-24" />
+                <div class="flex items-center gap-2">
+                  <div class="h-8 w-8 flex flex-none items-center justify-center rounded-xl bg-rose-400/20 sm:h-10 sm:w-10">
+                    <img src="/game-config/career/steal.png" alt="" class="h-6 w-6 object-contain sm:h-8 sm:w-8">
+                  </div>
+                  <span class="text-xs text-rose-600/90 font-medium sm:text-sm dark:text-rose-300/90">摘取好友作物</span>
                 </div>
-                <div class="mt-1 text-xl text-rose-600 font-bold sm:text-2xl">
+                <div class="mt-2 bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-right text-2xl font-extrabold text-transparent tabular-nums sm:mt-3 sm:text-3xl">
                   {{ formatCompactNumber(totalStealCount) }}
                 </div>
-                <div class="mt-0.5 text-[10px] text-gray-400">
+                <div class="mt-0.5 text-right text-[10px] text-gray-400">
                   官方生涯统计
                 </div>
               </div>
             </div>
 
-            <div v-if="topItems.length" class="grid grid-cols-3 mt-4 gap-2 border-t border-amber-100 pt-4 sm:mt-5 sm:gap-3 dark:border-gray-700 sm:pt-5">
-              <div v-for="(item, index) in topItems" :key="item.seedId" class="text-center">
-                <div class="mx-auto mb-1.5 h-6 w-6 flex items-center justify-center rounded-full text-xs text-white font-bold sm:mb-2 sm:h-7 sm:w-7 sm:text-sm" :class="index === 0 ? 'bg-amber-400' : index === 1 ? 'bg-slate-400' : 'bg-orange-400'">
-                  {{ index + 1 }}
-                </div>
-                <div class="mx-auto h-11 w-11 flex items-center justify-center sm:h-16 sm:w-16">
-                  <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">
-                  <div v-else class="i-carbon-sprout text-3xl text-green-400 sm:text-4xl" />
-                </div>
-                <div class="mt-1.5 truncate text-xs text-gray-600 sm:mt-2 sm:text-sm dark:text-gray-300">
-                  {{ item.name }}
-                </div>
-                <div class="text-base text-amber-800 font-bold sm:text-lg dark:text-amber-300">
-                  {{ formatNumber(Number(item.harvestCount)) }}
+            <!-- 收获三甲（领奖台） -->
+            <div v-if="topItems.length" class="mt-4 rounded-2xl border border-gray-200/70 bg-white/60 p-4 sm:mt-5 sm:p-6 dark:border-gray-700/60 dark:bg-gray-800/40">
+              <div class="mb-3 flex items-center justify-center gap-2 sm:mb-4">
+                <div class="i-fas-trophy text-amber-400" />
+                <span class="text-sm text-gray-500 font-semibold tracking-wide sm:text-base dark:text-gray-400">收获三甲</span>
+              </div>
+              <div class="flex items-end justify-center gap-3 sm:gap-6">
+                <div
+                  v-for="(item, index) in topItems"
+                  :key="item.seedId"
+                  class="flex w-1/3 max-w-32 flex-col items-center"
+                  :class="index === 0 ? 'order-2' : index === 1 ? 'order-1' : 'order-3'"
+                >
+                  <div
+                    class="mb-1.5 flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold text-white shadow-md sm:mb-2 sm:h-7 sm:w-7 sm:text-sm"
+                    :class="index === 0
+                      ? 'bg-gradient-to-br from-amber-300 to-amber-500 shadow-amber-500/40'
+                      : index === 1
+                        ? 'bg-gradient-to-br from-slate-300 to-slate-500 shadow-slate-500/40'
+                        : 'bg-gradient-to-br from-orange-300 to-orange-500 shadow-orange-500/40'"
+                  >
+                    {{ index + 1 }}
+                  </div>
+                  <div class="h-12 w-12 flex items-center justify-center drop-shadow-lg sm:h-16 sm:w-16">
+                    <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">
+                    <div v-else class="i-carbon-sprout text-3xl text-green-400 sm:text-4xl" />
+                  </div>
+                  <div class="mt-1.5 w-full max-w-full truncate text-center text-xs text-gray-600 sm:mt-2 sm:text-sm dark:text-gray-300">
+                    {{ item.name }}
+                  </div>
+                  <div
+                    class="mt-1 flex w-full items-end justify-center rounded-t-lg border-t border-x"
+                    :class="index === 0
+                      ? 'h-14 border-amber-400/50 bg-gradient-to-b from-amber-400/25 to-amber-400/5 sm:h-20'
+                      : index === 1
+                        ? 'h-10 border-slate-400/50 bg-gradient-to-b from-slate-400/25 to-slate-400/5 sm:h-14'
+                        : 'h-7 border-orange-400/50 bg-gradient-to-b from-orange-400/25 to-orange-400/5 sm:h-10'"
+                  >
+                    <span class="mb-1 text-xs font-bold tabular-nums sm:text-sm" :class="index === 0 ? 'text-amber-600 dark:text-amber-300' : 'text-gray-500 dark:text-gray-400'">
+                      {{ formatNumber(Number(item.harvestCount)) }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
+            <!-- 收获明细 -->
             <div class="mb-3 mt-5 flex items-baseline gap-2 sm:mt-7">
               <h3 class="text-base text-gray-900 font-bold sm:text-lg dark:text-white">
                 收获明细
@@ -193,20 +235,31 @@ onBeforeUnmount(() => {
               <span class="text-xs text-gray-400 sm:text-sm">({{ harvestedItems.length }})</span>
             </div>
             <div v-if="harvestedItems.length" class="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3">
-              <div v-for="item in harvestedItems" :key="item.seedId" class="rounded-xl bg-white p-2 text-center shadow-sm dark:bg-gray-800 sm:p-3">
-                <div class="mx-auto h-10 w-10 flex items-center justify-center sm:h-12 sm:w-12">
-                  <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain">
+              <div
+                v-for="item in harvestedItems"
+                :key="item.seedId"
+                class="group relative overflow-hidden rounded-xl border border-gray-200/70 bg-white p-2.5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-400/50 hover:shadow-lg hover:shadow-amber-500/10 dark:border-gray-700/60 dark:bg-gray-800 sm:p-3"
+              >
+                <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                <div class="relative mx-auto h-10 w-10 flex items-center justify-center rounded-lg bg-gradient-to-b from-green-500/10 to-transparent sm:h-12 sm:w-12">
+                  <img v-if="item.image" :src="item.image" :alt="item.name" class="max-h-full max-w-full object-contain drop-shadow-md">
                   <div v-else class="i-carbon-sprout text-3xl text-green-400" />
                 </div>
                 <div class="mt-1.5 truncate text-xs text-gray-600 sm:mt-2 dark:text-gray-300">
                   {{ item.name }}
                 </div>
-                <div class="mt-0.5 text-sm text-gray-900 font-bold dark:text-white">
+                <div class="mt-0.5 text-sm text-gray-900 font-bold tabular-nums dark:text-white">
                   {{ formatNumber(Number(item.harvestCount)) }}
+                </div>
+                <div class="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700">
+                  <div
+                    class="h-full rounded-full bg-gradient-to-r from-amber-400 to-orange-500"
+                    :style="{ width: `${Math.max(4, Math.round(Number(item.harvestCount) / Math.max(1, Number(harvestedItems[0]?.harvestCount) || 1)) * 100)}%` }"
+                  />
                 </div>
               </div>
             </div>
-            <div v-else class="rounded-2xl bg-white py-10 text-center text-sm text-gray-400 dark:bg-gray-800 sm:py-12">
+            <div v-else class="rounded-2xl border border-dashed border-gray-200 py-10 text-center text-sm text-gray-400 dark:border-gray-700 dark:bg-gray-800/40 sm:py-12">
               暂无收获记录
             </div>
           </template>
