@@ -326,6 +326,12 @@ onUnmounted(() => {
 .farm-scene-stage :deep(.land-isometric-size-2 .land-card-image-seed img) {
   width: 13%;
 }
+.farm-scene-stage :deep(.land-isometric-size-2 .land-card-image-paradise .land-crop-image) {
+  max-width: none;
+  max-height: none;
+  transform: scale(1.35);
+  transform-origin: 50% 82%;
+}
 .farm-scene-stage :deep(.land-card-name),
 .farm-scene-stage :deep(.land-card-meta),
 .farm-scene-stage :deep(.land-card-season),
