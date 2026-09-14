@@ -231,6 +231,10 @@ const TASK_PERMIT_TIMEOUT_MS = 30000;
 const PERMIT_TIMEOUT = Symbol('task-permit-timeout');
 
 function acquireTaskPermit() {
+    // 已禁用向主进程申请许可：不再做全局并发限制，每个账号自行执行任务，
+    // 避免多账号排队/许可泄漏导致「获取任务许可超时，本轮跳过」。
+    return Promise.resolve(null);
+    /*
     if (resourcePolicy.globalTaskConcurrency <= 0) return Promise.resolve(null);
     const token = String(nextPermitId++);
     return new Promise(resolve => {
@@ -252,6 +256,7 @@ function acquireTaskPermit() {
         });
         sendToMaster({ type: 'task_permit_request', token });
     });
+    */
 }
 
 function releaseTaskPermit(token) {
