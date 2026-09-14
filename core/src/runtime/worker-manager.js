@@ -425,6 +425,14 @@ function createWorkerManager(deps) {
             const token = `${accountId}:${String(msg.token || '')}`;
             permitQueue.push({ accountId, token, proc: wrk.process, requestedAt: Date.now() });
             drainPermitQueue();
+        } else if (msg.type === 'task_permit_cancel') {
+            // worker 等待超时后放弃：清掉排队请求；若授权恰好在竞态窗口内已发出，
+            // 也一并回收名额，否则该并发名额会永久泄漏（worker 不会为它发 release）。
+            const token = `${accountId}:${String(msg.token || '')}`;
+            const queueIndex = permitQueue.findIndex(request => request.token === token);
+            if (queueIndex !== -1) permitQueue.splice(queueIndex, 1);
+            activePermits.delete(token);
+            drainPermitQueue();
         } else if (msg.type === 'task_permit_release') {
             activePermits.delete(`${accountId}:${String(msg.token || '')}`);
             drainPermitQueue();

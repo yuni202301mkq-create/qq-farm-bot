@@ -240,6 +240,9 @@ function acquireTaskPermit() {
             logWarn('调度', `获取任务许可超时(${TASK_PERMIT_TIMEOUT_MS}ms)，本轮跳过`, {
                 module: 'scheduler', event: '任务许可', result: 'timeout', token,
             });
+            // 通知主进程取消：否则若授权在我们放弃后才到达（竞态），主进程会把这个
+            // 名额记为已占用且永远等不到归还，之后所有账号的申请都会排队超时。
+            sendToMaster({ type: 'task_permit_cancel', token });
             resolve(PERMIT_TIMEOUT);
         }, TASK_PERMIT_TIMEOUT_MS);
         if (typeof timer.unref === 'function') timer.unref();
