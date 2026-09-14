@@ -587,11 +587,11 @@ useIntervalFn(loadBag, 60000)
         </template>
       </div>
 
-      <div class="grid grid-cols-2 gap-4 lg:grid-cols-5 md:grid-cols-4 sm:grid-cols-3 xl:grid-cols-6">
+      <div class="grid grid-cols-3 gap-2 sm:grid-cols-3 md:grid-cols-4 sm:gap-4 lg:grid-cols-5 xl:grid-cols-6">
         <div
           v-for="item in filteredItems"
           :key="item.id"
-          class="group relative flex flex-col items-center border rounded-lg bg-white p-3 transition dark:border-gray-700 dark:bg-gray-800 hover:shadow-md"
+          class="group relative flex flex-col items-center border rounded-lg bg-white p-2 transition sm:p-3 dark:border-gray-700 dark:bg-gray-800 hover:shadow-md"
           :class="{
             'ring-2 ring-orange-500 dark:ring-orange-400': batchMode && selectedForBatch.has(Number(item.id)),
             'opacity-50': batchMode && canBatchSell(item) && !selectedForBatch.has(Number(item.id)),
@@ -602,7 +602,7 @@ useIntervalFn(loadBag, 60000)
             ? (isSeedItem(item) && handleLockClick(item))
             : (batchMode && canBatchSell(item) && handleSellClick(item))"
         >
-          <div class="absolute left-2 top-2 text-xs text-gray-400 font-mono">
+          <div class="absolute left-2 top-2 hidden text-xs text-gray-400 font-mono sm:block">
             #{{ item.id }}
           </div>
 
@@ -661,7 +661,7 @@ useIntervalFn(loadBag, 60000)
           </div>
 
           <div
-            class="thumb-wrap mb-2 mt-6 h-16 w-16 flex items-center justify-center rounded-full bg-gray-50 dark:bg-gray-700/50"
+            class="thumb-wrap mb-2 mt-6 h-14 w-14 flex items-center justify-center rounded-full bg-gray-50 sm:h-16 sm:w-16 dark:bg-gray-700/50"
             :data-fallback="(item.name || '物').slice(0, 1)"
           >
             <img
@@ -677,7 +677,7 @@ useIntervalFn(loadBag, 60000)
             </div>
           </div>
 
-          <div class="mb-1 w-full flex items-center justify-center gap-1 px-2 text-center text-sm font-bold" :title="item.name">
+          <div class="mb-1 w-full flex items-center justify-center gap-1 px-1 text-center text-xs font-bold sm:px-2 sm:text-sm" :title="item.name">
             <span class="truncate">{{ item.name || `物品${item.id}` }}</span>
             <span
               v-if="getItemCategory(item) === 'seed' && Number(item.plantSize) === 2"
@@ -688,8 +688,8 @@ useIntervalFn(loadBag, 60000)
             </span>
           </div>
 
-          <div class="mb-2 flex flex-col items-center gap-0.5 text-xs text-gray-400">
-            <span v-if="item.uid">UID: {{ item.uid }}</span>
+          <div class="mb-2 flex flex-col items-center gap-0.5 text-[10px] text-gray-400 sm:text-xs">
+            <span v-if="item.uid" class="hidden sm:inline">UID: {{ item.uid }}</span>
             <span>
               类型: {{ item.itemType || 0 }}
               <span v-if="getItemCategory(item) === 'seed' && Number(item.rarity) >= 2"> · 稀有</span>
@@ -699,7 +699,7 @@ useIntervalFn(loadBag, 60000)
             </span>
           </div>
 
-          <div class="mt-auto font-medium" :class="item.hoursText ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'">
+          <div class="mt-auto text-sm font-medium sm:text-base" :class="item.hoursText ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'">
             {{ item.hoursText || `x${item.count || 0}` }}
           </div>
         </div>
