@@ -375,13 +375,19 @@ function confirmDefaultPlanOperation() {
     void applyDefaultPlan(pending.account)
 }
 
+// 账号设置数据就绪标记：取号 + 拉取设置完成前，账号设置页显示加载态，
+// 避免先用默认/旧值渲染出错误的开关状态再"自动刷新"
+const accountDataReady = ref(false)
+
 watch(currentAccountId, async () => {
   settingStore.clearSettingsState()
   resetStrategyState()
+  accountDataReady.value = false
   if (currentAccountId.value) {
     await loadStrategyData()
     syncLocalAutomationSettings()
     syncLocalOfflineSettings()
+    accountDataReady.value = true
   }
 })
 
@@ -408,6 +414,7 @@ onMounted(async () => {
     syncLocalAutomationSettings()
     syncLocalOfflineSettings()
   }
+  accountDataReady.value = true
   await scrollActiveTabIntoView()
 })
 </script>
@@ -486,7 +493,7 @@ onMounted(async () => {
           v-model:automation="localAutomationSettings"
           :current-account-name="currentAccountName"
           :current-account-id="currentAccountId"
-          :loading="settingsLoading"
+          :loading="settingsLoading || !accountDataReady"
           :saving="accountSettingsSaving"
           :planting-strategy-options="plantingStrategyOptions"
           :bag-fallback-strategy-options="bagFallbackStrategyOptions"
