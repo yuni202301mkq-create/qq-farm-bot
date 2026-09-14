@@ -510,7 +510,10 @@ onMounted(async () => {
         </div>
 
         <div v-else-if="activeTab === 'system'" class="space-y-5">
-          <!-- 连接参数、设备协议、抓包服务、自动刷新验证码均为超管专属，普通用户不渲染也不请求；用户管理对所有用户开放 -->
+          <!-- 用户管理（含修改密码）对所有用户开放，固定在系统配置最上方 -->
+          <ChangePasswordCard />
+
+          <!-- 连接参数、设备协议、抓包服务、自动刷新验证码均为超管专属，普通用户不渲染也不请求 -->
           <template v-if="userStore.isSuperAdmin">
           <div class="sticky top-0 z-10 flex items-center justify-between border border-gray-200 rounded-xl bg-white/95 p-4 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
             <div>
@@ -605,8 +608,6 @@ onMounted(async () => {
             @open-docs="openChannelDocs"
             @test="handleTestOffline"
           />
-
-          <ChangePasswordCard />
         </div>
 
         <div v-else-if="activeTab === 'cardkey'" class="space-y-4">
