@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Account } from '@/stores/account'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { accountAvatarUrl, remoteAvatarUrl } from '@/utils/avatar'
 
 interface CareerItem {
   seedId: number
@@ -32,7 +33,9 @@ const harvestedItems = computed(() => (props.items || [])
 const totalHarvest = computed(() => Number(props.profile?.totalHarvestCount ?? harvestedItems.value.reduce((sum, item) => sum + Number(item.harvestCount || 0), 0)))
 const topItems = computed(() => harvestedItems.value.slice(0, 3))
 const name = computed(() => String(props.profile?.name || props.account?.nick || props.account?.name || '农场主'))
-const avatar = computed(() => String(props.profile?.avatar || props.account?.avatar || ''))
+// 头像统一走同源代理：远程头像 URL 编码代理，兜底按账号 id 取后端代理头像
+const avatar = computed(() =>
+  remoteAvatarUrl(props.profile?.avatar || props.account?.avatar) || accountAvatarUrl(props.account))
 const level = computed(() => Number(props.profile?.level || 0))
 const exp = computed(() => Number(props.profile?.exp || 0))
 const gid = computed(() => String(props.profile?.gid || ''))
