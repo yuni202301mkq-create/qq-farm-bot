@@ -565,10 +565,10 @@ function getIsometricBubbleClass(targetLand: any) {
       >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="text-[10px] tracking-wide text-gray-600 dark:text-gray-300">
+            <div class="land-bubble-sub text-[10px] tracking-wide">
               土地 #{{ land.id }}
             </div>
-            <div class="truncate text-sm text-gray-950 font-extrabold dark:text-white">
+            <div class="land-bubble-title truncate text-sm">
               {{ land.plantName || '未种植' }}
             </div>
           </div>
@@ -577,20 +577,20 @@ function getIsometricBubbleClass(targetLand: any) {
 
         <div class="grid grid-cols-2 mt-2.5 gap-2 text-xs">
           <div class="rounded-xl border-l-4 border-orange-400 bg-orange-50/80 p-2 dark:border-orange-500 dark:bg-orange-500/15">
-            <div class="flex items-center gap-1 text-[10px] text-orange-800 font-semibold dark:text-orange-200">
+            <div class="land-bubble-label text-[10px] font-semibold" style="color:#9a3412">
               <span class="i-carbon-timer" />
               成熟倒计时
             </div>
-            <div class="mt-0.5 text-sm text-orange-950 font-extrabold tabular-nums dark:text-orange-50">
+            <div class="land-bubble-value text-sm font-extrabold tabular-nums" style="color:#431407">
               {{ land.matureInSec > 0 ? formatTime(land.matureInSec) : '—' }}
             </div>
           </div>
           <div class="rounded-xl border-l-4 border-sky-400 bg-sky-50 p-2 dark:border-sky-500 dark:bg-sky-500/15">
-            <div class="flex items-center gap-1 text-[10px] text-sky-800 font-semibold dark:text-sky-200">
+            <div class="land-bubble-label text-[10px] font-semibold" style="color:#075985">
               <span class="i-carbon-renew" />
               生长季数
             </div>
-            <div class="mt-0.5 text-sm text-sky-950 font-extrabold tabular-nums dark:text-sky-50">
+            <div class="land-bubble-value text-sm font-extrabold tabular-nums" style="color:#082f49">
               {{ land.totalSeason > 0 ? `${land.currentSeason}/${land.totalSeason}` : '—' }}
             </div>
           </div>
@@ -1315,7 +1315,8 @@ function getIsometricBubbleClass(targetLand: any) {
   border: 1px solid rgb(255 255 255 / 0.9);
   border-radius: 16px;
   background: #ffffff;
-  color: #1e293b;
+  color: #0f172a;
+  opacity: 1;
   text-align: left;
   box-shadow:
     0 6px 16px rgb(15 23 42 / 0.16),
@@ -1479,6 +1480,31 @@ function getIsometricBubbleClass(targetLand: any) {
 .bubble-action:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+
+.land-bubble-title,
+.land-bubble-sub,
+.land-bubble-label,
+.land-bubble-value {
+  opacity: 1 !important;
+  text-shadow: none !important;
+  mix-blend-mode: normal !important;
+}
+
+.land-bubble-title {
+  color: #0f172a !important;
+}
+
+.land-bubble-sub {
+  color: #475569 !important;
+}
+
+:global(.dark) .land-bubble-title {
+  color: #f8fafc !important;
+}
+
+:global(.dark) .land-bubble-sub {
+  color: #94a3b8 !important;
 }
 
 :global(.dark) .land-bubble {
