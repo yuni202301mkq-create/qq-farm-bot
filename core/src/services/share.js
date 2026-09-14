@@ -114,17 +114,40 @@ async function performDailyShare(force = false) {
 
   try {
     // 检查是否可以分享
-    const canShareResult = await checkCanShare();
+    let canShareResult = null;
+    try {
+      canShareResult = await checkCanShare();
+    } catch (err) {
+      log('分享', `检查分享状态失败: ${err.message}`, { module: 'task', event: DAILY_KEY, result: 'error', step: 'check' });
+      return false;
+    }
     if (!canShareResult || !canShareResult.can_share) {
       markDoneToday();
-      log('分享', '今日暂无可领取分享礼包', { module: 'task', event: DAILY_KEY, result: 'none' });
+      log('分享', '今日暂无可领取分享礼包', {
+        module: 'task', event: DAILY_KEY, result: 'none',
+        raw: JSON.stringify(canShareResult || {}),
+      });
       return false;
     }
 
     // 上报分享
-    const reportResult = await reportShare();
+    let reportResult = null;
+    try {
+      reportResult = await reportShare();
+    } catch (err) {
+      if (isAlreadyClaimedError(err)) {
+        markDoneToday();
+        log('分享', '今日分享奖励已领取', { module: 'task', event: DAILY_KEY, result: 'none', step: 'report' });
+        return false;
+      }
+      log('分享', `上报分享状态失败: ${err.message}`, { module: 'task', event: DAILY_KEY, result: 'error', step: 'report' });
+      return false;
+    }
     if (!reportResult || !reportResult.success) {
-      log('分享', '上报分享状态失败', { module: 'task', event: DAILY_KEY, result: 'error' });
+      log('分享', '上报分享状态失败', {
+        module: 'task', event: DAILY_KEY, result: 'error', step: 'report',
+        raw: JSON.stringify(reportResult || {}),
+      });
       return false;
     }
 
@@ -142,7 +165,10 @@ async function performDailyShare(force = false) {
     }
 
     if (!claimResult || !claimResult.success) {
-      log('分享', '领取分享礼包失败', { module: 'task', event: DAILY_KEY, result: 'error' });
+      log('分享', '领取分享礼包失败', {
+        module: 'task', event: DAILY_KEY, result: 'error', step: 'claim',
+        raw: JSON.stringify(claimResult || {}),
+      });
       return false;
     }
 
