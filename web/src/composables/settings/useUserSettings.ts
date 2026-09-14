@@ -255,36 +255,6 @@ export function useUserSettings(showAlert: (message: string, type?: AlertType) =
     }
   }
 
-  async function handleSaveDeviceProtocol() {
-    deviceProtocolSaving.value = true
-    try {
-      const payload = {
-        enabled: !!deviceProtocolForm.value.enabled,
-        userAgent: String(deviceProtocolForm.value.userAgent || '').trim(),
-        deviceBrand: String(deviceProtocolForm.value.deviceBrand || '').trim(),
-        deviceModel: String(deviceProtocolForm.value.deviceModel || '').trim(),
-        deviceMac: String(deviceProtocolForm.value.deviceMac || '').trim(),
-        deviceId: String(deviceProtocolForm.value.deviceId || '').trim(),
-        imei: String(deviceProtocolForm.value.imei || '').trim(),
-      }
-      const { data } = await api.post('/api/user/device-protocol', payload)
-      if (data?.ok) {
-        applyDeviceProtocolConfig(data.config)
-        showAlert('设备协议配置已保存', 'primary')
-      }
-      else {
-        showAlert(`保存失败: ${data?.error || '未知错误'}`, 'danger')
-      }
-    }
-    catch (e: any) {
-      const msg = e?.response?.data?.error || e?.message || '请求失败'
-      showAlert(`保存失败: ${msg}`, 'danger')
-    }
-    finally {
-      deviceProtocolSaving.value = false
-    }
-  }
-
   function syncLocalOfflineSettings() {
     if (settings.value?.offlineReminder) {
       localOffline.value = JSON.parse(JSON.stringify(settings.value.offlineReminder))
@@ -351,7 +321,6 @@ export function useUserSettings(showAlert: (message: string, type?: AlertType) =
     applyDevicePreset,
     fetchDeviceProtocol,
     syncLocalOfflineSettings,
-    handleSaveDeviceProtocol,
     handleSaveOffline,
     handleTestOffline,
   }

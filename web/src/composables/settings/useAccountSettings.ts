@@ -64,6 +64,18 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
   // 记录每个账号上次已提示过的失败时间戳，避免轮询期间重复弹窗
   const notifiedStartErrors = new Map<string, number>()
 
+  // 通知里不展示内部错误码和 rid 等技术细节，完整信息保留在账号卡片的悬停提示里
+  function formatStartError(message: unknown): string {
+    const text = String(message || '').trim()
+    if (!text)
+      return '未知错误'
+    return text
+      .replace(/\s*msg=[\s\S]*$/, '')
+      .replace(/\s*code=\S*/g, '')
+      .replace(/[:\s]+$/, '')
+      .trim() || text
+  }
+
   watch(accounts, (list) => {
     if (!Array.isArray(list))
       return
@@ -79,9 +91,9 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
           notifiedStartErrors.set(id, stamp)
           const name = acc.name || acc.nick || id
           toastStore.add(
-            `账号「${name}」启动失败：${acc.startError}`,
+            `账号「${name}」启动失败：${formatStartError(acc.startError)}`,
             'error',
-            0,
+            3000,
             {
               label: acc.platform === 'wx' ? '重新获取微信Code' : '重新获取',
               handler: () => {

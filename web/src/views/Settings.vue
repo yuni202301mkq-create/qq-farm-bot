@@ -25,15 +25,17 @@ const settingStore = useSettingStore()
 const userStore = useUserStore()
 const route = useRoute()
 
-type SettingsTabKey = 'account' | 'account-config' | 'notification' | 'performance' | 'usermgmt' | 'system' | 'cardkey'
+type SettingsTabKey = 'account' | 'account-config' | 'performance' | 'system' | 'cardkey'
 
-const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'account-config', 'notification', 'performance', 'usermgmt', 'system', 'cardkey']
+const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'account-config', 'performance', 'system', 'cardkey']
 const LEGACY_SETTINGS_TABS: Record<string, SettingsTabKey> = {
   'strategy': 'account-config',
   'automation': 'account-config',
   'default-plan': 'account-config',
-  'user': 'notification',
+  'user': 'system',
+  'notification': 'system',
   'capture': 'system',
+  'usermgmt': 'system',
 }
 
 function getInitialSettingsTab(): SettingsTabKey {
@@ -64,9 +66,9 @@ watch(activeTab, (newTab) => {
   void scrollActiveTabIntoView()
 })
 
-// 普通用户没有系统配置/卡密设置页签，避免停留在不可见的 tab 上
+// 普通用户没有卡密设置页签，避免停留在不可见的 tab 上
 watch(() => userStore.isSuperAdmin, (isSuper) => {
-  if (!isSuper && (activeTab.value === 'system' || activeTab.value === 'cardkey'))
+  if (!isSuper && activeTab.value === 'cardkey')
     activeTab.value = 'account'
 }, { immediate: true })
 
@@ -74,14 +76,12 @@ const tabs = computed(() => {
   const all = [
     { key: 'account', label: '账号管理', icon: 'i-carbon-user-settings' },
     { key: 'account-config', label: '账号设置', icon: 'i-carbon-settings-adjust' },
-    { key: 'notification', label: '通知设置', icon: 'i-carbon-notification' },
     { key: 'performance', label: '界面性能', icon: 'i-carbon-dashboard' },
-    { key: 'usermgmt', label: '用户管理', icon: 'i-carbon-user' },
     { key: 'system', label: '系统配置', icon: 'i-carbon-settings-services' },
     { key: 'cardkey', label: '卡密设置', icon: 'i-carbon-ticket' },
   ] as const
-  // 系统配置与卡密设置仅超级管理员可见；用户管理所有登录用户可见
-  return userStore.isSuperAdmin ? all : all.filter(tab => tab.key !== 'system' && tab.key !== 'cardkey')
+  // 卡密设置仅超级管理员可见；系统配置对全部用户开放（普通用户其中仅见用户管理）
+  return userStore.isSuperAdmin ? all : all.filter(tab => tab.key !== 'cardkey')
 })
 
 const modalVisible = ref(false)
@@ -269,7 +269,7 @@ async function saveAutoCodeRefreshSettings() {
   }
 }
 
-function openAccountSettings(account: any) {
+async function openAccountSettings(account: any) {
   selectAccount(account)
   activeTab.value = 'account-config'
 }
@@ -396,11 +396,12 @@ watch(() => accounts.value.find((a: any) => String(a.id) === String(currentAccou
 })
 
 onMounted(async () => {
-  // 系统配置/抓包配置仅超管可见，普通用户不请求，避免 403 报错弹窗
-  if (userStore.isSuperAdmin)
+  // 系统配置/抓包配置/设备协议仅超管可见，普通用户不请求，避免 403 报错弹窗
+  if (userStore.isSuperAdmin) {
     await Promise.all([loadSystemConfig(), loadCaptureConfig()])
+    await fetchDeviceProtocol()
+  }
   await fetchAccounts()
-  await fetchDeviceProtocol()
   selectFirstAccountIfNeeded()
   if (currentAccountId.value) {
     await loadStrategyData()
@@ -496,32 +497,6 @@ onMounted(async () => {
           @save="saveCurrentAccountSettings"
         />
 
-        <div v-else-if="activeTab === 'notification'" class="space-y-4">
-          <div class="flex flex-wrap items-center justify-between gap-3">
-            <div class="min-w-0">
-              <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-                通知设置
-              </h3>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                配置账号离线后的通知渠道和消息内容。
-              </p>
-            </div>
-            <BaseButton size="sm" :loading="offlineSaving" :disabled="offlineTesting" @click="handleSaveOffline">
-              保存通知设置
-            </BaseButton>
-          </div>
-          <OfflineReminderCard
-            v-model:config="localOffline"
-            :channel-options="channelOptions"
-            :current-channel-doc-url="currentChannelDocUrl"
-            :saving="offlineSaving"
-            :testing="offlineTesting"
-            :show-save="false"
-            @open-docs="openChannelDocs"
-            @test="handleTestOffline"
-          />
-        </div>
-
         <div v-else-if="activeTab === 'performance'" class="space-y-4">
           <div>
             <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
@@ -534,26 +509,16 @@ onMounted(async () => {
           <PerformanceModeCard />
         </div>
 
-        <div v-else-if="activeTab === 'usermgmt'" class="space-y-4">
-          <div>
-            <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-              用户管理
-            </h3>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              管理登录账号，修改登录密码。
-            </p>
-          </div>
-          <ChangePasswordCard />
-        </div>
-
         <div v-else-if="activeTab === 'system'" class="space-y-5">
+          <!-- 连接参数、设备协议、抓包服务、自动刷新验证码均为超管专属，普通用户不渲染也不请求；用户管理对所有用户开放 -->
+          <template v-if="userStore.isSuperAdmin">
           <div class="sticky top-0 z-10 flex items-center justify-between border border-gray-200 rounded-xl bg-white/95 p-4 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
             <div>
               <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
                 系统配置
               </h3>
               <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                统一管理连接参数、设备协议和抓包服务。
+                统一管理连接参数、设备协议、抓包服务、离线通知和用户账号。
               </p>
             </div>
             <BaseButton size="sm" :loading="anySystemSaving" @click="saveSystemSettings">
@@ -615,6 +580,33 @@ onMounted(async () => {
             :capture-config-testing="captureConfigTesting"
             @test-capture="handleTestCaptureConfig"
           />
+          </template>
+
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+              <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
+                通知设置
+              </h3>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                配置账号离线后的通知渠道和消息内容。
+              </p>
+            </div>
+            <BaseButton size="sm" :loading="offlineSaving" :disabled="offlineTesting" @click="handleSaveOffline">
+              保存通知设置
+            </BaseButton>
+          </div>
+          <OfflineReminderCard
+            v-model:config="localOffline"
+            :channel-options="channelOptions"
+            :current-channel-doc-url="currentChannelDocUrl"
+            :saving="offlineSaving"
+            :testing="offlineTesting"
+            :show-save="false"
+            @open-docs="openChannelDocs"
+            @test="handleTestOffline"
+          />
+
+          <ChangePasswordCard />
         </div>
 
         <div v-else-if="activeTab === 'cardkey'" class="space-y-4">

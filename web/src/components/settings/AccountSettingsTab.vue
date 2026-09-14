@@ -162,7 +162,7 @@ function accountAvatar(acc: any) {
             </div>
           </div>
           <div class="flex items-center justify-end gap-2 sm:flex-col sm:items-end">
-            <span class="flex items-center gap-1 text-xs text-gray-500 sm:hidden">
+            <span class="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap text-gray-500 sm:hidden">
               <div class="h-2 w-2 rounded-full" :class="acc.running ? 'bg-green-500' : 'bg-gray-300'" />
               {{ acc.running ? '运行中' : '已停止' }}
             </span>
@@ -204,7 +204,7 @@ function accountAvatar(acc: any) {
         </div>
 
         <div class="mt-3 flex items-center justify-between border-t border-gray-100 pt-3 sm:mt-4 dark:border-gray-700 sm:pt-4">
-          <div class="hidden items-center gap-2 text-sm text-gray-500 sm:flex">
+          <div class="hidden shrink-0 items-center gap-2 text-sm whitespace-nowrap text-gray-500 sm:flex">
             <span class="flex items-center gap-1">
               <div class="h-2 w-2 rounded-full" :class="acc.running ? 'bg-green-500' : 'bg-gray-300'" />
               {{ acc.running ? '运行中' : '已停止' }}

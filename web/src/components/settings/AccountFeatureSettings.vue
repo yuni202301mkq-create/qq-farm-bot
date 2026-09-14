@@ -8,6 +8,7 @@ import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
 import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import { useToastStore } from '@/stores/toast'
 
 type ModuleKey = 'planting' | 'fertilizer' | 'friends' | 'steal' | 'merchant' | 'activity'
 
@@ -33,6 +34,65 @@ const automation = defineModel<any>('automation', { required: true })
 const activeModule = ref<ModuleKey | null>(null)
 const editSnapshot = ref<{ strategy: any, automation: any } | null>(null)
 const qixiFriends = ref<Array<{ gid: number, name: string }>>([])
+// 开关自动保存：配置面板内切换布尔开关即提交，非开关字段仍由「完成」统一保存
+const AUTO_SAVE_DEBOUNCE_MS = 500
+let autoSaveTimer: ReturnType<typeof setTimeout> | undefined
+const autoSaveSnapshot = ref<{ strategy: string, automation: string }>({ strategy: '', automation: '' })
+const toastStore = useToastStore()
+
+function refreshAutoSaveSnapshot() {
+  autoSaveSnapshot.value = {
+    strategy: JSON.stringify(strategy.value || {}),
+    automation: JSON.stringify(automation.value || {}),
+  }
+}
+
+watch([strategy, automation], () => {
+  if (!activeModule.value) {
+    // 面板未打开时的变化来自父级同步（加载/切号/保存后回填），只刷新基线不保存
+    refreshAutoSaveSnapshot()
+    return
+  }
+  const currentStrategy = JSON.stringify(strategy.value || {})
+  const currentAutomation = JSON.stringify(automation.value || {})
+  const prev = autoSaveSnapshot.value
+  if (currentStrategy === prev.strategy && currentAutomation === prev.automation)
+    return
+  // 只对布尔开关的变化自动保存；文本、下拉等字段仍由「完成」按钮提交
+  const changedKeys = new Set<string>()
+  for (const [index, current] of [currentStrategy, currentAutomation].entries()) {
+    const previous = index === 0 ? prev.strategy : prev.automation
+    if (current === previous)
+      continue
+    const currentObj = JSON.parse(current) as Record<string, any>
+    const previousObj = JSON.parse(previous) as Record<string, any>
+    collectBooleanDiff(index === 0 ? currentObj : currentObj.automation || {}, index === 0 ? previousObj : previousObj.automation || {}, changedKeys)
+  }
+  if (!changedKeys.size)
+    return
+  clearTimeout(autoSaveTimer)
+  autoSaveTimer = setTimeout(() => {
+    if (!activeModule.value)
+      return
+    // 已自动保存的开关视为已提交，取消面板时不再回退它们
+    editSnapshot.value = {
+      strategy: JSON.parse(JSON.stringify(strategy.value)),
+      automation: JSON.parse(JSON.stringify(automation.value)),
+    }
+    emit('save', activeModule.value, true)
+    refreshAutoSaveSnapshot()
+    toastStore.success('开关已自动保存')
+  }, AUTO_SAVE_DEBOUNCE_MS)
+}, { deep: true })
+
+function collectBooleanDiff(current: Record<string, any>, previous: Record<string, any>, out: Set<string>) {
+  for (const key of Object.keys(current)) {
+    if (typeof current[key] !== 'boolean' || typeof previous[key] !== 'boolean')
+      continue
+    if (current[key] !== previous[key])
+      out.add(key)
+  }
+}
 const SHOW_STAR_ACTIVITY = false
 const SHOW_QIXI_ACTIVITY = false
 const nowMs = ref(Date.now())
@@ -244,14 +304,6 @@ function openModule(key: ModuleKey) {
   }
   activeModule.value = key
 }
-function cancel() {
-  if (editSnapshot.value) {
-    strategy.value = editSnapshot.value.strategy
-    automation.value = editSnapshot.value.automation
-  }
-  editSnapshot.value = null
-  activeModule.value = null
-}
 onMounted(() => {
   loadQixiFriends()
   nowTimer = window.setInterval(() => {
@@ -331,7 +383,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
       <!-- 移动端：用 100dvh 限高（94vh 会低于浏览器底栏、页脚被遮）；垂直位置交给弹窗的 my-auto ——
            有富余空间时上下 auto 外边距平分即「居中」，空间不够时归零即「贴顶可滚」。
            这样不必用任何宽度断点，也不会重蹈 place-items-center 把标题挤出屏幕顶部且滚不到的覆辙。 -->
-      <div v-if="activeModule && activeInfo" class="fixed inset-0 z-50 grid justify-items-center items-start overflow-y-auto bg-gray-950/45 p-4 backdrop-blur-[2px] sm:p-6" @click.self="cancel">
+      <div v-if="activeModule && activeInfo" class="fixed inset-0 z-50 grid justify-items-center items-start overflow-y-auto bg-gray-950/45 p-4 backdrop-blur-[2px] sm:p-6" @click.self="finish">
         <section class="my-auto max-h-[calc(100dvh-2rem)] max-w-4xl w-full flex flex-col overflow-hidden border border-gray-200 rounded-lg bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800 lg:max-h-[94vh]">
           <header class="flex items-start justify-between gap-3 border-b border-gray-100 px-4 py-3.5 dark:border-gray-700 sm:gap-4 sm:px-6 sm:py-4">
             <div class="min-w-0 flex items-start gap-3">
@@ -351,7 +403,7 @@ watch(() => props.currentAccountId, loadQixiFriends)
                 </p>
               </div>
             </div>
-            <button class="h-11 w-11 flex shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" @click="cancel">
+            <button class="h-11 w-11 flex shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700" @click="finish">
               <span class="i-carbon-close text-xl" />
             </button>
           </header>
@@ -665,11 +717,8 @@ watch(() => props.currentAccountId, loadQixiFriends)
             </div>
           </div>
           <footer class="flex shrink-0 justify-end gap-2 border-t bg-gray-50/70 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] dark:border-gray-700 dark:bg-gray-900/20 sm:px-6 sm:py-4">
-            <BaseButton variant="secondary" size="sm" class="flex-1 sm:flex-none" @click="cancel">
-              取消
-            </BaseButton>
             <BaseButton size="sm" class="flex-1 sm:flex-none" :loading="saving" @click="finish">
-              保存并关闭
+              关闭
             </BaseButton>
           </footer>
         </section>
