@@ -83,7 +83,7 @@ const session = {
 // “本次在线”语义：仅保存在内存里，账号启动（initStatsWithPersistence）时清零。
 // 金币下降在 updateStats 里被观察到时落一条记录；若有“待归因消费上下文”
 // （如刚偷菜 → 被护主犬扣款），则带上好友/作物明细，否则记为通用消耗。
-const CONSUMPTION_RECORD_MAX = 200;
+const CONSUMPTION_RECORD_MAX = 100;
 const PENDING_SPEND_TTL_MS = 2 * 60 * 1000;
 const PENDING_SPEND_MAX = 20;
 
