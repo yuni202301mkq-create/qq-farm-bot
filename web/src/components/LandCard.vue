@@ -565,10 +565,10 @@ function getIsometricBubbleClass(targetLand: any) {
       >
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <div class="text-[10px] tracking-wide text-gray-500 dark:text-gray-400">
+            <div class="text-[10px] tracking-wide text-gray-600 dark:text-gray-300">
               土地 #{{ land.id }}
             </div>
-            <div class="truncate text-sm text-gray-900 font-bold dark:text-gray-100">
+            <div class="truncate text-sm text-gray-950 font-extrabold dark:text-white">
               {{ land.plantName || '未种植' }}
             </div>
           </div>
@@ -576,21 +576,21 @@ function getIsometricBubbleClass(targetLand: any) {
         </div>
 
         <div class="grid grid-cols-2 mt-2.5 gap-2 text-xs">
-          <div class="rounded-xl border-l-4 border-orange-400 bg-orange-50 p-2 dark:border-orange-500 dark:bg-orange-500/15">
-            <div class="flex items-center gap-1 text-[10px] text-orange-700 font-semibold dark:text-orange-200">
+          <div class="rounded-xl border-l-4 border-orange-400 bg-orange-50/80 p-2 dark:border-orange-500 dark:bg-orange-500/15">
+            <div class="flex items-center gap-1 text-[10px] text-orange-800 font-semibold dark:text-orange-200">
               <span class="i-carbon-timer" />
               成熟倒计时
             </div>
-            <div class="mt-0.5 text-sm text-orange-900 font-extrabold tabular-nums dark:text-orange-100">
+            <div class="mt-0.5 text-sm text-orange-950 font-extrabold tabular-nums dark:text-orange-50">
               {{ land.matureInSec > 0 ? formatTime(land.matureInSec) : '—' }}
             </div>
           </div>
           <div class="rounded-xl border-l-4 border-sky-400 bg-sky-50 p-2 dark:border-sky-500 dark:bg-sky-500/15">
-            <div class="flex items-center gap-1 text-[10px] text-sky-700 font-semibold dark:text-sky-200">
+            <div class="flex items-center gap-1 text-[10px] text-sky-800 font-semibold dark:text-sky-200">
               <span class="i-carbon-renew" />
               生长季数
             </div>
-            <div class="mt-0.5 text-sm text-sky-900 font-extrabold tabular-nums dark:text-sky-100">
+            <div class="mt-0.5 text-sm text-sky-950 font-extrabold tabular-nums dark:text-sky-50">
               {{ land.totalSeason > 0 ? `${land.currentSeason}/${land.totalSeason}` : '—' }}
             </div>
           </div>
@@ -598,7 +598,7 @@ function getIsometricBubbleClass(targetLand: any) {
 
         <div v-if="phaseProgress" class="mt-2.5 rounded-xl border border-emerald-300/70 bg-emerald-50 p-2 dark:border-emerald-500/40 dark:bg-emerald-500/12">
           <div class="flex items-center justify-between gap-2 text-[11px]">
-            <span class="truncate text-emerald-800 font-bold dark:text-emerald-200">
+            <span class="truncate text-emerald-900 font-bold dark:text-emerald-100">
               {{ land.phaseName || '当前阶段' }}
             </span>
             <span class="shrink-0 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] text-white font-extrabold tabular-nums shadow-sm dark:bg-emerald-400 dark:text-emerald-950">
@@ -611,7 +611,7 @@ function getIsometricBubbleClass(targetLand: any) {
               :style="{ width: `${phaseProgress.percent}%` }"
             />
           </div>
-          <div v-if="phaseProgress.duration > 0" class="mt-1 flex justify-between text-[10px] text-emerald-900/90 font-medium tabular-nums dark:text-emerald-200/90">
+          <div v-if="phaseProgress.duration > 0" class="mt-1 flex justify-between text-[10px] text-emerald-950 font-semibold tabular-nums dark:text-emerald-100">
             <span>已进行 {{ formatTime(phaseProgress.elapsed) }}</span>
             <span>本阶段 {{ formatTime(phaseProgress.duration) }}</span>
           </div>
@@ -632,7 +632,7 @@ function getIsometricBubbleClass(targetLand: any) {
               <span v-if="effect.tag && effect.tag !== '无'" class="text-[10px] text-pink-500 font-semibold">· {{ effect.tag }}</span>
             </div>
           </div>
-          <div class="mt-2 space-y-1 rounded-lg bg-white/85 px-2 py-1.5 text-[11px] text-pink-800 shadow-sm dark:bg-gray-900/85 dark:text-pink-100">
+          <div class="mt-2 space-y-1 rounded-lg bg-white/85 px-2 py-1.5 text-[11px] text-pink-900 shadow-sm dark:bg-gray-900/85 dark:text-pink-100">
             <div v-for="effect in mutantEffects" :key="`description-${effect.id}-${effect.icon}`">
               {{ effect.description || effect.name }}
             </div>
@@ -1314,7 +1314,7 @@ function getIsometricBubbleClass(targetLand: any) {
   padding: 14px;
   border: 1px solid rgb(255 255 255 / 0.9);
   border-radius: 16px;
-  background: linear-gradient(170deg, #fffdf8 0%, #faf4e8 100%);
+  background: #ffffff;
   color: #1e293b;
   text-align: left;
   box-shadow:
@@ -1333,7 +1333,7 @@ function getIsometricBubbleClass(targetLand: any) {
   content: '';
   border-left: 1px solid rgb(255 255 255 / 0.9);
   border-top: 1px solid rgb(255 255 255 / 0.9);
-  background: #fffdf8;
+  background: #ffffff;
   transform: translateX(-50%) rotate(45deg);
 }
 
