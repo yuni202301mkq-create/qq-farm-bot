@@ -2,7 +2,7 @@ const { CONFIG } = require('../config/config');
 const { getUserState, isConnected, networkEvents } = require('../utils/network');
 const { toNum, log, logWarn, randomDelay } = require('../utils/utils');
 const { isAutomationOn, getAutomation, getPrioritize2x2Crops } = require('../models/store');
-const { recordOperation } = require('./stats');
+const { recordOperation, markPendingSpend } = require('./stats');
 const { createScheduler } = require('./scheduler');
 const { getAllLands, harvest, farming, unlockLand, upgradeLand } = require('./farm-api');
 const { analyzeLands, resolveRemovableHarvestedLands } = require('./farm-land-analyzer');
@@ -233,6 +233,7 @@ async function runFarmOperation(opType) {
       let upgradedCount = 0;
       for (const landId of analysis.upgradable) {
         try {
+          markPendingSpend({ type: 'land_upgrade', title: `土地#${landId}升级` });
           const result = await upgradeLand(landId);
           const newLevel = result.land ? toNum(result.land.level) : '?';
           log('升级', `土地#${landId} 升级成功 → 等级${newLevel}`, {

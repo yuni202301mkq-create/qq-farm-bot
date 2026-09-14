@@ -207,12 +207,19 @@ function registerAdminMallRoutes({
     if (!accountId) return;
 
     try {
-      const { goodsId, count } = req.body || {};
+      const { goodsId, count, name, price, currencyName } = req.body || {};
       if (!goodsId || !count) {
         return res.status(400).json({ ok: false, error: "参数不完整" });
       }
 
-      const data = await provider.buyMallGoods(accountId, goodsId, count);
+      const data = await provider.buyMallGoods(
+        accountId,
+        goodsId,
+        count,
+        String(name || "").trim(),
+        toNum(price),
+        String(currencyName || "").trim(),
+      );
       res.json({ ok: true, data });
     } catch (error) {
       sendProviderError(res, error);

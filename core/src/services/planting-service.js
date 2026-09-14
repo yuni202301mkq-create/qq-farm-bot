@@ -3,6 +3,7 @@ const { types } = require('../utils/proto');
 const { toNum, toLong, toTimeSec, getServerTimeSec, log, logWarn, sleep } = require('../utils/utils');
 const { compareBagSeedGameOrder } = require('../utils/bag-seed-order');
 const { getPlantNameBySeedId, getPlantGrowTime, formatGrowTime, getAllSeeds, getPlantBySeedId, getPlantById } = require('../config/gameConfig');
+const { markPendingSpend } = require('./stats');
 const {
   getPlantingStrategy,
   syncBagSeedPriority,
@@ -1289,6 +1290,12 @@ async function autoPlantEmptyLands(deadLandIds, emptyLandIds, lands = []) {
           const available = limit > 0 ? Math.max(0, limit - toNum(goods.bought_num)) : count;
           const buyCount = Math.min(count, available, Math.max(0, Math.floor(userState.gold / price)));
           if (!buyCount) return 0;
+          const seedName = getPlantNameBySeedId(seedId) || '';
+          markPendingSpend({
+            type: 'seed_buy',
+            title: seedName ? `购买${seedName}种子` : '购买种子',
+            detail: `x${buyCount}`,
+          });
           // The seed shop uses gold; no activity shop or premium-resource purchasing is used.
           await buyGoods(toNum(goods.id), buyCount, price);
           userState.gold = Math.max(0, userState.gold - buyCount * price);
@@ -1461,6 +1468,11 @@ async function plantFromShop(landIds, userState, overrideStrategy, accountId = g
   let finalSeedId = bestSeed.seedId;
   if (hasShopData) {
     try {
+      markPendingSpend({
+        type: 'seed_buy',
+        title: `${plantName ? `购买${plantName}种子` : '购买种子'}`,
+        detail: `x${plantCount}`,
+      });
       const buyResult = await buyGoods(bestSeed.goodsId, plantCount, bestSeed.price);
       // 从购买结果中提取实际种子 ID（可能是获取物品后得到的真实 ID）
       if (buyResult.get_items && buyResult.get_items.length > 0) {

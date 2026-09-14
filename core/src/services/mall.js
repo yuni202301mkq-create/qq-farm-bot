@@ -12,6 +12,7 @@ const { Buffer } = require('node:buffer');
 const { sendMsgAsync, getUserState } = require('../utils/network');
 const { types } = require('../utils/proto');
 const { toNum, log, sleep, getServerDateKey } = require('../utils/utils');
+const { recordConsumptionSpend } = require('./stats');
 
 // ---- 商品 ID 常量 ----
 
@@ -288,6 +289,14 @@ async function autoBuyOrganicFertilizerViaMall() {
     log('商城', `购买化肥成功，共购买 ${totalBought} 个`, {
       module: 'warehouse', event: '购买化肥', result: 'ok', count: totalBought, type: 'organic',
     });
+    if (price > 0) {
+      recordConsumptionSpend(price * totalBought, {
+        type: 'fertilizer_buy',
+        title: '购买有机化肥',
+        detail: `x${totalBought}`,
+        currency: 'coupon',
+      });
+    }
   }
   return totalBought;
 }
@@ -378,6 +387,14 @@ async function autoBuyFertilizerViaMall(type = 'organic', targetCount = 0) {
     log('商城', `购买化肥成功，共购买 ${totalBought} 个`, {
       module: 'warehouse', event: '购买化肥', result: 'ok', count: totalBought, type,
     });
+    if (price > 0) {
+      recordConsumptionSpend(price * totalBought, {
+        type: 'fertilizer_buy',
+        title: `购买${typeLabel}`,
+        detail: `x${totalBought}`,
+        currency: 'coupon',
+      });
+    }
   }
 
   return totalBought;

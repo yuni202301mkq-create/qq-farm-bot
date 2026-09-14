@@ -43,12 +43,12 @@ function registerAdminShopPurchaseRoutes({
     if (!accountId) return;
 
     try {
-      const { goodsId, num, price } = req.body || {};
+      const { goodsId, num, price, name } = req.body || {};
       if (!goodsId || !num || price === undefined) {
         return res.status(400).json({ ok: false, error: "参数不完整" });
       }
 
-      const buyResult = await provider.buyGoods(accountId, goodsId, num, price);
+      const buyResult = await provider.buyGoods(accountId, goodsId, num, price, String(name || "").trim());
       res.json({
         ok: true,
         data: {

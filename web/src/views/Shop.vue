@@ -237,7 +237,7 @@ function syncTabFromRouteQuery() {
 async function buyGoods(item: any, quantity = 1) {
   if (!currentAccountId.value)
     return
-  const result = await shopStore.buyGoods(currentAccountId.value, item.id, quantity, item.price)
+  const result = await shopStore.buyGoods(currentAccountId.value, item.id, quantity, item.price, item.name)
   if (result?.ok) {
     toast.success(`已购买 ${item.name} x${quantity}`)
     await refreshAll()
@@ -250,7 +250,7 @@ async function buyGoods(item: any, quantity = 1) {
 async function buyMallGoods(item: any, quantity = 1) {
   if (!currentAccountId.value)
     return
-  const result = await shopStore.buyMallGoods(currentAccountId.value, item.goodsId, quantity)
+  const result = await shopStore.buyMallGoods(currentAccountId.value, item.goodsId, quantity, item.name, item.price, item.currencyName)
   if (result?.ok) {
     toast.success(`已购买 ${item.name} x${quantity}`)
     await refreshAll()

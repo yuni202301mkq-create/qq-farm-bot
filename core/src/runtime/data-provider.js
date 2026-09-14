@@ -197,7 +197,7 @@ function createDataProvider(deps) {
         removePlant: (ref, landId) => callWorkerApi(resolveAccountId(ref), 'removePlant', landId),
         removeAllPlants: (ref) => callWorkerApi(resolveAccountId(ref), 'removeAllPlants'),
         getShopInfo: (ref, shopId) => callWorkerApi(resolveAccountId(ref), 'getShopInfo', shopId),
-        buyGoods: (ref, shopId, goodsId, count) => callWorkerApi(resolveAccountId(ref), 'buyGoods', shopId, goodsId, count),
+        buyGoods: (ref, shopId, goodsId, count, name) => callWorkerApi(resolveAccountId(ref), 'buyGoods', shopId, goodsId, count, name),
         doAnalytics: (ref, days) => callWorkerApi(resolveAccountId(ref), 'getAnalytics', days),
 
         // ========== Friend API ==========
@@ -222,7 +222,7 @@ function createDataProvider(deps) {
 
         // ========== Mall ==========
         getMallGoods: (ref) => callWorkerApi(resolveAccountId(ref), 'getMallGoods'),
-        buyMallGoods: (ref, goodsId, count) => callWorkerApi(resolveAccountId(ref), 'buyMallGoods', goodsId, count),
+        buyMallGoods: (ref, goodsId, count, name, price, currencyName) => callWorkerApi(resolveAccountId(ref), 'buyMallGoods', goodsId, count, name, price, currencyName),
         getMysteryShop: (ref) => callWorkerApi(resolveAccountId(ref), 'getMysteryShop'),
         buyMysteryShopGoods: (ref, npcId) => callWorkerApi(resolveAccountId(ref), 'buyMysteryShopGoods', npcId),
         abandonMysteryShop: (ref) => callWorkerApi(resolveAccountId(ref), 'abandonMysteryShop'),

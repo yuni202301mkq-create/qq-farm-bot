@@ -1826,6 +1826,12 @@ async function handleApiCall(msg) {
             }
             case 'buyGoods': {
                 const { buyGoods } = require('../services/farm');
+                const buyName = String(args[3] || '').trim();
+                if (buyName) {
+                    // 手动购买随请求带来的商品名，用于消费明细归因
+                    const { markPendingSpend } = require('../services/stats');
+                    markPendingSpend({ type: 'shop_buy', title: `购买${buyName}`, detail: `x${args[1] || 1}` });
+                }
                 result = await buyGoods(args[0], args[1], args[2]);
                 break;
             }
@@ -1836,7 +1842,21 @@ async function handleApiCall(msg) {
             }
             case 'buyMallGoods': {
                 const { purchaseMallGoods } = require('../services/mall');
+                const mallName = String(args[2] || '').trim();
+                const mallPrice = toNum(args[3]);
+                const mallCurrency = String(args[4] || '').trim();
                 result = await purchaseMallGoods(args[0], args[1]);
+                if (mallName && mallPrice > 0) {
+                    // 点券等货币支出不被金币下降观察覆盖，购买成功后直接落消费记录
+                    const { recordConsumptionSpend } = require('../services/stats');
+                    const currencyMap = { '点券': 'coupon', '金币': 'gold', '金豆豆': 'goldBean', '钻石': 'diamond' };
+                    recordConsumptionSpend(mallPrice * (args[1] || 1), {
+                        type: 'mall_buy',
+                        title: `购买${mallName}`,
+                        detail: `x${args[1] || 1}`,
+                        currency: currencyMap[mallCurrency] || 'coupon',
+                    });
+                }
                 break;
             }
             case 'getMysteryShop': {

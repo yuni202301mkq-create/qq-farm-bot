@@ -120,10 +120,15 @@ function markPendingSpend(entry) {
   while (pendingSpends.length > PENDING_SPEND_MAX) pendingSpends.shift();
 }
 
-/** 取最匹配的待归因上下文：优先同类最近一笔，否则最近一笔 */
+/** 取最匹配的待归因上下文：优先具体类型（种子/土地/带名手动购买），退回通用「购买商品」，都没有则取最近一笔 */
 function takeMatchingPendingSpend(now = Date.now()) {
   prunePendingSpends(now);
   if (pendingSpends.length === 0) return null;
+  for (let i = pendingSpends.length - 1; i >= 0; i--) {
+    if (pendingSpends[i].type !== 'goods_buy') {
+      return pendingSpends.splice(i, 1)[0];
+    }
+  }
   return pendingSpends.pop();
 }
 
@@ -148,7 +153,8 @@ function pushConsumptionRecord(delta, context) {
   const amount = Math.abs(Number(delta) || 0);
   if (!Number.isFinite(amount) || amount <= 0) return;
   const currency = (context && context.currency) || 'gold';
-  const currencyLabel = currency === 'gold' ? '金币' : currency;
+  const currencyLabels = { gold: '金币', coupon: '点券', diamond: '钻石', goldBean: '金豆豆' };
+  const currencyLabel = currencyLabels[currency] || currency;
   consumptionRecords.push({
     id: `${Date.now()}-${consumptionSeq++}`,
     title: buildConsumptionTitle(context),
@@ -166,6 +172,13 @@ function pushConsumptionRecord(delta, context) {
 /** 本次在线的消费记录（最新在前） */
 function getConsumptionRecords() {
   return [...consumptionRecords].reverse();
+}
+
+/**
+ * 主动落一笔消费记录。用于点券等不被金币下降观察覆盖的支出（如购买化肥）。
+ */
+function recordConsumptionSpend(amount, context) {
+  pushConsumptionRecord(amount, context);
 }
 
 function getConsumptionCount() {
@@ -466,6 +479,7 @@ module.exports = {
   loadPersistedStats,
   checkAndResetDailyStats,
   markPendingSpend,
+  recordConsumptionSpend,
   getConsumptionRecords,
   getConsumptionCount,
   clearConsumptionRecords

@@ -1,6 +1,7 @@
 const { sendMsgAsync, getUserState } = require('../utils/network');
 const { types, waitForProtoReady } = require('../utils/proto');
-const { toLong, sleep, log } = require('../utils/utils');
+const { toLong, sleep, log, toNum } = require('../utils/utils');
+const { markPendingSpend } = require('./stats');
 
 /** 普通化肥 ID */
 const NORMAL_FERTILIZER_ID = 1011;
@@ -166,6 +167,8 @@ async function getShopInfo(shopId) {
  */
 async function buyGoods(goodsId, num, price) {
   await waitForProtoReady();
+  // 消费归因兜底：具体购买方（种植/worker 手动购买带商品名）会先标记更精确的上下文
+  markPendingSpend({ type: 'goods_buy', title: '购买商品' });
   const payload = types.BuyGoodsRequest.encode(types.BuyGoodsRequest.create({
     goods_id: toLong(goodsId),
     num: toLong(num),

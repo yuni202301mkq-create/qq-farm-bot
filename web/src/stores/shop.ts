@@ -321,21 +321,25 @@ export const useShopStore = defineStore('shop', () => {
     }
   }
 
-  async function buyGoods(accountId: string, goodsId: number, num: number, price: number) {
+  async function buyGoods(accountId: string, goodsId: number, num: number, price: number, name?: string) {
     const { data } = await api.post('/api/shop/buy', {
       goodsId,
       num,
       price,
+      name: name || '',
     }, {
       headers: { 'x-account-id': accountId },
     })
     return data
   }
 
-  async function buyMallGoods(accountId: string, goodsId: number, count: number) {
+  async function buyMallGoods(accountId: string, goodsId: number, count: number, name?: string, price?: number, currencyName?: string) {
     const { data } = await api.post('/api/shop/mall/buy', {
       goodsId,
       count,
+      name: name || '',
+      price: price ?? 0,
+      currencyName: currencyName || '',
     }, {
       headers: { 'x-account-id': accountId },
     })
