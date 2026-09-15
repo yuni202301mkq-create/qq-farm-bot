@@ -91,6 +91,14 @@ function buildIllustratedItem(
     seedLevel > 0 &&
     userLevel >= seedLevel &&
     !!seedGoods;
+  const rawGuaranteeInfo = rawItem.guarantee_info ?? rawItem.guaranteeInfo;
+  const wishProgress = rawGuaranteeInfo
+    ? {
+        type: toNum(rawGuaranteeInfo.progress_type ?? rawGuaranteeInfo.progressType) || 0,
+        current: toNum(rawGuaranteeInfo.current) || 0,
+        total: toNum(rawGuaranteeInfo.total) || 0,
+      }
+    : null;
 
   return {
     seedId: fruitId,
@@ -98,6 +106,7 @@ function buildIllustratedItem(
     unlocked,
     plantedCount: toNum(rawItem.planted_count) || 0,
     harvestCount: toNum(rawItem.harvest_count) || 0,
+    wishProgress: wishProgress?.total > 0 ? wishProgress : null,
     name: fruitConfig?.name || nongmePlant?.name || `果实${  fruitId}`,
     image: getItemImageById(fruitId) || getNongmeSeedImageUrl(seedId),
     level: Number(fruitConfig?.level) || Number(nongmePlant?.level) || 0,

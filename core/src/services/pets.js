@@ -39,9 +39,12 @@ async function activateDog(dogIdInput) {
   const dogId = num(dogIdInput);
   if (!dogId) throw new Error('请选择要激活的宠物');
   return serialize(async () => {
-    const before = getDogActivationState(await getDogInfo(), dogId);
+    const [dogInfo, bagReply] = await Promise.all([getDogInfo(), getBag()]);
+    const before = getDogActivationState(dogInfo, dogId);
     if (before.owned) return { ok: true, activated: false, reason: 'already_owned', dogId };
-    if (!before.activatable) throw new Error('宠物尚未达到激活条件');
+    const hasUnlockedCard = getBagItems(bagReply).some(item => num(item?.id) === dogId
+      && item?.locked !== true && item?.locked !== 1 && num(item?.count) > 0);
+    if (!before.activatable && !hasUnlockedCard) throw new Error('背包中没有可用的宠物卡');
 
     const payload = types.ActivateDogRequest.encode(types.ActivateDogRequest.create({ dog_id: dogId })).finish();
     const { body } = await sendMsgAsync('gamepb.dogpb.DogService', 'ActivateDog', payload);
@@ -67,12 +70,20 @@ function buildPetSnapshot(reply, bagReply = {}) {
   const byId = new Map(rawDogs.map(dog => [num(dog.id), dog]));
   const ids = [...PET_IDS, ...rawDogs.map(dog => num(dog.id)).filter(id => id && !PET_IDS.includes(id))];
   const usages = Array.isArray(reply && reply.skill_usages) ? reply.skill_usages : [];
+  const activatableCardIds = new Set(getBagItems(bagReply)
+    .filter(item => item?.locked !== true && item?.locked !== 1 && num(item?.count) > 0)
+    .map(item => num(item?.id)));
   const dogs = ids.map((id) => {
     const raw = byId.get(id) || {};
     const skillUsage = usages.filter(item => num(item.dog_id) === id).map(item => ({
       skillId: num(item.skill_id), usedCount: num(item.used_count), dailyLimit: num(item.daily_limit)
     }));
-    return { ...metadata(id), price: num(raw.price), level: num(raw.level), owned: num(raw.owned) === 1 || id === currentDogId, deployed: id === currentDogId, skillUsage };
+    const owned = num(raw.owned) === 1 || id === currentDogId;
+    return {
+      ...metadata(id), price: num(raw.price), level: num(raw.level), owned,
+      activatable: !owned && (num(raw.field_6) === 1 || activatableCardIds.has(id)),
+      deployed: id === currentDogId, skillUsage
+    };
   });
   const foodCounts = new Map();
   for (const item of getBagItems(bagReply)) {

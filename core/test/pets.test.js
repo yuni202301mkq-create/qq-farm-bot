@@ -48,10 +48,21 @@ test('bichon metadata and official image resolve for owned and unowned pets', ()
   const owned = buildPetSnapshot({ current_dog_id: 90031, dogs: [{ id: 90031, owned: 1, level: 3 }] }).dogs;
   assert.equal(owned.filter(dog => dog.id === 90031).length, 1);
   assert.deepEqual({ ...owned.find(dog => dog.id === 90031) }, {
-    ...unowned, owned: true, deployed: true, level: 3
+    ...unowned, owned: true, activatable: false, deployed: true, level: 3
   });
   assert.equal(unowned.image, image);
   assert.match(unowned.desc, /比熊润田/);
+});
+
+test('pet snapshot exposes unlocked cards as manually activatable', () => {
+  const snapshot = buildPetSnapshot({
+    dogs: [{ id: 90011, name: '柯基' }]
+  }, { items: [
+    { id: 90011, count: 1 },
+    { id: 90021, count: 1, locked: true },
+  ] });
+  assert.equal(snapshot.dogs.find(dog => dog.id === 90011).activatable, true);
+  assert.equal(snapshot.dogs.find(dog => dog.id === 90021).activatable, false);
 });
 
 test('bichon activation requires server activatable marker and stops after ownership', () => {

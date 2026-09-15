@@ -634,10 +634,7 @@ function buildLoginDeviceInfo(deviceProtocol) {
     if (!custom) {
         return {
             client_version: CONFIG.clientVersion,
-            sys_software: DEFAULT_DEVICE_FINGERPRINT.sysSoftware,
-            network: 'wifi',
-            memory: DEFAULT_DEVICE_FINGERPRINT.memory,
-            device_id: DEFAULT_DEVICE_FINGERPRINT.deviceId,
+            sys_software: 'Windows',
         };
     }
 
@@ -652,18 +649,23 @@ function buildLoginDeviceInfo(deviceProtocol) {
     };
 }
 
-async function sendLogin(onLoginSuccess, deviceProtocol) {
-    const body = types.LoginRequest.encode(types.LoginRequest.create({
+function buildLoginBody(deviceProtocol) {
+    return Buffer.from(types.LoginRequest.encode(types.LoginRequest.create({
         sharer_id: toLong(0),
         sharer_open_id: '',
         device_info: buildLoginDeviceInfo(deviceProtocol),
         share_cfg_id: toLong(0),
-        scene_id: '1256',
+        scene_id: '1234567',
         report_data: {
             callback: '', cd_extend_info: '', click_id: '', clue_token: '',
-            minigame_channel: 'other', minigame_platid: 2, req_id: '', trackid: '',
+            minigame_channel: 'other-qq', minigame_platid: 2, req_id: '', trackid: '',
         },
-    })).finish();
+        extra: Buffer.alloc(0),
+    })).finish());
+}
+
+async function sendLogin(onLoginSuccess, deviceProtocol) {
+    const body = buildLoginBody(deviceProtocol);
 
     await sendMsg('gamepb.userpb.UserService', 'Login', body, (err, bodyBytes, _meta) => {
         if (err) {
@@ -773,10 +775,7 @@ function startHeartbeat() {
             }
         }
 
-        const body = types.HeartbeatRequest.encode(types.HeartbeatRequest.create({
-            gid: toLong(userState.gid),
-            client_version: CONFIG.clientVersion,
-        })).finish();
+        const body = buildHeartbeatBody(userState.gid);
         sendMsgAsync('gamepb.userpb.UserService', 'Heartbeat', body, 20000, { priority: 'critical' }).then(({ body: replyBody }) => {
             lastHeartbeatResponse = Date.now();
             heartbeatMissCount = 0;
@@ -791,6 +790,14 @@ function startHeartbeat() {
             } catch { }
         }).catch(() => { });
     });
+}
+
+function buildHeartbeatBody(gid) {
+    return Buffer.from(types.HeartbeatRequest.encode(types.HeartbeatRequest.create({
+        gid: toLong(gid),
+        client_version: CONFIG.clientVersion,
+        field_3: toLong(0),
+    })).finish());
 }
 
 // ============ WebSocket 连接 ============
@@ -984,6 +991,8 @@ module.exports = {
     getGatewayHealth,
     getAceStatus,
     buildLoginDeviceInfo,
+    buildLoginBody,
+    buildHeartbeatBody,
     buildWebSocketHeaders,
     buildTsdkDeviceInfo,
     resolveDeviceFingerprint,

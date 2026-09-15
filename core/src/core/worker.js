@@ -1769,6 +1769,9 @@ async function handleApiCall(msg) {
             case 'getPetOverview':
                 result = await require('../services/pets').getPetOverview();
                 break;
+            case 'activateDog':
+                result = await require('../services/pets').activateDog(args[0]);
+                break;
             case 'deployDog':
                 require('../services/capital-mode').releaseForManualCommand();
                 result = await require('../services/pets').deployDog(args[0]);

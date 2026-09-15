@@ -186,6 +186,7 @@ function createDataProvider(deps) {
         getConsumptionRecords: (ref) => callWorkerApi(resolveAccountId(ref), 'getConsumptionRecords'),
         claimDogSkillGifts: (ref) => callWorkerApi(resolveAccountId(ref), 'claimDogSkillGifts'),
         getPetOverview: (ref) => callWorkerApi(resolveAccountId(ref), 'getPetOverview'),
+        activateDog: (ref, dogId) => callWorkerApi(resolveAccountId(ref), 'activateDog', dogId),
         deployDog: (ref, dogId) => callWorkerApi(resolveAccountId(ref), 'deployDog', dogId),
         withdrawDog: (ref) => callWorkerApi(resolveAccountId(ref), 'withdrawDog'),
         feedDog: (ref, foodId, count) => callWorkerApi(resolveAccountId(ref), 'feedDog', foodId, count),
