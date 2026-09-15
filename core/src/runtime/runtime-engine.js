@@ -97,6 +97,7 @@ function createRuntimeEngine(options = {}) {
         startWorker,
         stopWorker,
         restartWorker,
+        dropStaleWorker,
         callWorkerApi,
         getResourceStatus
     } = createWorkerManager({
@@ -158,6 +159,7 @@ function createRuntimeEngine(options = {}) {
         startWorker,
         stopWorker,
         restartWorker,
+        dropStaleWorker,
         getResourceStatus,
         scheduleAutoCodeRefresh: autoCodeRefresh.scheduleAccount,
         refreshAccountCode: autoCodeRefresh.refreshAccountCode
@@ -241,9 +243,13 @@ function createRuntimeEngine(options = {}) {
             if (runtimeSystemConfig.clientVersion !== sysConfig.clientVersion) {
                 store.setSystemConfig({ ...sysConfig, clientVersion: runtimeSystemConfig.clientVersion });
             }
+            // serverUrl 等属于内部运维信息，只给管理员看：打上 adminOnly 后，
+            // 普通用户在日志出口（socket 快照、日志接口）会被过滤掉。
             log('系统', `已加载系统配置: serverUrl=${  sysConfig.serverUrl
                  }, clientVersion=${  runtimeSystemConfig.clientVersion
-                 }, platform=${  sysConfig.platform}`);
+                 }, platform=${  sysConfig.platform}`, {
+                adminOnly: true,
+            });
         }
 
         if (shouldStartAdmin && startAdminServer) {

@@ -249,7 +249,7 @@ function registerAdminAccountRoutes({
       if (!isUpdate && currentUser && !isAdmin) {
         const accountCount = getAccountsForUser(currentUser.username).length;
         const accountLimit =
-          currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2;
+          currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT;
         if (accountCount >= accountLimit) {
           return res.status(403).json({
             ok: false,
@@ -340,9 +340,22 @@ function registerAdminAccountRoutes({
 
       let autoRefreshEnabled = false;
       let startQueued = false;
+      // 新增账号时把落盘后的账号 id 回传，前端据此展示启动进度弹窗。
+      // 编辑账号路径不返回，避免把"保存修改"也当成新增启动流程。
+      let createdAccountId = "";
       if (!isUpdate) {
         const created = data.accounts.at(-1);
         if (created) {
+          createdAccountId = String(created.id || "");
+          // 账号 id 会被复用：账号列表被清空后 nextId 重置为 1，新建账号可能拿到刚被
+          // 移除账号的 id。若上一轮同 id 的 Worker 还挂在运行时注册表里，会有两个后果：
+          //   1. /api/status 把它残留的「已连接」当成新账号的登录结果，前端启动进度
+          //      弹窗直接跳到「启动成功」，用户看不到「账号启动中」；
+          //   2. startWorker 见到同 id 已存在会直接跳过，新账号实际不会被启动。
+          // 先丢弃残留运行时，再排队启动。
+          if (typeof provider.dropStaleWorker === "function") {
+            provider.dropStaleWorker(created.id);
+          }
           const isNativeWxScan = created.platform === "wx"
             && created.loginType === "wx_qr"
             && !!body.wxSessionId;
@@ -388,7 +401,11 @@ function registerAdminAccountRoutes({
       res.json({
         ok: true,
         data: provider.getAccounts(),
-        startup: { queued: startQueued, autoRefreshEnabled },
+        startup: {
+          queued: startQueued,
+          autoRefreshEnabled,
+          accountId: createdAccountId,
+        },
         clientVersion: gateway ? gateway.clientVersion : "",
         clientVersionUpdated,
       });

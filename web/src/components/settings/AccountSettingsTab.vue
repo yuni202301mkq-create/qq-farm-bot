@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AccountModal from '@/components/AccountModal.vue'
+import AccountStartupModal from '@/components/AccountStartupModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { getPlatformClass, getPlatformLabel } from '@/stores/account'
@@ -24,6 +25,7 @@ defineProps<{
   refreshWxCodesLoading: boolean
   defaultPlanSettingId: string
   defaultPlanApplyingId: string
+  startupAccount: { id: string, name?: string, platform?: string, startErrorAt?: number } | null
 }>()
 
 const emit = defineEmits<{
@@ -37,7 +39,8 @@ const emit = defineEmits<{
   applyDefaultPlan: [account: any]
   edit: [account: any]
   delete: [account: any]
-  saved: []
+  saved: [payload?: any]
+  closeStartup: []
   closeModal: []
   closeDeleteConfirm: []
   confirmDelete: []
@@ -166,27 +169,17 @@ function accountAvatar(acc: any) {
               <div class="h-2 w-2 rounded-full" :class="acc.running ? 'bg-green-500' : 'bg-gray-300'" />
               {{ acc.running ? '运行中' : '已停止' }}
             </span>
-            <template v-if="acc.startError && !acc.running">
-              <button
-                type="button"
-                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap border border-red-200 rounded-full bg-red-50 px-3 py-1 text-xs text-red-600 font-medium transition-colors active:scale-95 dark:border-red-800 dark:bg-red-900/20 hover:bg-red-100 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-900/30"
-                :disabled="isAccountOpsDisabled"
-                :title="acc.startError"
-                @click.stop="emit('toggle', acc)"
-              >
-                <div class="i-carbon-warning-alt" />
-                启动失败
-              </button>
-              <button
-                type="button"
-                class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs text-red-600 font-medium underline-offset-2 transition-colors dark:text-red-400 hover:underline focus:outline-none focus:ring-2 focus:ring-red-500"
-                :disabled="isAccountOpsDisabled"
-                :title="`重新获取 ${acc.platform === 'wx' ? '微信Code并' : ''}启动账号`"
-                @click.stop="emit('toggle', acc)"
-              >
-                重新获取
-              </button>
-            </template>
+            <button
+              v-if="acc.startError && !acc.running"
+              type="button"
+              class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap border border-red-200 rounded-full bg-red-50 px-3 py-1 text-xs text-red-600 font-medium transition-colors active:scale-95 dark:border-red-800 dark:bg-red-900/20 hover:bg-red-100 dark:text-red-400 focus:outline-none focus:ring-2 focus:ring-red-500 dark:hover:bg-red-900/30"
+              :disabled="isAccountOpsDisabled"
+              :title="`${acc.startError}（重新获取${acc.platform === 'wx' ? '微信Code并' : ''}启动账号）`"
+              @click.stop="emit('toggle', acc)"
+            >
+              <div class="i-carbon-warning-alt" />
+              启动失败
+            </button>
             <BaseButton
               v-else
               variant="secondary"
@@ -287,7 +280,13 @@ function accountAvatar(acc: any) {
       :show="showModal"
       :edit-data="editingAccount"
       @close="emit('closeModal')"
-      @saved="emit('saved')"
+      @saved="emit('saved', $event)"
+    />
+
+    <AccountStartupModal
+      :show="!!startupAccount"
+      :account="startupAccount"
+      @close="emit('closeStartup')"
     />
 
     <ConfirmModal

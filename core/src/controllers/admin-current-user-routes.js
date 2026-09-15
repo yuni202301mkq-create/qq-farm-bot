@@ -29,7 +29,7 @@ function registerAdminCurrentUserRoutes({
           role: currentUser.role,
           card: currentUser.card,
           accountLimit:
-            currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2,
+            currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT,
           expiresAt: currentUser.expiresAt || null,
           mustChangePassword: profile ? profile.mustChangePassword === true : false,
         },
@@ -92,6 +92,7 @@ function registerAdminCurrentUserRoutes({
         ok: true,
         data: {
           code: key.code,
+          type: key.type,
           days: key.days,
           accountLimit: key.accountLimit,
           note: key.note || "",
@@ -126,10 +127,11 @@ function registerAdminCurrentUserRoutes({
       userStore.consumeCardKey(key.code, currentUser.username);
       const before = userStore.findUser(currentUser.username);
       let updated = before;
-      if (key.days > 0) {
+      // 登录后是额度账号卡密的唯一激活入口；按类型只应用对应效果，避免互相串味
+      if (key.type === userStore.CARD_KEY_TYPE_DURATION && key.days > 0) {
         updated = userStore.extendUserExpiry(currentUser.username, key.days);
       }
-      if (key.accountLimit > 0) {
+      if (key.type === userStore.CARD_KEY_TYPE_QUOTA && key.accountLimit > 0) {
         updated = userStore.updateUser(currentUser.username, {
           accountLimit: (before.accountLimit || 0) + key.accountLimit,
         });
@@ -150,6 +152,7 @@ function registerAdminCurrentUserRoutes({
         ok: true,
         data: {
           code: key.code,
+          type: key.type,
           days: key.days,
           accountLimitAdded: key.accountLimit,
           accountLimit: updated.accountLimit,

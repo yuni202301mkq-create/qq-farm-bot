@@ -35,16 +35,16 @@ const PANEL = {
   register: {
     badge: 'CREATE ACCOUNT',
     title: ['注册账号', '开启托管之旅'],
-    desc: '填写用户名和卡密即可开通 QQ 农场 Bot 账号，卡密决定有效期与可添加账号数。',
-    tips: ['卡密即刻生效', '支持中文用户名', '注册后自动登录'],
+    desc: '填写用户名和时效卡密即可开通 QQ 农场 Bot 账号，卡密决定有效期。账号数量额度请登录后在应用内激活额度账号卡密。',
+    tips: ['仅支持时效卡密', '支持中文用户名', '注册后自动登录'],
     statusLabel: '注册通道开放',
     statusDot: 'live',
   },
   renew: {
     badge: 'ACCOUNT RENEWAL',
     title: ['账号续费', '卡密即时生效'],
-    desc: '输入用户名和卡密，即可为账号延长有效期或补充可添加账号额度。',
-    tips: ['支持时间卡与额度卡', '卡密信息无需准确确认', '续费成功后自动返回登录'],
+    desc: '输入用户名和时效卡密，即可为账号延长有效期。额度账号卡密必须登录后在应用内激活。',
+    tips: ['仅支持时效卡密', '卡密信息无需准确确认', '续费成功后自动返回登录'],
     statusLabel: '续费通道在线',
     statusDot: 'live',
   },
@@ -191,7 +191,7 @@ function applySession(data: any) {
     username: String(data.user?.username || ''),
     role: (data.role === 'super_admin' ? 'super_admin' : 'user') as UserRole,
     card: data.card ?? null,
-    accountLimit: Number(data.accountLimit || 2),
+    accountLimit: Number(data.accountLimit || 1),
     expiresAt: data.expiresAt ?? null,
   }
 }
@@ -495,8 +495,8 @@ async function submit() {
             >
             <p class="form-side__hint">
               {{ mode === 'register'
-                ? '注册卡密与充值卡密是两种卡，请分开办理'
-                : '卡密注册后立即生效，有效期自动叠加' }}
+                ? '此处仅接受时效卡密；额度账号卡密请注册登录后在应用内激活'
+                : '此处仅接受时效卡密，续费后有效期自动叠加；额度账号卡密请登录后在应用内激活' }}
             </p>
             <button
               v-if="mode === 'register'"
@@ -507,7 +507,7 @@ async function submit() {
             >
               <span v-if="freeCardLoading" class="i-svg-spinners-90-ring-with-bg" />
               <span v-else class="i-carbon-gift" />
-              <span>免费领取 7 天卡密</span>
+              <span>免费领取 7 天时效卡密</span>
             </button>
           </div>
 

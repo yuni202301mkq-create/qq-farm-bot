@@ -190,7 +190,15 @@ export const useSettingStore = defineStore('setting', () => {
     goldenBugRoundLimit: 24,
   })
   const loading = ref(false)
+  // 记录当前 settings 属于哪个账号：页面据此判断能否先用缓存渲染，
+  // 避免每次进入设置页都整页回到「加载中」再刷新出真实值。
+  const loadedAccountId = ref('')
   let fetchRequestId = 0
+
+  function hasSettingsFor(accountId: string | number | null | undefined) {
+    const id = String(accountId ?? '')
+    return !!id && loadedAccountId.value === id
+  }
 
   function isCurrentAccount(accountId: string) {
     const accountStore = useAccountStore()
@@ -223,6 +231,7 @@ export const useSettingStore = defineStore('setting', () => {
       goldenBugRoundLimit: 24,
     }
     loading.value = false
+    loadedAccountId.value = ''
   }
 
   async function fetchSettings(accountId: string) {
@@ -263,6 +272,7 @@ export const useSettingStore = defineStore('setting', () => {
         settings.value.bagSeedKnownIds = d.bagSeedKnownIds ?? []
         settings.value.bagSeedExcludedIds = d.bagSeedExcludedIds ?? []
         settings.value.bagSeedFallbackStrategy = d.bagSeedFallbackStrategy ?? 'level'
+        loadedAccountId.value = requestedId
       }
     }
     finally {
@@ -374,6 +384,8 @@ export const useSettingStore = defineStore('setting', () => {
   return {
     settings,
     loading,
+    loadedAccountId,
+    hasSettingsFor,
     clearSettingsState,
     fetchSettings,
     saveSettings,

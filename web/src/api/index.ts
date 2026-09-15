@@ -68,7 +68,14 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers['x-admin-token'] = token
   }
-  const accountId = accountIdRef.value
+  // 调用方可以用单次请求的 headers 显式指定要操作的账号，例如启动进度弹窗必须跟踪
+  // 「刚新增的账号」，而不是当前选中账号。只有调用方没指定时才回落到当前选中账号：
+  // 如果无条件覆盖，显式指定的账号会被静默换掉，请求拿到的就是另一个账号的数据。
+  const headers = config.headers as any
+  const explicit = typeof headers?.get === 'function'
+    ? headers.get('x-account-id')
+    : headers?.['x-account-id']
+  const accountId = String(explicit || accountIdRef.value || '')
   if (accountId) {
     config.headers['x-account-id'] = accountId
   }

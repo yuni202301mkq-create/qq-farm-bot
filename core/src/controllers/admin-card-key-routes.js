@@ -8,8 +8,11 @@ function formatDate(ms) {
 }
 
 function serializeKey(key) {
+  const type = userStore.normalizeCardKeyType(key);
   return {
     ...key,
+    type,
+    typeText: type === userStore.CARD_KEY_TYPE_QUOTA ? '额度账号卡密' : '时效卡密',
     used: Boolean(key.usedBy),
     createdAtText: formatDate(key.createdAt),
     usedAtText: key.usedAt ? formatDate(key.usedAt) : '',
@@ -33,10 +36,12 @@ function registerAdminCardKeyRoutes({
   });
 
   // 批量生成卡密
+  // 时效卡密只带天数，额度账号卡密只带账号数，两者不混用；
+  // 额度账号卡密必须由用户在应用内登录后激活，不能用于注册/登录前续期。
   app.post('/api/card-keys/generate', requireAdminToken, requireSuperAdminRole, (req, res) => {
     try {
-      const { count, days, accountLimit, note } = req.body || {};
-      const created = userStore.createCardKeys({ count, days, accountLimit, note });
+      const { count, type, days, accountLimit, note } = req.body || {};
+      const created = userStore.createCardKeys({ count, type, days, accountLimit, note });
       res.json({ ok: true, data: created.map(serializeKey) });
     } catch (error) {
       res.status(500).json({ ok: false, error: error.message });

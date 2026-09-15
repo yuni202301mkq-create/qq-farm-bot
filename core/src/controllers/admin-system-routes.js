@@ -50,7 +50,6 @@ function registerAdminSystemRoutes({
   store,
   logger,
   requireAdminToken,
-  requireAdminRole,
   requireSuperAdminRole,
   requireDangerConfirmation,
   getDefaultSystemConfig,
@@ -72,10 +71,13 @@ function registerAdminSystemRoutes({
     return !link || link.startsWith("/") || /^https?:\/\//i.test(link);
   };
 
+  // 连接参数是全站共用的服务器级设置，只有超级管理员能读写：
+  // 前端 Settings.vue 用 isSuperAdmin 控制入口，后端必须同级校验，
+  // 否则普通管理员绕过界面就能改全站配置、影响所有普通用户的账号。
   app.get(
    "/api/admin/system-config",
     requireAdminToken,
-    requireAdminRole,
+    requireSuperAdminRole,
     (req, res) => {
       try {
         res.json({
@@ -103,7 +105,7 @@ function registerAdminSystemRoutes({
   app.post(
    "/api/admin/system-config",
     requireAdminToken,
-    requireAdminRole,
+    requireSuperAdminRole,
     (req, res) => {
       try {
         if (!requireDangerConfirmation(req, res, "UPDATE_SYSTEM_CONFIG")) return;
@@ -139,7 +141,7 @@ function registerAdminSystemRoutes({
   app.post(
     "/api/admin/system-config/reset",
     requireAdminToken,
-    requireAdminRole,
+    requireSuperAdminRole,
     (req, res) => {
       try {
         if (!requireDangerConfirmation(req, res, "RESET_SYSTEM_CONFIG")) return;

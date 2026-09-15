@@ -65,7 +65,12 @@ async function activate() {
     const { data } = await api.post('/api/user/card-redeem', { cardKey: key })
     if (!data?.ok)
       throw new Error(data?.error || '激活失败')
-    successMsg.value = `激活成功，已延长 ${data.data?.days || 0} 天${data.data?.accountLimitAdded > 0 ? `，额度 +${data.data.accountLimitAdded}` : ''}`
+    // 按卡密类型只汇报对应效果：时效卡密延长有效期，额度账号卡密增加账号数
+    const d = data.data || {}
+    if (d.type === 'quota')
+      successMsg.value = `激活成功，账号额度 +${d.accountLimitAdded || 0}，当前共 ${d.accountLimit ?? accountLimit.value} 个账号`
+    else
+      successMsg.value = `激活成功，已延长 ${d.days || 0} 天`
     cardKey.value = ''
     await userStore.fetchUserInfo()
   }
@@ -152,7 +157,7 @@ onUnmounted(() => {
         激活卡密
       </h4>
       <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        输入卡密即可延长使用时长，卡密可叠加使用。
+        时效卡密延长使用时长，额度账号卡密增加可添加账号数，卡密可叠加使用。
       </p>
       <div class="mt-3 flex gap-2">
         <input
@@ -175,8 +180,9 @@ onUnmounted(() => {
     </div>
 
     <ul class="mt-4 list-disc space-y-1 border-t border-gray-100 pl-5 pt-4 text-xs text-gray-500 dark:border-gray-700 dark:text-gray-400">
-      <li>卡密激活后会自动延长账号到期时间</li>
-      <li>多张卡密可叠加使用，时长累加</li>
+      <li>时效卡密激活后自动延长账号到期时间</li>
+      <li>额度账号卡密激活后增加可添加账号数，只能在此页登录后激活</li>
+      <li>多张卡密可叠加使用，效果累加</li>
     </ul>
   </div>
 </template>

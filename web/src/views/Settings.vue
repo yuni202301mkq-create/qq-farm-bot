@@ -172,6 +172,7 @@ const {
   showClearStoppedConfirm,
   clearStoppedLoading,
   refreshWxCodesLoading,
+  startupAccount,
   stoppedAccountsCount,
   isAddAccountDisabled,
   addAccountDisabledReason,
@@ -185,6 +186,7 @@ const {
   toggleAccount,
   refreshWxCodesNow,
   handleSaved,
+  closeStartupModal,
   selectAccount,
   openClearStoppedConfirm,
   confirmClearStopped,
@@ -204,12 +206,14 @@ const {
 })
 
 const {
-  settingsLoading,
   localStrategySettings,
   plantingStrategyOptions,
   bagFallbackStrategyOptions,
   strategyPreviewLabel,
   strategyPreviewLoading,
+  syncLocalStrategySettings,
+  fetchAccountSettings,
+  loadSeedPreview,
   loadStrategyData,
   resetStrategyState,
 } = useStrategySettings({
@@ -221,6 +225,9 @@ const {
 const accountSettingsSaving = ref(false)
 const autoCodeRefreshSaving = ref(false)
 const systemSettingsSaving = ref(false)
+// 用户是否已经在本页改过开关（含开关自动保存）：改过之后后台刷新不再回写本地表单，
+// 避免服务端旧值把刚切换的开关回退掉。
+const accountSettingsDirty = ref(false)
 const anySystemSaving = computed(() => systemSettingsSaving.value || systemConfigSaving.value || captureConfigSaving.value || deviceProtocolSaving.value)
 
 function buildCurrentAccountConfig() {
@@ -236,6 +243,7 @@ async function saveCurrentAccountSettings(_module?: string, quiet = false) {
   if (!currentAccountId.value || accountSettingsSaving.value)
     return
   accountSettingsSaving.value = true
+  accountSettingsDirty.value = true
   try {
     const result = await settingStore.saveSettings(String(currentAccountId.value), buildCurrentAccountConfig())
     if (!result.ok)
@@ -375,47 +383,91 @@ function confirmDefaultPlanOperation() {
     void applyDefaultPlan(pending.account)
 }
 
-// 账号设置数据就绪标记：取号 + 拉取设置完成前，账号设置页显示加载态，
-// 避免先用默认/旧值渲染出错误的开关状态再"自动刷新"
-const accountDataReady = ref(false)
+// 账号设置数据就绪标记：只有在「当前账号还没有任何设置数据」时才整页显示加载态。
+// 之前这里把 settingsLoading 也算进加载条件，导致每次保存（含开关自动保存）都会
+// 整页闪回「加载中...」；而且种子列表要走游戏协议，慢的时候会连带面板一起等。
+const accountDataReady = ref(settingStore.hasSettingsFor(currentAccountId.value))
+const accountSettingsLoading = computed(() => !accountDataReady.value && !!currentAccountId.value)
 
-watch(currentAccountId, async () => {
-  settingStore.clearSettingsState()
-  resetStrategyState()
-  accountDataReady.value = false
-  if (currentAccountId.value) {
-    await loadStrategyData()
-    syncLocalAutomationSettings()
-    syncLocalOfflineSettings()
+// 用 store 里已缓存的设置填满本地表单，让面板立刻显示真实值（而不是默认值）
+function applyCachedAccountSettings() {
+  syncLocalStrategySettings()
+  syncLocalAutomationSettings()
+  syncLocalOfflineSettings()
+  accountDataReady.value = true
+}
+
+let accountSettingsLoadToken = 0
+
+async function loadCurrentAccountSettings() {
+  const accountId = currentAccountId.value
+  if (!accountId) {
     accountDataReady.value = true
-  }
-})
-
-// 账号启动/停止后，种子列表（进而「策略选种预览」）需要重新获取。
-// 未启动时后端会返回「账号未运行」，此时预览显示提示文案；启动后自动刷新成真实结果。
-watch(() => accounts.value.find((a: any) => String(a.id) === String(currentAccountId.value || ''))?.running, async (running, previous) => {
-  if (running === previous)
     return
-  if (!currentAccountId.value)
-    return
-  await loadStrategyData()
-})
-
-onMounted(async () => {
-  // 系统配置/抓包配置/设备协议仅超管可见，普通用户不请求，避免 403 报错弹窗
-  if (userStore.isSuperAdmin) {
-    await Promise.all([loadSystemConfig(), loadCaptureConfig()])
-    await fetchDeviceProtocol()
   }
-  await fetchAccounts()
-  selectFirstAccountIfNeeded()
-  if (currentAccountId.value) {
-    await loadStrategyData()
+  const token = ++accountSettingsLoadToken
+  // 有该账号的缓存 → 先渲染再后台刷新；没有 → 才显示加载态
+  const hadCache = settingStore.hasSettingsFor(accountId)
+  if (hadCache)
+    applyCachedAccountSettings()
+  else
+    accountDataReady.value = false
+
+  await fetchAccountSettings()
+  if (token !== accountSettingsLoadToken || String(currentAccountId.value || '') !== String(accountId))
+    return
+  if (!hadCache || !accountSettingsDirty.value) {
+    syncLocalStrategySettings()
     syncLocalAutomationSettings()
     syncLocalOfflineSettings()
   }
   accountDataReady.value = true
+  loadSeedPreview()
+}
+
+watch(currentAccountId, async (newId, previousId) => {
+  if (String(newId || '') === String(previousId || ''))
+    return
+  // 切号：先清掉上一个账号的设置，避免在加载完成前显示旧账号的开关状态
+  settingStore.clearSettingsState()
+  resetStrategyState()
+  accountDataReady.value = false
+  accountSettingsDirty.value = false
+  await loadCurrentAccountSettings()
+})
+
+// 账号启动/停止后，种子列表（进而「策略选种预览」）需要重新获取。
+// 未启动时后端会返回「账号未运行」，此时预览显示提示文案；启动后自动刷新成真实结果。
+watch(() => accounts.value.find((a: any) => String(a.id) === String(currentAccountId.value || ''))?.running, (running, previous) => {
+  if (running === previous)
+    return
+  if (!currentAccountId.value)
+    return
+  loadSeedPreview()
+})
+
+onMounted(async () => {
+  const accountIdBeforeFetch = String(currentAccountId.value || '')
+  // 已有该账号的缓存设置时立即渲染，不必等系统配置和种子列表
+  if (settingStore.hasSettingsFor(accountIdBeforeFetch))
+    applyCachedAccountSettings()
+
+  // 系统配置/抓包配置/设备协议仅超管可见，普通用户不请求，避免 403 报错弹窗。
+  // 与账号数据并行加载，不再阻塞账号设置面板。
+  const systemConfigTask = userStore.isSuperAdmin
+    ? Promise.all([loadSystemConfig(), loadCaptureConfig()])
+        .then(() => fetchDeviceProtocol())
+        .catch(() => {})
+    : Promise.resolve()
+
+  await fetchAccounts()
+  selectFirstAccountIfNeeded()
+  // 账号没变时由这里加载；账号变了说明上面的 watcher 已接管，避免重复请求
+  if (String(currentAccountId.value || '') === accountIdBeforeFetch)
+    await loadCurrentAccountSettings()
+
   await scrollActiveTabIntoView()
+  void systemConfigTask
 })
 </script>
 
@@ -469,6 +521,7 @@ onMounted(async () => {
           :refresh-wx-codes-loading="refreshWxCodesLoading"
           :default-plan-setting-id="defaultPlanSettingId"
           :default-plan-applying-id="defaultPlanApplyingId"
+          :startup-account="startupAccount"
           @add="openAddModal"
           @clear-stopped="openClearStoppedConfirm"
           @refresh-wx-codes="refreshWxCodesNow"
@@ -480,6 +533,7 @@ onMounted(async () => {
           @edit="openEditModal"
           @delete="handleDelete"
           @saved="handleSaved"
+          @close-startup="closeStartupModal"
           @close-modal="showModal = false"
           @close-delete-confirm="showDeleteConfirm = false"
           @confirm-delete="confirmDelete"
@@ -493,7 +547,7 @@ onMounted(async () => {
           v-model:automation="localAutomationSettings"
           :current-account-name="currentAccountName"
           :current-account-id="currentAccountId"
-          :loading="settingsLoading || !accountDataReady"
+          :loading="accountSettingsLoading"
           :saving="accountSettingsSaving"
           :planting-strategy-options="plantingStrategyOptions"
           :bag-fallback-strategy-options="bagFallbackStrategyOptions"
@@ -520,77 +574,78 @@ onMounted(async () => {
           <!-- 用户管理（含修改密码）对所有用户开放，固定在系统配置最上方 -->
           <ChangePasswordCard />
 
-          <!-- 连接参数、设备协议、抓包服务、自动刷新验证码均为超管专属，普通用户不渲染也不请求 -->
+          <!-- 连接参数、设备协议、抓包服务均为超管专属，普通用户不渲染也不请求 -->
           <template v-if="userStore.isSuperAdmin">
-          <div class="sticky top-0 z-10 flex items-center justify-between border border-gray-200 rounded-xl bg-white/95 p-4 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
-            <div>
-              <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-                系统配置
-              </h3>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                统一管理连接参数、设备协议、抓包服务、离线通知和用户账号。
-              </p>
+            <div class="sticky top-0 z-10 flex items-center justify-between border border-gray-200 rounded-xl bg-white/95 p-4 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
+              <div>
+                <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
+                  系统配置
+                </h3>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  统一管理连接参数、设备协议、抓包服务、离线通知和用户账号。
+                </p>
+              </div>
+              <BaseButton size="sm" :loading="anySystemSaving" @click="saveSystemSettings">
+                保存系统配置
+              </BaseButton>
             </div>
-            <BaseButton size="sm" :loading="anySystemSaving" @click="saveSystemSettings">
-              保存系统配置
-            </BaseButton>
-          </div>
 
-          <AdminSystemPanel
-            v-model:local-system-config="localSystemConfig"
-            v-model:local-capture-config="localCaptureConfig"
-            section="system"
-            :show-heading="false"
-            :show-save="false"
-            :default-system-config="defaultSystemConfig"
-            :platform-options="platformOptions"
-            :os-options="osOptions"
-            :system-config-saving="systemConfigSaving"
-            :capture-config-saving="captureConfigSaving"
-            :capture-config-testing="captureConfigTesting"
-            @reset-system="handleResetSystemConfig"
-            @test-capture="handleTestCaptureConfig"
-          />
+            <AdminSystemPanel
+              v-model:local-system-config="localSystemConfig"
+              v-model:local-capture-config="localCaptureConfig"
+              section="system"
+              :show-heading="false"
+              :show-save="false"
+              :default-system-config="defaultSystemConfig"
+              :platform-options="platformOptions"
+              :os-options="osOptions"
+              :system-config-saving="systemConfigSaving"
+              :capture-config-saving="captureConfigSaving"
+              :capture-config-testing="captureConfigTesting"
+              @reset-system="handleResetSystemConfig"
+              @test-capture="handleTestCaptureConfig"
+            />
 
-          <DeviceProtocolCard
-            v-model:form="deviceProtocolForm"
-            v-model:selected-preset="selectedDevicePreset"
-            :loading="deviceProtocolLoading"
-            :saving="deviceProtocolSaving"
-            :preset-options="deviceProtocolPresetOptions"
-            :show-save="false"
-            @apply-preset="applyDevicePreset"
-            @random-mac="fillRandomDeviceMac"
-            @random-device-id="fillRandomDeviceId"
-            @random-imei="fillRandomImei"
-          />
+            <DeviceProtocolCard
+              v-model:form="deviceProtocolForm"
+              v-model:selected-preset="selectedDevicePreset"
+              :loading="deviceProtocolLoading"
+              :saving="deviceProtocolSaving"
+              :preset-options="deviceProtocolPresetOptions"
+              :show-save="false"
+              @apply-preset="applyDevicePreset"
+              @random-mac="fillRandomDeviceMac"
+              @random-device-id="fillRandomDeviceId"
+              @random-imei="fillRandomImei"
+            />
 
+            <AdminSystemPanel
+              v-model:local-system-config="localSystemConfig"
+              v-model:local-capture-config="localCaptureConfig"
+              section="capture"
+              :show-heading="false"
+              :show-save="false"
+              :default-system-config="defaultSystemConfig"
+              :platform-options="platformOptions"
+              :os-options="osOptions"
+              :system-config-saving="systemConfigSaving"
+              :capture-config-saving="captureConfigSaving"
+              :capture-config-testing="captureConfigTesting"
+              @test-capture="handleTestCaptureConfig"
+            />
+          </template>
+
+          <!-- 定时刷新重登按账号保存，可见范围由账号归属决定，因此对所有用户开放 -->
           <AutoCodeRefreshCard
             v-model:config="localAutoCodeRefresh"
             :current-account-name="currentAccountName"
             :current-account-id="currentAccountId"
-            :loading="settingsLoading"
+            :loading="accountSettingsLoading"
             :saving="autoCodeRefreshSaving"
             :refreshing="autoCodeRefreshing"
             @save="saveAutoCodeRefreshSettings"
             @refresh="runAutoCodeRefreshNow"
           />
-
-          <AdminSystemPanel
-            v-model:local-system-config="localSystemConfig"
-            v-model:local-capture-config="localCaptureConfig"
-            section="capture"
-            :show-heading="false"
-            :show-save="false"
-            :default-system-config="defaultSystemConfig"
-            :platform-options="platformOptions"
-            :os-options="osOptions"
-            :system-config-saving="systemConfigSaving"
-            :capture-config-saving="captureConfigSaving"
-            :capture-config-testing="captureConfigTesting"
-            @test-capture="handleTestCaptureConfig"
-          />
-          </template>
 
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">

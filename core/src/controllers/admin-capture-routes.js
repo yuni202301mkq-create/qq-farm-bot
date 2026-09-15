@@ -484,7 +484,7 @@ function registerAdminCaptureRoutes({
   provider,
   userStore,
   logger,
-  requireAdminRole,
+  requireSuperAdminRole,
   requireDangerConfirmation,
   canAccessAccount,
   resolveAccountReference,
@@ -498,7 +498,9 @@ function registerAdminCaptureRoutes({
   }, 60_000);
   if (typeof cleanupTimer.unref === "function") cleanupTimer.unref();
 
-  app.get("/api/admin/capture-config", requireAdminRole, (req, res) => {
+  // 抓包服务是全站共用的服务器级设置，只有超级管理员能读写：
+  // 前端 Settings.vue 用 isSuperAdmin 控制入口，后端必须同级校验。
+  app.get("/api/admin/capture-config", requireSuperAdminRole, (req, res) => {
     try {
       const config = store.getCaptureConfig();
       const embedded = config.embedded !== false;
@@ -521,7 +523,7 @@ function registerAdminCaptureRoutes({
     }
   });
 
-  app.post("/api/admin/capture-config/test", requireAdminRole, async (req, res) => {
+  app.post("/api/admin/capture-config/test", requireSuperAdminRole, async (req, res) => {
     try {
       const config = resolveCaptureConfig(store, req.body || {});
       const health = await captureRequest(config, "/api/health");
@@ -539,7 +541,7 @@ function registerAdminCaptureRoutes({
     }
   });
 
-  app.post("/api/admin/capture-config", requireAdminRole, async (req, res) => {
+  app.post("/api/admin/capture-config", requireSuperAdminRole, async (req, res) => {
     try {
       if (!requireDangerConfirmation(req, res, "UPDATE_CAPTURE_CONFIG")) return;
       const input = req.body || {};
@@ -748,7 +750,7 @@ function registerAdminCaptureRoutes({
       }
       if (!isUpdate && !isAdminUser(currentUser)) {
         const accountCount = store.getAccountsByUser(currentUser.username).accounts.length;
-        const accountLimit = currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2;
+        const accountLimit = currentUser.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT;
         if (accountCount >= accountLimit) {
           return res.status(403).json({
             ok: false,

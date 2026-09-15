@@ -66,6 +66,23 @@ function createAdminAccountAccess({ store, getProvider }) {
     return accountList.map(account => account.id);
   }
 
+  /**
+   * 按用户过滤日志条目。
+   * - 打上 `adminOnly` 的日志含 serverUrl 等内部配置，只对管理员可见。
+   * - 其余日志按可访问账号过滤；没有 accountId 的系统级日志（如启动提示）对所有人可见。
+   */
+  function filterLogsForUser(logList, user) {
+    const isAdmin = !!user && (user.role === 'admin' || user.role === 'super_admin');
+    const accessibleAccountIds = getAccessibleAccountIdsForUser(user);
+    return (Array.isArray(logList) ? logList : []).filter((logEntry) => {
+      if (!logEntry) return false;
+      if (logEntry.adminOnly && !isAdmin) return false;
+      const logAccountId = logEntry.accountId || logEntry.id;
+      if (!logAccountId) return true;
+      return accessibleAccountIds.includes(logAccountId);
+    });
+  }
+
   function resolveAccountReference(ref) {
     const normalizedRef = normalizeAccountRef(ref);
     if (!normalizedRef) return '';
@@ -87,6 +104,7 @@ function createAdminAccountAccess({ store, getProvider }) {
   return {
     canAccessAccount,
     getAccessibleAccountIdsForUser,
+    filterLogsForUser,
     getAccessibleAccountIdsFromRequest,
     getAccountIdFromRequest,
     getAccountsForUser,

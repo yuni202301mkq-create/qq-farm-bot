@@ -766,6 +766,9 @@ const globalConfig = {
     defaultAccountConfig: cloneAccountConfig(DEFAULT_ACCOUNT_CONFIG),
     userDefaultAccountPlans: {},
     ui: { theme: 'light' },
+    // 主题是个人偏好，按用户名分开存，避免任何用户改主题影响其他人。
+    // 未设置过的用户回退到 ui.theme（系统默认值）。
+    userUIThemes: {},
     offlineReminder: { ...DEFAULT_OFFLINE_REMINDER },
     userOfflineReminders: {},
     adminPasswordHash: '',
@@ -1036,6 +1039,16 @@ function loadGlobalConfig() {
         const theme = String(globalConfig.ui.theme || '').toLowerCase();
         globalConfig.ui.theme = theme === 'light' ? 'light' : 'dark';
 
+        // 用户主题：按用户名存，个人偏好不落到全局
+        globalConfig.userUIThemes = {};
+        if (data.userUIThemes && typeof data.userUIThemes === 'object') {
+            for (const [key, val] of Object.entries(data.userUIThemes)) {
+                const username = String(key || '').trim();
+                const slug = normalizeUIThemeSlug(val);
+                if (username && slug) globalConfig.userUIThemes[username] = slug;
+            }
+        }
+
         // 离线提醒
         globalConfig.offlineReminder = normalizeOfflineReminder(data.offlineReminder);
 
@@ -1145,6 +1158,23 @@ function loadGlobalConfig() {
             }
         }
 
+        // 旧版全局设备协议并入管理员槽位：设备协议改成按用户读取后，
+        // 如果不搬迁，老安装里管理员配好的设备指纹会直接丢失。
+        // 与离线通知的迁移保持一致，只在管理员槽位为空时补一次。
+        if (data.deviceProtocol && typeof data.deviceProtocol === 'object') {
+            if (!globalConfig.userDeviceProtocols.admin) {
+                globalConfig.userDeviceProtocols.admin = {
+                    enabled: data.deviceProtocol.enabled === true,
+                    userAgent: normalizeDeviceUserAgent(data.deviceProtocol.userAgent),
+                    deviceModel: String(data.deviceProtocol.deviceModel || DEFAULT_DEVICE_PROTOCOL.deviceModel).trim(),
+                    deviceBrand: String(data.deviceProtocol.deviceBrand || DEFAULT_DEVICE_PROTOCOL.deviceBrand).trim(),
+                    deviceMac: String(data.deviceProtocol.deviceMac || '').trim(),
+                    deviceId: String(data.deviceProtocol.deviceId || '').trim(),
+                    imei: String(data.deviceProtocol.imei || '').trim()
+                };
+            }
+        }
+
         // 防倒卖配置
         if (data.antiResaleConfig && typeof data.antiResaleConfig === 'object') {
             globalConfig.antiResaleConfig = {
@@ -1216,6 +1246,17 @@ function sanitizeGlobalConfigBeforeSave() {
         };
     }
     globalConfig.userDeviceProtocols = cleanProtocols;
+
+    // 用户主题：按用户名存，写入前再归一一次，避免脏值落盘
+    const rawThemes = globalConfig.userUIThemes && typeof globalConfig.userUIThemes === 'object'
+        ? globalConfig.userUIThemes : {};
+    const cleanThemes = {};
+    for (const [key, val] of Object.entries(rawThemes)) {
+        const username = String(key || '').trim();
+        const slug = normalizeUIThemeSlug(val);
+        if (username && slug) cleanThemes[username] = slug;
+    }
+    globalConfig.userUIThemes = cleanThemes;
 }
 
 function saveGlobalConfig(options = {}) {
@@ -1580,17 +1621,44 @@ function setSeedLocks(accountId, seedIds) {
     return [...cfg.seedLocks];
 }
 
-function getUI() {
-    return { ...globalConfig.ui };
+function getUI(username) {
+    const ui = { ...globalConfig.ui };
+    const owner = String(username || '').trim();
+    const own = owner ? (globalConfig.userUIThemes || {})[owner] : '';
+    // 用户自己设置过主题就用他自己的，没设置过才回退到系统默认值
+    if (own) ui.theme = own;
+    return ui;
 }
 
-function setUITheme(theme) {
+/** 主题标识只接受小写字母/数字/连字符的短标识，避免任意字符串落盘 */
+function normalizeUIThemeSlug(value) {
+    const raw = String(value || '').trim().toLowerCase();
+    return /^[a-z0-9][a-z0-9-]{0,31}$/.test(raw) ? raw : '';
+}
+
+function setUITheme(theme, username) {
+    const owner = String(username || '').trim();
+    // 主题是个人偏好：只要知道是哪个用户在改，就只写他自己的槽位，
+    // 绝不碰全局 ui.theme，否则一个普通用户改主题会影响所有人。
+    if (owner) {
+        const slug = normalizeUIThemeSlug(theme);
+        if (slug) {
+            globalConfig.userUIThemes[owner] = slug;
+            saveGlobalConfig();
+        }
+        return { ui: getUI(owner) };
+    }
+    // 无用户上下文的内部/系统调用才允许改全局默认值
     const raw = String(theme || '').toLowerCase();
     return applyConfigSnapshot({ ui: { theme: raw === 'light' ? 'light' : 'dark' } });
 }
 
 function getOfflineReminder(username) {
-    if (!username) return normalizeOfflineReminder(globalConfig.offlineReminder);
+    // 离线通知是用户级设置：取不到用户名时必须返回内置默认值，
+    // 绝不能回退到 globalConfig.offlineReminder —— 那是单用户时代的全局配置，
+    // 启动迁移时已并入 userOfflineReminders.admin。继续回退会让管理员的
+    // 配置（含 offlineDeleteSec 自动删号阈值）落到没有归属用户的账号上。
+    if (!username) return normalizeOfflineReminder({});
     const userReminder = globalConfig.userOfflineReminders && globalConfig.userOfflineReminders[username];
     if (userReminder) return normalizeOfflineReminder(userReminder);
     return normalizeOfflineReminder({});
@@ -1601,7 +1669,7 @@ function setOfflineReminder(config, username) {
         const current = normalizeOfflineReminder(globalConfig.offlineReminder);
         globalConfig.offlineReminder = normalizeOfflineReminder({ ...current, ...config || {} });
         saveGlobalConfig();
-        return getOfflineReminder();
+        return normalizeOfflineReminder(globalConfig.offlineReminder);
     }
     if (!globalConfig.userOfflineReminders) globalConfig.userOfflineReminders = {};
     const current = normalizeOfflineReminder(globalConfig.userOfflineReminders[username] || {});
@@ -1993,8 +2061,10 @@ function getDeviceProtocolForAccount(accountId) {
             return getUserDeviceProtocol(username);
         }
     }
-    // Keep the legacy global value as a migration fallback for older installations.
-    return getDeviceProtocol();
+    // 设备协议是用户级设置：账号所属用户没有个人配置时用内置默认值，
+    // 不再回退 globalConfig.deviceProtocol —— 那是单用户时代的全局值，
+    // 回退会把管理员的设备指纹（含 deviceId / imei）落到普通用户的账号上。
+    return { ...DEFAULT_DEVICE_PROTOCOL };
 }
 
 function setUserDeviceProtocol(config, username) {

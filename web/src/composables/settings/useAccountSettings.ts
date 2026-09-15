@@ -23,13 +23,15 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
   const showClearStoppedConfirm = ref(false)
   const clearStoppedLoading = ref(false)
   const refreshWxCodesLoading = ref(false)
+  // 新增账号保存成功后置为目标账号，驱动启动进度弹窗；编辑账号保持 null
+  const startupAccount = ref<{ id: string, name?: string, platform?: string, startErrorAt?: number } | null>(null)
 
   const userIsAdmin = computed(() => userStore.isAdmin)
   const isAccountOpsDisabled = computed(() => !userStore.isAdmin && userStore.isExpired)
   const quotaLimit = computed(() => {
     const limit = userStore.accountLimit
     if (limit === undefined || limit === null)
-      return 3
+      return 1
     return limit
   })
   const isOverQuota = computed(() => {
@@ -157,12 +159,34 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     }
   }
 
+  // 启动账号是「排队 + 后台执行」的：微信账号还要先刷新 Code（实测约 9 秒）才拉起
+  // worker。等 /start 接口返回再弹窗会直接错过「启动中」阶段，所以点击启动后立刻展示
+  // 启动进度弹窗，由它自己轮询 /api/status 与 /api/accounts 跟踪真实结果。
+  function openStartupModal(account: any) {
+    if (!account || account.id === undefined || account.id === null)
+      return
+    startupAccount.value = {
+      id: String(account.id),
+      name: account.name || account.nick || '',
+      platform: account.platform || '',
+      // 带上打开时的失败时间戳，弹窗据此忽略重试前的旧 startError
+      startErrorAt: Number(account.startErrorAt || 0),
+    }
+  }
+
   async function toggleAccount(account: any) {
     if (account.running) {
       await accountStore.stopAccount(account.id)
+      return
     }
-    else {
+    openStartupModal(account)
+    try {
       await accountStore.startAccount(account.id)
+    }
+    catch (error) {
+      // 启动请求本身失败（无权访问 / 账号已到期 / 账号不存在）时不能留下一直转圈的弹窗
+      startupAccount.value = null
+      throw error
     }
   }
 
@@ -171,11 +195,13 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     if (!account || !account.id)
       return
     notifiedStartErrors.delete(String(account.id))
+    openStartupModal(account)
     try {
       await accountStore.startAccount(account.id)
       await accountStore.fetchAccounts()
     }
     catch (error: any) {
+      startupAccount.value = null
       const name = account.name || account.nick || account.id
       toastStore.error(`账号「${name}」重新获取失败：${error?.response?.data?.error || error?.message || '请稍后重试'}`)
     }
@@ -210,8 +236,22 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     }
   }
 
-  function handleSaved() {
+  // AccountModal 保存成功后会带上新账号信息（新增才有 created，编辑为 null）。
+  // 新增账号后端已排队后台启动，这里交给启动进度弹窗跟踪启动结果。
+  function handleSaved(payload?: { created?: { id?: string, name?: string, platform?: string } | null }) {
     accountStore.fetchAccounts()
+    const created = payload?.created
+    if (created?.id) {
+      startupAccount.value = {
+        id: String(created.id),
+        name: created.name,
+        platform: created.platform,
+      }
+    }
+  }
+
+  function closeStartupModal() {
+    startupAccount.value = null
   }
 
   function selectAccount(account: any) {
@@ -265,6 +305,7 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     showClearStoppedConfirm,
     clearStoppedLoading,
     refreshWxCodesLoading,
+    startupAccount,
     stoppedAccountsCount,
     isAddAccountDisabled,
     addAccountDisabledReason,
@@ -280,6 +321,7 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     retryStartAccount,
     refreshWxCodesNow,
     handleSaved,
+    closeStartupModal,
     selectAccount,
     openClearStoppedConfirm,
     confirmClearStopped,

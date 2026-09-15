@@ -139,7 +139,7 @@ function buildSettingsPayload(store, accountId, currentUser) {
       accountId && typeof store.getBagSeedFallbackStrategy === "function"
         ? store.getBagSeedFallbackStrategy(accountId)
         : "level",
-    ui: store.getUI(),
+    ui: store.getUI(currentUser && currentUser.username),
     offlineReminder:
       store.getOfflineReminder && currentUser
         ? store.getOfflineReminder(currentUser.username)
@@ -287,7 +287,14 @@ function registerAdminSettingsRoutes({
   app.post("/api/settings/theme", async (req, res) => {
     try {
       const theme = String((req.body || {}).theme || "");
-      const data = await provider.setUITheme(theme);
+      // 主题是个人偏好：必须带上当前登录用户，只写该用户自己的主题，不能改全局默认值。
+      const username = req.currentUser && req.currentUser.username
+        ? String(req.currentUser.username)
+        : "";
+      if (!username) {
+        return res.status(401).json({ ok: false, error: "未登录" });
+      }
+      const data = await provider.setUITheme(theme, username);
       res.json({ ok: true, data: data || {} });
     } catch (error) {
       // 超时守卫可能已先行返回 503；此时再 res.json 会抛 ERR_HTTP_HEADERS_SENT。

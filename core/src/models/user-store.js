@@ -2,7 +2,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const { getDataFile, ensureDataDir } = require('../config/runtime-paths');
 
-const DEFAULT_ACCOUNT_LIMIT = 2;
+const DEFAULT_ACCOUNT_LIMIT = 1;
 const SUPER_ADMIN_USERNAME = 'admin';
 // 出厂初始口令：仅用于首次登录，登录后必须立刻改掉（由 mustChangePassword 强制）
 const DEFAULT_SUPER_ADMIN_PASSWORD = 'admin';
@@ -12,6 +12,13 @@ const CARD_KEYS_FILE = getDataFile('card-keys.json');
 const FREE_CARD_CLAIMS_FILE = getDataFile('free-card-claims.json');
 const FREE_CARD_DAYS = 7;
 const FREE_CARD_NOTE = '免费试用7天';
+
+// 卡密分两类，一种卡密只带一种效果，互不混用：
+//   duration（时效卡密）—— 只延长账号有效期，登录前后都可激活
+//   quota（额度账号卡密）—— 只增加账号数量上限，必须在登录后激活
+const CARD_KEY_TYPE_DURATION = 'duration';
+const CARD_KEY_TYPE_QUOTA = 'quota';
+const CARD_KEY_TYPES = [CARD_KEY_TYPE_DURATION, CARD_KEY_TYPE_QUOTA];
 
 ensureDataDir();
 
@@ -50,9 +57,33 @@ function saveUsers(users) {
   writeJson(USERS_FILE, { users });
 }
 
+/**
+ * 卡密类型：新记录直接读 type；旧记录没有 type 时按已有字段推断，
+ * 让历史卡密落到「天数优先、其次额度」的确定归属，而不是随机取一个默认值。
+ */
+function normalizeCardKeyType(key) {
+  const raw = String((key && key.type) || '').trim().toLowerCase();
+  if (CARD_KEY_TYPES.includes(raw)) return raw;
+  if (Number(key && key.days) > 0) return CARD_KEY_TYPE_DURATION;
+  if (Number(key && key.accountLimit) > 0) return CARD_KEY_TYPE_QUOTA;
+  return CARD_KEY_TYPE_DURATION;
+}
+
+/** 归一成「一种卡密只带一种效果」：时效卡密不带额度，额度卡密不带天数 */
+function normalizeCardKey(key) {
+  const source = key && typeof key === 'object' ? key : {};
+  const type = normalizeCardKeyType(source);
+  return {
+    ...source,
+    type,
+    days: type === CARD_KEY_TYPE_DURATION ? Math.max(0, Number(source.days) || 0) : 0,
+    accountLimit: type === CARD_KEY_TYPE_QUOTA ? Math.max(0, Number(source.accountLimit) || 0) : 0,
+  };
+}
+
 function loadCardKeys() {
   const data = readJson(CARD_KEYS_FILE, { keys: [] });
-  return Array.isArray(data.keys) ? data.keys : [];
+  return Array.isArray(data.keys) ? data.keys.map(normalizeCardKey) : [];
 }
 
 function saveCardKeys(keys) {
@@ -240,15 +271,22 @@ function listCardKeys() {
   return loadCardKeys().sort((a, b) => b.createdAt - a.createdAt);
 }
 
-function createCardKeys({ count = 1, days = 30, accountLimit = DEFAULT_ACCOUNT_LIMIT, note = '' } = {}) {
+function createCardKeys({ count = 1, type = CARD_KEY_TYPE_DURATION, days = 30, accountLimit = DEFAULT_ACCOUNT_LIMIT, note = '' } = {}) {
   const total = Math.max(1, Math.min(100, Number(count) || 1));
-  const durationDays = Math.max(1, Math.min(3650, Number(days) || 30));
-  const limit = Math.max(1, Math.min(50, Number(accountLimit) || DEFAULT_ACCOUNT_LIMIT));
+  const keyType = normalizeCardKeyType({ type });
+  // 一类卡密只写入自己那一项，另一项固定为 0，避免激活时把另一种效果也带上
+  const durationDays = keyType === CARD_KEY_TYPE_DURATION
+    ? Math.max(1, Math.min(3650, Number(days) || 30))
+    : 0;
+  const limit = keyType === CARD_KEY_TYPE_QUOTA
+    ? Math.max(1, Math.min(50, Number(accountLimit) || DEFAULT_ACCOUNT_LIMIT))
+    : 0;
   const keys = loadCardKeys();
   const created = [];
   for (let i = 0; i < total; i += 1) {
     const key = {
       code: generateCardCode(),
+      type: keyType,
       days: durationDays,
       accountLimit: limit,
       note: String(note || '').slice(0, 100),
@@ -261,6 +299,16 @@ function createCardKeys({ count = 1, days = 30, accountLimit = DEFAULT_ACCOUNT_L
   }
   saveCardKeys(keys);
   return created;
+}
+
+/**
+ * 登录前激活路径（注册 / 凭用户名续费）只允许时效卡密。
+ * 额度卡密会改变账号数量上限，必须登录后在应用内激活，避免仅凭用户名就替他人消耗额度。
+ */
+function assertCardKeyActivatableBeforeLogin(key) {
+  if (normalizeCardKeyType(key) === CARD_KEY_TYPE_QUOTA) {
+    throw new Error('额度账号卡密只能在登录后激活，请先登录再使用');
+  }
 }
 
 function findCardKey(code) {
@@ -280,6 +328,19 @@ function consumeCardKey(code, username) {
   key.usedAt = Date.now();
   saveCardKeys(keys);
   return key;
+}
+
+/**
+ * 登录前使用卡密：先校验类型再消耗。
+ * 顺序很关键——consumeCardKey 会把卡密标记为已使用，
+ * 若先消耗再拒绝，用户手里那张额度卡密就被白白废掉了。
+ */
+function consumeCardKeyBeforeLogin(code, username) {
+  const key = findCardKey(code);
+  if (!key) throw new Error('卡密不存在，请检查后重新输入');
+  if (key.usedBy) throw new Error('该卡密已被使用');
+  assertCardKeyActivatableBeforeLogin(key);
+  return consumeCardKey(code, username);
 }
 
 function deleteCardKey(code) {
@@ -329,7 +390,7 @@ function findFreeCardClaimByDevice(deviceId) {
 }
 
 /** 领取免费试用卡密：同一来源地址或同一设备都只能领一次 */
-function claimFreeCard({ address, deviceId, username = '', days = FREE_CARD_DAYS, accountLimit = DEFAULT_ACCOUNT_LIMIT } = {}) {
+function claimFreeCard({ address, deviceId, username = '', days = FREE_CARD_DAYS } = {}) {
   const target = normalizeClaimAddress(address);
   const device = normalizeDeviceId(deviceId);
   // IP 与设备是两个独立限制维度：换设备刷 IP、换 IP 刷设备都拦住
@@ -337,7 +398,8 @@ function claimFreeCard({ address, deviceId, username = '', days = FREE_CARD_DAYS
   if (target && findFreeCardClaim(target)) throw new Error('每个IP/设备仅可领取一次免费卡密，感谢您的使用！');
   if (device && findFreeCardClaimByDevice(device)) throw new Error('每个IP/设备仅可领取一次免费卡密，感谢您的使用！');
 
-  const [card] = createCardKeys({ count: 1, days, accountLimit, note: FREE_CARD_NOTE });
+  // 免费试用只送时长；账号额度由 createUser 的默认额度提供，不通过卡密发放
+  const [card] = createCardKeys({ count: 1, type: CARD_KEY_TYPE_DURATION, days, note: FREE_CARD_NOTE });
   const claims = loadFreeCardClaims();
   claims.push({
     address: target,
@@ -380,7 +442,14 @@ module.exports = {
   createCardKeys,
   findCardKey,
   consumeCardKey,
+  consumeCardKeyBeforeLogin,
   deleteCardKey,
+  CARD_KEY_TYPE_DURATION,
+  CARD_KEY_TYPE_QUOTA,
+  CARD_KEY_TYPES,
+  normalizeCardKeyType,
+  normalizeCardKey,
+  assertCardKeyActivatableBeforeLogin,
   FREE_CARD_DAYS,
   listFreeCardClaims,
   findFreeCardClaim,

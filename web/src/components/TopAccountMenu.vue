@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import api from '@/api'
 import AccountCareerModal from '@/components/AccountCareerModal.vue'
 import AccountModal from '@/components/AccountModal.vue'
+import AccountStartupModal from '@/components/AccountStartupModal.vue'
 import RemarkModal from '@/components/RemarkModal.vue'
 import RenewCardModal from '@/components/RenewCardModal.vue'
 import { getPlatformClass, getPlatformLabel, useAccountStore } from '@/stores/account'
@@ -30,6 +31,8 @@ const careerError = ref('')
 const careerItems = ref<any[]>([])
 const careerProfile = ref<Record<string, any>>({})
 const accountToEdit = ref<any>(null)
+// 顶部菜单新增账号后，驱动启动进度弹窗；编辑账号保持 null
+const startupAccount = ref<{ id: string, name?: string, platform?: string } | null>(null)
 const failedAvatars = ref(new Set<string>())
 
 const triggerRef = useTemplateRef<HTMLElement>('trigger')
@@ -213,11 +216,21 @@ function openRemarkModal(acc: any) {
   closeDropdown()
 }
 
-async function handleAccountSaved() {
-  await accountStore.fetchAccounts()
+async function handleAccountSaved(payload?: { created?: { id?: string, name?: string, platform?: string } | null }) {
   showAccountModal.value = false
   showRemarkModal.value = false
   accountToEdit.value = null
+  // 新增账号（后端已排队后台启动）才弹启动进度；改备注/编辑账号不会带 created。
+  // 必须先置状态再刷新列表：fetchAccounts 是网络请求，放在前面会让弹窗晚几百毫秒才出现。
+  const created = payload?.created
+  if (created?.id) {
+    startupAccount.value = {
+      id: String(created.id),
+      name: created.name,
+      platform: created.platform,
+    }
+  }
+  await accountStore.fetchAccounts()
 }
 
 function handleLogout() {
@@ -396,6 +409,12 @@ function handleLogout() {
         :edit-data="accountToEdit"
         @close="showAccountModal = false; accountToEdit = null"
         @saved="handleAccountSaved"
+      />
+
+      <AccountStartupModal
+        :show="!!startupAccount"
+        :account="startupAccount"
+        @close="startupAccount = null"
       />
 
       <RemarkModal

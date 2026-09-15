@@ -55,7 +55,7 @@ export const useUserStore = defineStore('user', () => {
           username: data.data.username,
           role: data.data.role === 'super_admin' ? 'super_admin' : 'user',
           card: data.data.card ?? null,
-          accountLimit: data.data.accountLimit ?? 2,
+          accountLimit: data.data.accountLimit ?? 1,
           expiresAt: data.data.expiresAt ?? null,
           mustChangePassword: data.data.mustChangePassword === true,
         }

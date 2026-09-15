@@ -9,19 +9,34 @@ const { log } = require('./utils');
 // Proto 根对象与所有消息类型
 let root = null;
 const types = {};
-let protoReadyResolve = null;
-let protoReadyPromise = null;
+// 消息类型是否已全部挂到 types 上。不能拿 root 当就绪判据：root 在 `await root.load(...)`
+// 返回后就已经非空，而 types 要到之后逐个 lookupType 才填满，中间存在窗口。
+let protoReady = false;
+// 等待 proto 就绪的调用方。用集合而不是单例 promise：单例只能被唤醒一次，
+// 一旦某次加载失败并唤醒了等待方，之后重新加载时新注册的等待方会立刻拿到旧的失败结论。
+const protoReadyWaiters = [];
+// 等待上限。proto 正常只需几十毫秒，这里只是兜底：万一加载从未被触发，
+// 等待方要拿到明确错误而不是永久挂起，同时从等待队列里移除避免堆积。
+const PROTO_WAIT_TIMEOUT_MS = 8000;
 
-function getProtoReadyPromise() {
-    if (!protoReadyPromise) {
-        protoReadyPromise = new Promise((resolve) => {
-            protoReadyResolve = resolve;
-        });
+function notifyProtoWaiters() {
+    while (protoReadyWaiters.length > 0) {
+        const waiter = protoReadyWaiters.shift();
+        if (waiter.timer) clearTimeout(waiter.timer);
+        if (protoReady) {
+            waiter.resolve(true);
+        } else {
+            waiter.reject(new Error('Protobuf 定义加载失败，无法编解码消息'));
+        }
     }
-    return protoReadyPromise;
 }
 
-async function loadProto() {
+/**
+ * 加载 proto 文件并把所有消息类型挂到 `types` 上。
+ * 就绪状态只在最后一批 lookupType 完成后置为 true，对外请用下面的 `loadProto`，
+ * 它会保证成功和失败都唤醒等待方。
+ */
+async function loadProtoInner() {
     log('系统', '正在加载 Protobuf 定义...');
     root = new protobuf.Root();
     await root.load([
@@ -262,19 +277,52 @@ async function loadProto() {
     types.ActivateDogRequest = root.lookupType('gamepb.dogpb.ActivateDogRequest');
     types.ActivateDogReply = root.lookupType('gamepb.dogpb.ActivateDogReply');
 
+    // 所有消息类型都挂到 types 之后才算就绪。waitForProtoReady 依据 protoReady 放行，
+    // 不能依据 root：root 在 `await root.load(...)` 返回时就已经非空，而这时 types 还是空的，
+    // 窗口内的 encode/decode 会抛 "Cannot read properties of undefined (reading 'encode')"。
+    protoReady = true;
+
     // Proto 加载完成
     log('系统', 'Protobuf 定义加载完成');
-    if (protoReadyResolve) protoReadyResolve(true);
+}
+
+/**
+ * 对外入口：无论加载成功还是失败都要唤醒 waitForProtoReady 的等待方，
+ * 否则加载失败时等待方会永久挂起。失败时 protoReady 仍为 false，
+ * 等待方会据此拿到明确错误，而不是让底层 encode 抛空指针。
+ */
+async function loadProto() {
+    try {
+        return await loadProtoInner();
+    } finally {
+        notifyProtoWaiters();
+    }
 }
 
 function getRoot() {
     return root;
 }
 
-async function waitForProtoReady() {
-    if (root) return true;
-    await getProtoReadyPromise();
-    return true;
+/** 消息类型是否已全部就绪（供诊断与守卫使用） */
+function isProtoReady() {
+    return protoReady;
 }
 
-module.exports = { loadProto, types, getRoot, waitForProtoReady };
+/**
+ * 等待消息类型就绪。未就绪时挂起，加载成功后被放行，加载失败或等待超时则抛出可读错误。
+ * @param {number} [timeoutMs] - 等待上限，默认 8 秒
+ */
+function waitForProtoReady(timeoutMs = PROTO_WAIT_TIMEOUT_MS) {
+    if (protoReady) return Promise.resolve(true);
+    return new Promise((resolve, reject) => {
+        const waiter = { resolve, reject, timer: null };
+        waiter.timer = setTimeout(() => {
+            const index = protoReadyWaiters.indexOf(waiter);
+            if (index >= 0) protoReadyWaiters.splice(index, 1);
+            reject(new Error('等待 Protobuf 定义加载超时'));
+        }, timeoutMs);
+        protoReadyWaiters.push(waiter);
+    });
+}
+
+module.exports = { loadProto, types, getRoot, waitForProtoReady, isProtoReady };

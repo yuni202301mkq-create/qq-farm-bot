@@ -317,14 +317,15 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
       if (userStore.findUser(username)) {
         return res.status(400).json({ ok: false, error: '用户名已存在' });
       }
-      const key = userStore.consumeCardKey(cardKey, username);
+      // 登录前只接受时效卡密；额度账号卡密必须登录后在应用内激活
+      const key = userStore.consumeCardKeyBeforeLogin(cardKey, username);
       const expiresAt = Date.now() + Number(key.days) * 24 * 60 * 60 * 1000;
       const user = userStore.createUser({
         username,
         password,
         role: 'user',
         card: key.code,
-        accountLimit: key.accountLimit,
+        // 额度不通过卡密发放：交给 createUser 的默认额度
         expiresAt,
       });
       return sendSession(res, createAdminSession, user, refreshTokens);
@@ -344,15 +345,12 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
       if (user.role === 'super_admin') {
         return res.status(400).json({ ok: false, error: '超级管理员无需续费' });
       }
-      const key = userStore.consumeCardKey(cardKey, username);
+      // 登录前只接受时效卡密；额度账号卡密必须登录后在应用内激活
+      const key = userStore.consumeCardKeyBeforeLogin(cardKey, username);
       const addMs = Number(key.days) * 24 * 60 * 60 * 1000;
       const base = user.expiresAt && user.expiresAt > Date.now() ? user.expiresAt : Date.now();
-      // 天数与额度都要生效，和应用内续费（/api/user/card-redeem）保持一致
-      const currentLimit = Number(user.accountLimit || userStore.DEFAULT_ACCOUNT_LIMIT || 2);
-      const updated = userStore.updateUser(username, {
-        expiresAt: base + addMs,
-        accountLimit: currentLimit + Number(key.accountLimit || 0),
-      });
+      // 这里只叠加有效期；账号额度由应用内的 /api/user/card-redeem 处理
+      const updated = userStore.updateUser(username, { expiresAt: base + addMs });
       // 同步该用户的在线会话，额度/有效期立即生效
       if (typeof updateAdminSessions === 'function') {
         updateAdminSessions(
@@ -366,8 +364,8 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
           username: updated.username,
           expiresAt: updated.expiresAt,
           accountLimit: updated.accountLimit,
-          accountLimitAdded: key.accountLimit,
           cardKey: key.code,
+          type: key.type,
           days: key.days,
         },
       });
@@ -388,8 +386,8 @@ function registerAdminAuthRoutes({ app, createAdminSession, updateAdminSessions,
         ok: true,
         data: {
           cardKey: card.code,
+          type: card.type,
           days: card.days,
-          accountLimit: card.accountLimit,
         },
       });
     } catch (error) {

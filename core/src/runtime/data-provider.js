@@ -35,6 +35,7 @@ function createDataProvider(deps) {
         startWorker,
         stopWorker,
         restartWorker,
+        dropStaleWorker: dropStaleWorkerRuntime,
         getResourceStatus,
         scheduleAutoCodeRefresh,
         refreshAccountCode
@@ -354,9 +355,10 @@ function createDataProvider(deps) {
             return { ok };
         },
 
-        setUITheme: async (theme) => {
-            const result = store.setUITheme(theme);
-            return { ui: result.ui || store.getUI() };
+        setUITheme: async (theme, username) => {
+            // 主题按用户隔离：带上调用者用户名，只写他自己的主题槽位
+            const result = store.setUITheme(theme, username);
+            return { ui: result.ui || store.getUI(username) };
         },
 
         broadcastConfig: (accountId) => {
@@ -429,6 +431,16 @@ function createDataProvider(deps) {
             if (!account) return false;
             if (id) stopWorker(id);
             return true;
+        },
+
+        /**
+         * 丢弃指定 id 上残留的 Worker 运行时（账号 id 复用时清理上一轮残留）。
+         * 新建账号前调用，避免旧 Worker 冒充新账号的「运行中 / 已连接」状态。
+         */
+        dropStaleWorker: (ref) => {
+            const id = resolveAccountId(ref);
+            if (!id || typeof dropStaleWorkerRuntime !== 'function') return false;
+            return dropStaleWorkerRuntime(id);
         },
 
         restartAccount: (ref) => {

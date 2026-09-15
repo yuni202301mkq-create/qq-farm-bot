@@ -41,8 +41,10 @@ export const useToastStore = defineStore('toast', () => {
     const toast: Toast = { id, message, type, duration, action }
     toasts.value.push(toast)
 
-    // Toasts with an action button stay until dismissed (or until the action is clicked)
-    if (duration > 0 && !action) {
+    // duration > 0 时按 duration 自动消失；duration 传 0 表示需要用户手动关闭。
+    // 带操作按钮的通知同样遵守 duration：调用方显式给了 3000，就应当在 3 秒后消失，
+    // 不能因为带了按钮就永久驻留。
+    if (duration > 0) {
       setTimeout(() => {
         remove(id)
       }, duration)

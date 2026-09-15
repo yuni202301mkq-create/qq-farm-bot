@@ -194,13 +194,39 @@ export function useStrategySettings({
     }
   }
 
+  /**
+   * 只把当前账号的设置拉进 store（本地配置接口，快），不覆盖页面本地表单。
+   * 调用方自行决定何时把 store 同步到表单，避免后台刷新回退用户刚改的开关。
+   */
+  async function fetchAccountSettings() {
+    const accountId = currentAccountId.value
+    if (!accountId)
+      return
+    await settingStore.fetchSettings(String(accountId))
+  }
+
+  /**
+   * 拉取当前账号设置并同步到本地表单（切号、应用默认方案等场景）。
+   */
+  async function loadSettingsForAccount() {
+    await fetchAccountSettings()
+    syncLocalStrategySettings()
+  }
+
+  /**
+   * 种子列表需要账号在线并走游戏协议，明显慢于本地接口。
+   * 后台刷新即可：选种预览自身有 strategyPreviewLoading，不阻塞面板显示。
+   */
+  function loadSeedPreview() {
+    const accountId = currentAccountId.value
+    if (!accountId)
+      return
+    void farmStore.fetchSeeds(String(accountId))
+  }
+
   async function loadStrategyData() {
-    if (currentAccountId.value) {
-      const accountId = String(currentAccountId.value)
-      await settingStore.fetchSettings(accountId)
-      syncLocalStrategySettings()
-      await farmStore.fetchSeeds(accountId)
-    }
+    await loadSettingsForAccount()
+    loadSeedPreview()
   }
 
   async function saveStrategySettings() {
@@ -242,6 +268,9 @@ export function useStrategySettings({
     strategyPreviewLabel,
     strategyPreviewLoading,
     syncLocalStrategySettings,
+    fetchAccountSettings,
+    loadSettingsForAccount,
+    loadSeedPreview,
     loadStrategyData,
     saveStrategySettings,
     resetStrategyState,

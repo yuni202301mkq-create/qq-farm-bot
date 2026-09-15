@@ -363,6 +363,31 @@ function createWorkerManager(deps) {
     }
 
     /**
+     * 丢弃指定 id 上残留的 Worker 运行时。
+     *
+     * 账号 id 会被复用：账号列表被清空后 nextId 重置为 1，新建账号可能拿到刚被移除
+     * 账号的 id。此时上一轮同 id 的 Worker 可能仍在注册表里，会引发两个问题：
+     *   1. /api/status 把旧 Worker 的「已连接」状态当成新账号的登录结果，
+     *      前端启动进度弹窗直接跳到「启动成功」，用户看不到「账号启动中」；
+     *   2. startWorker 见到注册表已有同 id 会直接 return false，新账号不会被启动。
+     * 新建账号前调用本方法清掉残留。只会命中孤儿 Worker（store 中已无同 id 账号），
+     * 正常新增/编辑流程不受影响。
+     */
+    function dropStaleWorker(accountId) {
+        const id = String(accountId || '');
+        if (!id) return false;
+
+        const wrk = workers[id];
+        if (!wrk) return false;
+
+        wrk.stopping = true;
+        // 先解除注册：此后 isAccountRunning / getStatus 不会再读到这个已废弃的 Worker
+        delete workers[id];
+        try { wrk.process.kill(); } catch { }
+        return true;
+    }
+
+    /**
      * 重启账号 Worker
      */
     function restartWorker(account) {
@@ -771,6 +796,7 @@ function createWorkerManager(deps) {
         startWorker,
         stopWorker,
         restartWorker,
+        dropStaleWorker,
         callWorkerApi,
         getResourceStatus: () => ({
             policy: resourcePolicy,

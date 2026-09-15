@@ -1,12 +1,20 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import api from '@/api'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
+import BaseSelect from '@/components/ui/BaseSelect.vue'
 import { useToastStore } from '@/stores/toast'
+
+// 卡密分两类，一类只带一种效果：
+//   duration 时效卡密 —— 只延长有效期，注册/登录前与登录后都能激活
+//   quota    额度账号卡密 —— 只增加账号数量上限，必须登录后在应用内激活
+type CardKeyType = 'duration' | 'quota'
 
 interface CardKey {
   code: string
+  type: CardKeyType
+  typeText?: string
   days: number
   accountLimit: number
   note: string
@@ -32,11 +40,19 @@ const toastStore = useToastStore()
 
 // ---- 生成卡密 ----
 const genCount = ref(1)
+const genType = ref<CardKeyType>('duration')
 const genDays = ref(30)
-const genLimit = ref(2)
+const genLimit = ref(1)
 const genNote = ref('')
 const generating = ref(false)
 const lastGenerated = ref<string[]>([])
+
+const typeOptions = [
+  { label: '时效卡密（延长有效期）', value: 'duration' },
+  { label: '额度账号卡密（增加账号数）', value: 'quota' },
+]
+
+const genTypeText = computed(() => (genType.value === 'quota' ? '额度账号卡密' : '时效卡密'))
 
 // ---- 卡密列表 ----
 const keys = ref<CardKey[]>([])
@@ -87,15 +103,21 @@ async function generate() {
     return
   generating.value = true
   try {
-    const { data } = await api.post('/api/card-keys/generate', {
+    // 按类型只提交自己那一项，避免后端把两种效果一起写进同一张卡
+    const payload: Record<string, unknown> = {
       count: genCount.value,
-      days: genDays.value,
-      accountLimit: genLimit.value,
+      type: genType.value,
       note: genNote.value,
-    })
+    }
+    if (genType.value === 'duration')
+      payload.days = genDays.value
+    else
+      payload.accountLimit = genLimit.value
+
+    const { data } = await api.post('/api/card-keys/generate', payload)
     if (data?.ok) {
       lastGenerated.value = (data.data || []).map((k: CardKey) => k.code)
-      toastStore.success(`已生成 ${lastGenerated.value.length} 个卡密`)
+      toastStore.success(`已生成 ${lastGenerated.value.length} 个${genTypeText.value}`)
       await loadKeys()
     }
   }
@@ -243,11 +265,20 @@ onMounted(refresh)
         生成卡密
       </h4>
       <div class="grid gap-3 md:grid-cols-4">
+        <BaseSelect v-model="genType" label="卡密类型" :options="typeOptions" />
         <BaseInput v-model="genCount" type="number" label="生成数量（1-100）" />
-        <BaseInput v-model="genDays" type="number" label="有效天数（1-3650）" />
-        <BaseInput v-model="genLimit" type="number" label="账号数上限（1-50）" />
+        <BaseInput v-if="genType === 'duration'" v-model="genDays" type="number" label="有效天数（1-3650）" />
+        <BaseInput v-else v-model="genLimit" type="number" label="账号数上限（1-50）" />
         <BaseInput v-model="genNote" type="text" label="备注（可选）" />
       </div>
+      <p class="mt-2 text-xs text-gray-400">
+        <template v-if="genType === 'duration'">
+          时效卡密只延长有效期，用户可在注册页或登录后激活。
+        </template>
+        <template v-else>
+          额度账号卡密只增加账号数量上限，用户必须在登录后于应用内激活，注册/续费页无法使用。
+        </template>
+      </p>
       <div class="mt-3 flex items-center gap-2">
         <BaseButton variant="primary" size="sm" :loading="generating" @click="generate">
           生成卡密
@@ -261,7 +292,7 @@ onMounted(refresh)
       </div>
       <div v-if="lastGenerated.length" class="mt-3 rounded-xl bg-emerald-50 p-3 dark:bg-emerald-900/20">
         <div class="mb-1 text-xs text-emerald-700 dark:text-emerald-300">
-          最新生成：
+          最新生成（{{ genTypeText }}）：
         </div>
         <div class="max-h-32 overflow-y-auto text-sm text-emerald-800 font-mono dark:text-emerald-200">
           <div v-for="code in lastGenerated" :key="code">
@@ -293,6 +324,9 @@ onMounted(refresh)
             <tr>
               <th class="py-2 pr-3">
                 卡密
+              </th>
+              <th class="py-2 pr-3">
+                类型
               </th>
               <th class="py-2 pr-3">
                 天数
@@ -330,10 +364,20 @@ onMounted(refresh)
                 </div>
               </td>
               <td class="py-2 pr-3">
-                {{ key.days }}天
+                <span
+                  class="whitespace-nowrap rounded px-1.5 py-0.5 text-xs"
+                  :class="key.type === 'quota'
+                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                    : 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300'"
+                >
+                  {{ key.type === 'quota' ? '额度账号' : '时效' }}
+                </span>
               </td>
               <td class="py-2 pr-3">
-                {{ key.accountLimit }}
+                {{ key.type === 'duration' ? `${key.days}天` : '-' }}
+              </td>
+              <td class="py-2 pr-3">
+                {{ key.type === 'quota' ? key.accountLimit : '-' }}
               </td>
               <td class="py-2 pr-3">
                 <span :class="key.used ? 'text-gray-400' : 'text-emerald-600 font-semibold'">
@@ -356,7 +400,7 @@ onMounted(refresh)
               </td>
             </tr>
             <tr v-if="!keys.length">
-              <td colspan="7" class="py-6 text-center text-sm text-gray-400">
+              <td colspan="8" class="py-6 text-center text-sm text-gray-400">
                 暂无卡密，先在上方生成一批
               </td>
             </tr>

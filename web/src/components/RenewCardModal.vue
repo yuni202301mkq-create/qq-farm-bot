@@ -17,7 +17,11 @@ const loading = ref(false)
 const inspecting = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
-const inspectedCard = ref<{ code: string, days: number, accountLimit: number, note: string } | null>(null)
+// 时效卡密只延长有效期，额度账号卡密只增加账号数量上限，两类卡密只带一种效果
+type CardKeyType = 'duration' | 'quota'
+const inspectedCard = ref<{ code: string, type: CardKeyType, days: number, accountLimit: number, note: string } | null>(null)
+
+const inspectedTypeText = computed(() => (inspectedCard.value?.type === 'quota' ? '额度账号卡密' : '时效卡密'))
 
 const quotaLabel = computed(() => {
   if (userStore.isSuperAdmin)
@@ -97,8 +101,9 @@ async function redeemCard() {
     if (d.days > 0)
       parts.push(`有效期 +${d.days} 天`)
     if (d.accountLimitAdded > 0)
-      parts.push(`额度 +${d.accountLimitAdded}`)
-    successMessage.value = `兑换成功：${parts.join('，')}（当前额度 ${d.accountLimit} 个）`
+      parts.push(`账号额度 +${d.accountLimitAdded}`)
+    const suffix = d.accountLimitAdded > 0 ? `（当前额度 ${d.accountLimit} 个）` : ''
+    successMessage.value = `激活成功：${parts.join('，')}${suffix}`
     inspectedCard.value = null
     cardKey.value = ''
     await userStore.fetchUserInfo()
@@ -122,7 +127,7 @@ async function redeemCard() {
       <div class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
         <div class="flex items-center gap-2">
           <h3 class="text-lg font-semibold">
-            续费卡密
+            激活卡密
           </h3>
           <span
             class="rounded-full px-2 py-0.5 text-xs font-medium"
@@ -179,14 +184,14 @@ async function redeemCard() {
           <!-- 卡密信息 -->
           <div v-if="inspectedCard" class="border border-emerald-200 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
             <div class="font-medium">
-              卡密可用
+              卡密可用 · {{ inspectedTypeText }}
             </div>
             <div class="mt-1 text-xs space-y-0.5">
-              <div v-if="inspectedCard.days > 0">
+              <div v-if="inspectedCard.type === 'duration'">
                 有效天数：+{{ inspectedCard.days }} 天
               </div>
-              <div v-if="inspectedCard.accountLimit > 0">
-                新增额度：+{{ inspectedCard.accountLimit }} 个
+              <div v-else>
+                新增额度：+{{ inspectedCard.accountLimit }} 个账号
               </div>
               <div v-if="inspectedCard.note">
                 备注：{{ inspectedCard.note }}

@@ -105,7 +105,7 @@ const {
 } = require('../utils/network');
 const { nextBusinessBackoffMs } = require('../utils/gateway-health');
 const { runWithRequestPriority } = require('../utils/request-priority');
-const { loadProto } = require('../utils/proto');
+const { loadProto, waitForProtoReady } = require('../utils/proto');
 const { setLogHook, log, logWarn, toNum, getServerDateKey } = require('../utils/utils');
 const { resourcePolicy, createResourceMonitor } = require('../runtime/resource-policy');
 
@@ -1701,6 +1701,14 @@ async function handleApiCall(msg) {
     }
 
     try {
+        // 所有 API 都需要 protobuf 编解码，因此必须先等消息类型装载完成。
+        // worker 在 spawn 后就被立刻注册进 worker-manager（见 worker-manager 的 startWorker），
+        // 而 proto 是异步加载的，启动瞬间到达的请求如果直接进 switch，底层 encode 会抛
+        // "Cannot read properties of undefined (reading 'encode')" 并被业务层当成真实失败
+        // 吞掉（例如 getSeeds 会静默回退到本地备选列表）。这里统一等待就绪再执行，
+        // 加载失败时 waitForProtoReady 会抛出可读错误，由下方 catch 回给调用方。
+        await waitForProtoReady();
+
         switch (method) {
             case 'getLands':
                 result = await getLandsDetail();

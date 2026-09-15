@@ -545,6 +545,7 @@ function startAdminServer(dataProvider) {
   const {
     canAccessAccount,
     getAccessibleAccountIdsForUser,
+    filterLogsForUser,
     getAccessibleAccountIdsFromRequest,
     getAccountIdFromRequest,
     getAccountsForUser,
@@ -760,7 +761,7 @@ function startAdminServer(dataProvider) {
     provider,
     userStore,
     logger: adminLogger,
-    requireAdminRole,
+    requireSuperAdminRole,
     requireDangerConfirmation,
     canAccessAccount,
     resolveAccountReference,
@@ -870,12 +871,8 @@ function startAdminServer(dataProvider) {
         });
         if (!Array.isArray(logs)) logs = [];
         if (socketUser) {
-          const accessibleAccountIds = getAccessibleAccountIdsForUser(socketUser);
-          logs = logs.filter((logEntry) => {
-            const logAccountId = logEntry.accountId || logEntry.id;
-            if (!logAccountId) return true;
-            return accessibleAccountIds.includes(logAccountId);
-          });
+          // adminOnly 的日志（如「已加载系统配置」里的 serverUrl）只对管理员可见
+          logs = filterLogsForUser(logs, socketUser);
         }
         socket.emit("logs:snapshot", {
           accountId: subscribedAccountId || "all",
