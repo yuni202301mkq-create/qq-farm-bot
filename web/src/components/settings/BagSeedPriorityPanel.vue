@@ -229,7 +229,7 @@ defineExpose({ fetchBagSeeds })
 </script>
 
 <template>
-  <div class="bag-seed-panel border border-amber-200 rounded-lg bg-amber-50/70 p-3 space-y-3 dark:border-amber-800/50 dark:bg-amber-900/20">
+  <div class="bag-seed-panel liquid-glass-sub border border-amber-200 rounded-lg bg-amber-50/70 p-3 space-y-3 dark:border-amber-800/50 dark:bg-amber-900/20">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <div class="text-sm text-amber-900 font-semibold dark:text-amber-200">
@@ -237,7 +237,6 @@ defineExpose({ fetchBagSeeds })
         </div>
         <p class="mt-1 text-xs text-amber-700/90 dark:text-amber-300/90">
           先按下方顺序消耗背包中的种子；背包种子不足时，再按“第二优先策略”补种。
-          四格（2×2）作物同样按此顺序参与种植；「优先种植 2×2 作物」开关只控制其他策略下是否让四格作物插队先种，不影响本顺序。
         </p>
       </div>
       <button

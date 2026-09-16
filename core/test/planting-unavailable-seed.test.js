@@ -271,7 +271,7 @@ test('transient failures still retry every land and keep the shop fallback block
   }
 });
 
-test('2x2 seeds take part in the bag priority order when 四格优先 is on', async () => {
+test('2x2 seeds plant before 1x1 seeds when 四格优先 is on', async () => {
   const accountId = 'interleave-order';
   configurePriority(accountId, [29001, 101, 29002], { prioritize2x2Crops: true });
   const { service, requests, logs, restore } = loadService({
@@ -282,20 +282,16 @@ test('2x2 seeds take part in the bag priority order when 四格优先 is on', as
   try {
     const result = await service.plantFromBagSeeds([1, 2, 5, 6, 3, 4, 7, 8], accountId, { lands: unlockedLands() });
 
-    // 顺序 = 用户列表顺序：2x2 的 29001 → 单格 101 → 2x2 的 29002（凑不齐四格地，预留等待）。
+    // 开关开启时四格整体插队：29001、29002 依次先种（2x2 组内保持列表顺序，
+    // 101 在列表中虽排在 29002 前，仍要让位给所有 2x2）；地被 2x2 用完后 101 无地可种。
     assert.deepEqual(requests.map(item => `${item.seedId}:${item.landIds.join('-')}`), [
       '29001:5-6-1-2',
-      '101:3',
-      '101:4',
+      '29002:7-8-3-4',
     ]);
-    assert.equal(result.totalPlanted, 3);
-    assert.deepEqual(result.plantedLandIds.slice().sort((a, b) => a - b), [3, 4, 5]);
-    assert.deepEqual(result.reservedLandIds.slice().sort((a, b) => a - b), [7, 8]);
+    assert.equal(result.totalPlanted, 2);
+    assert.deepEqual(result.plantedLandIds.slice().sort((a, b) => a - b), [5, 7]);
+    assert.deepEqual(result.reservedLandIds, []);
     assert.deepEqual(result.remainingLandIds, []);
-    assert.equal(
-      logs.some(entry => entry.meta && entry.meta.result === 'waiting'),
-      true
-    );
     assert.equal(
       logs.some(entry => entry.meta && entry.meta.result === 'ok' && entry.meta.event === '种植2x2作物'),
       true
@@ -352,7 +348,7 @@ test('unavailable 2x2 seed enters cooldown and 1x1 seeds continue in order', asy
   }
 });
 
-test('2x2 seeds still follow the bag order while 四格优先 is off', async () => {
+test('2x2 seeds are skipped while 四格优先 is off', async () => {
   const accountId = 'interleave-toggle-off';
   configurePriority(accountId, [29001, 101], { prioritize2x2Crops: false });
   const { service, requests, restore } = loadService({
@@ -363,12 +359,12 @@ test('2x2 seeds still follow the bag order while 四格优先 is off', async () 
   try {
     const result = await service.plantFromBagSeeds([1, 2, 5, 6, 3], accountId, { lands: unlockedLands() });
 
-    // 「优先种植四格作物」只控制插队先种；背包优先策略内 2x2 始终按列表顺序参与。
+    // 「优先种植四格作物」开关是 2x2 参与背包优先顺序的总闸：关闭时 2x2
+    // 不参与、不预留，仅 1x1 按列表顺序种植。
     assert.deepEqual(requests.map(item => `${item.seedId}:${item.landIds.join('-')}`), [
-      '29001:5-6-1-2',
-      '101:3',
+      '101:1',
     ]);
-    assert.equal(result.totalPlanted, 2);
+    assert.equal(result.totalPlanted, 1);
     assert.deepEqual(result.reservedLandIds, []);
   } finally {
     restore();

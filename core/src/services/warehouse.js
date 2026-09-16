@@ -548,6 +548,7 @@ async function sellAllFruits() {
     }
 
     // 批量出售
+    const batchFailMessages = new Set();
     for (let i = 0; i < fruits.length; i += SELL_BATCH_SIZE) {
       const batch = fruits.slice(i, i + SELL_BATCH_SIZE);
       try {
@@ -558,8 +559,9 @@ async function sellAllFruits() {
         if (gain > 0) totalGoldFromReply += gain;
         batch.forEach(recordSoldFruit);
       } catch (err) {
-        // 批量失败，逐个重试
-        logWarn('仓库', `批量出售失败，改为逐个重试: ${err.message}`);
+        // 批量失败，逐个重试；失败原因不再单独打一行，
+        // 统一并入下方跳过日志（同一原因合并一条 + skipKey 变更去重），避免同屏重复两条。
+        batchFailMessages.add(String(err.message || '').replace(/^gamepb\.[\w.]+?\s*错误:\s*/, ''));
         for (const fruit of batch) {
           try {
             const result = await sellItems([fruit]);
@@ -586,12 +588,25 @@ async function sellAllFruits() {
     const skipChanged = skipKey !== lastSellSkipKey;
     lastSellSkipKey = skipKey;
     const skipSuffix = skippedKindCount > 0 && skipChanged ? `，跳过 ${skippedKindCount} 个不可售物品` : '';
-    if (skipChanged) {
+    if (skipChanged && skippedKindCount > 0) {
+      // 同一错误原因合并为一行：批量失败(原因)，跳过 ID=xxx xN、ID=yyy xM
+      const byMessage = new Map();
       for (const item of skippedItems) {
-        logWarn('仓库', `跳过不可售物品: ID=${item.id} x${item.count} (${item.message})`, {
-          module: 'warehouse', event: '跳过不可售物品', result: 'skip', itemId: item.id, count: item.count,
+        const shortMsg = String(item.message || '').replace(/^gamepb\.[\w.]+?\s*错误:\s*/, '') || item.message;
+        if (!byMessage.has(shortMsg)) byMessage.set(shortMsg, []);
+        byMessage.get(shortMsg).push(item);
+      }
+      for (const [shortMsg, group] of byMessage) {
+        const label = group.map(item => `ID=${item.id} x${item.count}`).join('、');
+        logWarn('仓库', `批量出售失败(${shortMsg})，跳过 ${label}`, {
+          module: 'warehouse', event: '跳过不可售物品', result: 'skip', count: group.length,
         });
       }
+    } else if (skipChanged && batchFailMessages.size > 0) {
+      // 整批失败但逐个重试全部补售成功：仅在新情况时提示一次，不逐轮刷屏
+      logWarn('仓库', `批量出售失败，逐个重试后全部售出 (${[...batchFailMessages].join('；')})`, {
+        module: 'warehouse', event: '批量出售重试成功', result: 'retry_ok',
+      });
     }
 
     // 等待金币更新

@@ -16,17 +16,7 @@ const currentHint = computed(() =>
 </script>
 
 <template>
-  <div class="border border-gray-200 rounded-xl p-4 dark:border-gray-700">
-    <div class="mb-4">
-      <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-        流畅模式
-      </h3>
-      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        关闭地块变异光效、天气粒子等装饰性动画，并去掉毛玻璃模糊，静态配色与滤镜保持不变。
-        手机上农场页掉帧、滑动发涩时建议开启。
-      </p>
-    </div>
-
+  <div class="liquid-glass rounded-2xl p-4">
     <div class="flex flex-wrap gap-2">
       <button
         v-for="option in options"

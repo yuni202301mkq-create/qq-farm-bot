@@ -7,9 +7,11 @@ import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import TopAccountMenu from '@/components/TopAccountMenu.vue'
 import { useAppStore } from '@/stores/app'
+import { useMemorialDay } from '@/composables/useMemorialDay'
 
 const appStore = useAppStore()
 const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
+const { memorialText } = useMemorialDay()
 
 // ============ 更新日志：登录成功进入主界面后自动弹出一次 ============
 const showUpdateLog = ref(false)
@@ -74,12 +76,20 @@ onUnmounted(() => {
           >
             <div class="i-carbon-menu text-xl" />
           </button>
-          <div class="min-w-0">
-            <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
-              {{ loginPageConfig.title || 'QQ农场智能助手' }}
+          <div class="flex min-w-0 items-center gap-2.5">
+            <div
+              class="h-9 w-9 flex flex-none items-center justify-center rounded-xl text-white shadow-md"
+              style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #f97316 100%); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);"
+            >
+              <div class="i-carbon-sprout text-lg" />
             </div>
-            <div class="hidden truncate text-xs text-gray-500 sm:block dark:text-gray-400">
-              自动化工作台 · 账号状态、策略、日志与后台管理集中处理
+            <div class="min-w-0">
+              <div class="truncate text-base text-gray-900 font-bold md:text-lg dark:text-gray-100">
+                {{ loginPageConfig.title || '农场智能助手' }}
+              </div>
+              <div v-if="memorialText" class="truncate text-xs text-gray-900 font-bold sm:block dark:text-white">
+                {{ memorialText }}
+              </div>
             </div>
           </div>
         </div>

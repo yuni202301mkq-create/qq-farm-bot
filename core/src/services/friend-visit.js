@@ -1,5 +1,5 @@
 const { PlantPhase } = require('../config/config');
-const { getPlantBlacklist, isAutomationOn } = require('../models/store');
+const { getPlantBlacklist, isAutomationOn, getStealDelaySec } = require('../models/store');
 const { getUserState } = require('../utils/network');
 const { toNum, log, logWarn, randomDelay } = require('../utils/utils');
 const { recordOperation, markPendingSpend } = require('./stats');
@@ -447,7 +447,13 @@ async function visitFriend(friend, tally, myGid, accountId) {
         actionLogs.push(`偷${stolen}${namesStr ? `(${namesStr})` : ''}`);
         tally.steal += stolen;
         recordOperation('steal', stolen);
-        await randomDelay(500, 1500);
+        // 「偷菜延迟(秒)」：偷完一位好友后等待一段时间再继续；0 表示仅保留基础随机间隔。
+        const stealPacingMs = Math.max(0, Number(getStealDelaySec(accountId)) || 0) * 1000;
+        if (stealPacingMs > 0) {
+          await randomDelay(stealPacingMs, stealPacingMs + 500);
+        } else {
+          await randomDelay(500, 1500);
+        }
       }
     }
   }

@@ -50,7 +50,7 @@ const defaultCaptureConfig: CaptureConfig = {
 
 const defaultLoginLinks: LoginLinks = {
   logoUrl: '',
-  title: 'QQ农场智能助手',
+  title: '农场智能助手',
   loginSubtitle: '欢迎回来，开启智慧农耕之旅',
   registerSubtitle: '创建账号，开启智慧农耕之旅',
   purchaseUrl: '',

@@ -948,16 +948,38 @@ function applyIntervalsToRuntime(intervals) {
     const iv = intervals && typeof intervals === 'object' ? intervals : {};
     const farmDefault = Math.max(2, Number.parseInt(iv.farm, 10) || 2);
     const farmRange = normalizeIntervalRangeSec(iv.farmMin, iv.farmMax, farmDefault);
-    CONFIG.farmCheckIntervalMin = farmRange.min * 1000;
-    CONFIG.farmCheckIntervalMax = farmRange.max * 1000;
-    CONFIG.farmCheckInterval = CONFIG.farmCheckIntervalMin;
-
     const helpRange = normalizeIntervalRangeSec(iv.helpMin, iv.helpMax, 30);
-    CONFIG.helpCheckIntervalMin = helpRange.min * 1000;
-    CONFIG.helpCheckIntervalMax = helpRange.max * 1000;
+    // 偷菜巡查仍由 friend-maturity-plan 的成熟度计划动态唤醒（见 runScheduledStealCheck /
+    // getNextStealDelayMs）；stealMin/stealMax 是「无已知成熟时间时的兜底轮询窗口」：
+    // 校准间隔在区间内随机取值，下一次唤醒不超过区间上限。
+    const stealRange = normalizeIntervalRangeSec(iv.stealMin, iv.stealMax, 180);
 
-    // 偷菜巡查时机由 friend-maturity-plan 的成熟度计划动态计算（见 runScheduledStealCheck /
-    // getNextStealDelayMs），不再受用户配置的固定区间控制，此处无需处理 steal 相关字段。
+    const next = {
+        farmCheckIntervalMin: farmRange.min * 1000,
+        farmCheckIntervalMax: farmRange.max * 1000,
+        helpCheckIntervalMin: helpRange.min * 1000,
+        helpCheckIntervalMax: helpRange.max * 1000,
+        stealCheckIntervalMin: stealRange.min * 1000,
+        stealCheckIntervalMax: stealRange.max * 1000,
+    };
+    // 与当前值逐项比较：间隔没变时调用方可跳过统一调度重排，避免
+    // 保存设置/切换开关导致帮助、偷菜倒计时无意义地重新随机跳变。
+    const changed = next.farmCheckIntervalMin !== CONFIG.farmCheckIntervalMin
+        || next.farmCheckIntervalMax !== CONFIG.farmCheckIntervalMax
+        || next.helpCheckIntervalMin !== CONFIG.helpCheckIntervalMin
+        || next.helpCheckIntervalMax !== CONFIG.helpCheckIntervalMax
+        || next.stealCheckIntervalMin !== CONFIG.stealCheckIntervalMin
+        || next.stealCheckIntervalMax !== CONFIG.stealCheckIntervalMax;
+
+    CONFIG.farmCheckIntervalMin = next.farmCheckIntervalMin;
+    CONFIG.farmCheckIntervalMax = next.farmCheckIntervalMax;
+    CONFIG.farmCheckInterval = next.farmCheckIntervalMin;
+    CONFIG.helpCheckIntervalMin = next.helpCheckIntervalMin;
+    CONFIG.helpCheckIntervalMax = next.helpCheckIntervalMax;
+    CONFIG.stealCheckIntervalMin = next.stealCheckIntervalMin;
+    CONFIG.stealCheckIntervalMax = next.stealCheckIntervalMax;
+
+    return changed;
 }
 
 /** 在 [minMs, maxMs] 范围内随机取一个毫秒数 */
@@ -979,9 +1001,13 @@ function resetUnifiedSchedule() {
         CONFIG.helpCheckIntervalMin || 30000,
         CONFIG.helpCheckIntervalMax || 35000
     );
-    // 偷菜首轮延迟固定给一个较短的随机窗口即可，后续节奏由 runScheduledStealCheck
-    // 返回的 getNextStealDelayMs() 动态决定（根据好友作物成熟时间计算）。
-    const stealDelay = randomIntervalMs(5000, 15000);
+    // 偷菜首轮延迟落在用户配置的兜底轮询区间内（而非固定 5~15 秒），后续节奏
+    // 仍由 runScheduledStealCheck 返回的 getNextStealDelayMs() 动态决定（根据好友
+    // 作物成熟时间计算）。
+    const stealDelay = randomIntervalMs(
+        CONFIG.stealCheckIntervalMin || 5000,
+        CONFIG.stealCheckIntervalMax || 15000
+    );
     const accountId = String(process.env.FARM_ACCOUNT_ID || '');
     const staggerMs = [...accountId].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) % 3000, 0);
     const now = Date.now() + staggerMs;
@@ -1052,7 +1078,12 @@ let nextHelpRunAt = 0;
 
 async function runHelpTick(autoConfig) {
     if (helpTaskRunning || friendSyncPaused) return;
-    if (!autoConfig.friend_help && !autoConfig.friend_golden_bug) return;
+    if (!autoConfig.friend_help && !autoConfig.friend_golden_bug) {
+        // 帮助自动化全关时也必须推进 nextHelpRunAt，
+        // 否则 nextHelpRunAt 永远停在过去，统一调度器会以 ~100ms 间隔空转。
+        nextHelpRunAt = Date.now() + 60 * 1000;
+        return;
+    }
     const deferMs = getBusinessDeferMs('friend');
     if (deferMs > 0) {
         nextHelpRunAt = Date.now() + deferMs;
@@ -1060,11 +1091,11 @@ async function runHelpTick(autoConfig) {
     }
     helpTaskRunning = true;
 
+    // 帮助巡查按策略设置的帮助间隔执行（helpCheckIntervalMin/Max，秒→毫秒）。
     const nextDelay = randomIntervalMs(
         CONFIG.helpCheckIntervalMin || 30000,
         CONFIG.helpCheckIntervalMax || 35000
     );
-    const lowFrequencyDelay = Math.max(10 * 60 * 1000, nextDelay);
 
     try {
         await runWithRequestPriority('friend', async () => {
@@ -1080,7 +1111,7 @@ async function runHelpTick(autoConfig) {
             });
         }
     } finally {
-        nextHelpRunAt = Date.now() + lowFrequencyDelay;
+        nextHelpRunAt = Date.now() + nextDelay;
         helpTaskRunning = false;
     }
 }
@@ -1209,13 +1240,18 @@ function applyRuntimeConfig(config, syncStatusAfter = false) {
 
     const intervals = config && config.intervals && typeof config.intervals === 'object'
         ? config.intervals : null;
-    if (intervals) applyIntervalsToRuntime(intervals);
+    // 只有间隔真正变化时才重排统一调度：同值保存、仅切换自动化开关（如
+    // applyRuntimeConfig({automation: patch}, true)）不再导致帮助、偷菜倒计时
+    // 无意义地重新随机跳变。
+    const intervalsChanged = intervals ? applyIntervalsToRuntime(intervals) : false;
 
     if (loginReady) {
         refreshFarmCheckLoop(3000);
         refreshFriendCheckLoop(12000);
-        resetUnifiedSchedule();
-        scheduleUnifiedNextTick();
+        if (intervalsChanged) {
+            resetUnifiedSchedule();
+            scheduleUnifiedNextTick();
+        }
 
         const hasAutomation = !!(config && config.automation && typeof config.automation === 'object');
         if (hasAutomation) {

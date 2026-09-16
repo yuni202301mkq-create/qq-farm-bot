@@ -28,14 +28,19 @@ function isMobileLike() {
 function detectNeedsLite() {
   if (typeof window === 'undefined')
     return false
-  const nav = navigator as Navigator & { connection?: { saveData?: boolean } }
+  const nav = navigator as Navigator & { connection?: { saveData?: boolean }, deviceMemory?: number, hardwareConcurrency?: number }
   // 系统层面要求减少动效，或用户开了省流量，一律降级
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
     return true
   if (nav.connection?.saveData)
     return true
   // 手机/平板默认降级，桌面默认保留完整动效
-  return isMobileLike()
+  if (isMobileLike())
+    return true
+  // 低配桌面（内存 ≤4GB 或 CPU ≤4 核）带不动毛玻璃+装饰动画，自动进流畅模式
+  if ((nav.deviceMemory ?? 8) <= 4 || (nav.hardwareConcurrency ?? 8) <= 4)
+    return true
+  return false
 }
 
 function readPreference(): PerformancePreference {

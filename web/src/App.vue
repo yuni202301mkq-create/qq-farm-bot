@@ -113,8 +113,96 @@ body {
 .glass-panel {
   border: 1px solid var(--surface-border);
   background: color-mix(in srgb, var(--surface-1) 78%, transparent);
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(12px);
   box-shadow: var(--surface-shadow-soft);
+}
+
+/* ==========================================================================
+   3D 液态磨砂玻璃卡片（设置页）
+   .liquid-glass         主卡片：磨砂玻璃底 + 液态高光渐层 + 3D 悬浮投影
+   .liquid-glass-static  在主卡片基础上关闭悬停上浮（页面外壳/吸顶栏用）
+   .liquid-glass-sub     内嵌子面板：轻磨砂 + 顶部高光线，保留原有的彩色边框底色
+   颜色走主题 token（--theme-primary），深色模式自动适配；
+   perf-lite 模式下全局 backdrop-filter 已被关闭，仅保留静态配色。
+   ========================================================================== */
+.liquid-glass {
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background:
+    radial-gradient(130% 74% at 8% -6%, rgba(255, 255, 255, 0.66), transparent 56%),
+    radial-gradient(120% 64% at 104% 110%, color-mix(in srgb, var(--theme-primary) 17%, transparent), transparent 62%),
+    linear-gradient(152deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.4) 46%, rgba(255, 255, 255, 0.54));
+  -webkit-backdrop-filter: blur(12px) saturate(1.3);
+  backdrop-filter: blur(12px) saturate(1.3);
+  box-shadow:
+    0 24px 48px -20px rgba(15, 23, 42, 0.3),
+    0 0 0 1px rgba(15, 23, 42, 0.06),
+    0 4px 12px -4px rgba(15, 23, 42, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.28),
+    inset 0 0 28px rgba(255, 255, 255, 0.16) !important;
+  transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+
+.liquid-glass:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 32px 60px -22px rgba(15, 23, 42, 0.34),
+    0 0 0 1px rgba(15, 23, 42, 0.07),
+    0 6px 16px -6px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.3),
+    inset 0 0 30px rgba(255, 255, 255, 0.18) !important;
+}
+
+.liquid-glass-static:hover {
+  transform: none;
+}
+
+.dark .liquid-glass {
+  border-color: rgba(255, 255, 255, 0.14);
+  background:
+    radial-gradient(130% 74% at 8% -6%, rgba(255, 255, 255, 0.13), transparent 56%),
+    radial-gradient(120% 64% at 104% 110%, color-mix(in srgb, var(--theme-primary) 24%, transparent), transparent 62%),
+    linear-gradient(152deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.08));
+  box-shadow:
+    0 26px 52px -22px rgba(0, 0, 0, 0.62),
+    0 4px 12px -4px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.05),
+    inset 0 0 28px rgba(255, 255, 255, 0.045) !important;
+}
+
+.dark .liquid-glass:hover {
+  box-shadow:
+    0 34px 66px -24px rgba(0, 0, 0, 0.68),
+    0 6px 16px -6px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -1px 1px rgba(255, 255, 255, 0.06),
+    inset 0 0 30px rgba(255, 255, 255, 0.05) !important;
+}
+
+.liquid-glass-sub {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 10px 22px -14px rgba(15, 23, 42, 0.18);
+}
+
+.dark .liquid-glass-sub {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 10px 22px -14px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-glass {
+    transition: none;
+  }
+
+  .liquid-glass:hover {
+    transform: none;
+  }
 }
 
 .metric-card {

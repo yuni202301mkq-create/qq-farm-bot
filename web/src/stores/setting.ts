@@ -111,6 +111,12 @@ export interface SettingsState {
   plantingStrategy: string
   prioritize2x2Crops: boolean
   prioritizeGrowthTasks: boolean
+  /** 「种植顺序随机」：按随机顺序访问地块种植 */
+  plantRandomOrder: boolean
+  /** 种植延迟（秒）：两次种植请求之间的最小间隔 */
+  plantDelaySec: number
+  /** 偷菜延迟（秒）：偷取一位好友作物后的等待时间 */
+  stealDelaySec: number
   bagSeedPriority: number[]
   bagSeedKnownIds: number[]
   /** 被移出「背包种子优先顺序」的种子：不参与背包优先种植。 */
@@ -170,6 +176,9 @@ export const useSettingStore = defineStore('setting', () => {
     plantingStrategy: 'max_exp',
     prioritize2x2Crops: false,
     prioritizeGrowthTasks: false,
+    plantRandomOrder: false,
+    plantDelaySec: 2,
+    stealDelaySec: 1,
     bagSeedPriority: [],
     bagSeedKnownIds: [],
     bagSeedExcludedIds: [],
@@ -211,6 +220,9 @@ export const useSettingStore = defineStore('setting', () => {
       plantingStrategy: 'max_exp',
       prioritize2x2Crops: false,
       prioritizeGrowthTasks: false,
+      plantRandomOrder: false,
+      plantDelaySec: 2,
+      stealDelaySec: 1,
       bagSeedPriority: [],
       bagSeedKnownIds: [],
       bagSeedExcludedIds: [],
@@ -251,6 +263,9 @@ export const useSettingStore = defineStore('setting', () => {
         settings.value.plantingStrategy = d.plantingStrategy || d.strategy || 'max_exp'
         settings.value.prioritize2x2Crops = d.prioritize2x2Crops === true
         settings.value.prioritizeGrowthTasks = d.prioritizeGrowthTasks === true
+        settings.value.plantRandomOrder = d.plantRandomOrder === true
+        settings.value.plantDelaySec = d.plantDelaySec ?? 2
+        settings.value.stealDelaySec = d.stealDelaySec ?? 1
         settings.value.intervals = d.intervals || {}
         settings.value.friendQuietHours = d.friendQuietHours || { enabled: false, start: '23:00', end: '07:00' }
         settings.value.automation = d.automation || {}
@@ -290,6 +305,9 @@ export const useSettingStore = defineStore('setting', () => {
         plantingStrategy: newSettings.plantingStrategy,
         prioritize2x2Crops: newSettings.prioritize2x2Crops === true,
         prioritizeGrowthTasks: newSettings.prioritizeGrowthTasks === true,
+        plantRandomOrder: newSettings.plantRandomOrder === true,
+        plantDelaySec: newSettings.plantDelaySec ?? 2,
+        stealDelaySec: newSettings.stealDelaySec ?? 1,
         bagSeedPriority: newSettings.bagSeedPriority ?? [],
         bagSeedKnownIds: newSettings.bagSeedKnownIds ?? [],
         bagSeedExcludedIds: newSettings.bagSeedExcludedIds ?? [],

@@ -219,7 +219,7 @@ onBeforeUnmount(stopTimers)
     class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4"
     @click.self="handleClose"
   >
-    <div class="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl shadow-xl" :style="{ background: 'var(--theme-bg)' }">
+    <div class="liquid-glass liquid-glass-static max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl">
       <!-- 启动中 -->
       <template v-if="phase === 'starting'">
         <div class="flex items-center gap-4 p-5">

@@ -25,7 +25,7 @@ const config = defineModel<AutoCodeRefreshConfig>('config', { required: true })
 </script>
 
 <template>
-  <div class="border border-gray-200 rounded-xl p-4 dark:border-gray-700">
+  <div class="liquid-glass rounded-2xl p-4">
     <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">

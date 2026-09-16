@@ -5,13 +5,15 @@ import api from '@/api'
 import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
 import CardKeyPanel from '@/components/admin/CardKeyPanel.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
-import AccountFeatureSettings from '@/components/settings/AccountFeatureSettings.vue'
 import AccountSettingsTab from '@/components/settings/AccountSettingsTab.vue'
+import AutomationControlPanel from '@/components/settings/AutomationControlPanel.vue'
 import AutoCodeRefreshCard from '@/components/settings/AutoCodeRefreshCard.vue'
 import ChangePasswordCard from '@/components/settings/ChangePasswordCard.vue'
+import DefaultPlanTab from '@/components/settings/DefaultPlanTab.vue'
 import DeviceProtocolCard from '@/components/settings/DeviceProtocolCard.vue'
 import OfflineReminderCard from '@/components/settings/OfflineReminderCard.vue'
 import PerformanceModeCard from '@/components/settings/PerformanceModeCard.vue'
+import StrategySettingsPanel from '@/components/settings/StrategySettingsPanel.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useAccountSettings } from '@/composables/settings/useAccountSettings'
 import { useAutomationSettings } from '@/composables/settings/useAutomationSettings'
@@ -25,17 +27,19 @@ const settingStore = useSettingStore()
 const userStore = useUserStore()
 const route = useRoute()
 
-type SettingsTabKey = 'account' | 'account-config' | 'performance' | 'system' | 'cardkey'
+type SettingsTabKey = 'account' | 'strategy' | 'automation' | 'default-plan' | 'system' | 'cardkey'
 
-const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'account-config', 'performance', 'system', 'cardkey']
+const SETTINGS_TAB_KEYS: SettingsTabKey[] = ['account', 'strategy', 'automation', 'default-plan', 'system', 'cardkey']
 const LEGACY_SETTINGS_TABS: Record<string, SettingsTabKey> = {
-  'strategy': 'account-config',
-  'automation': 'account-config',
-  'default-plan': 'account-config',
+  'strategy': 'strategy',
+  'automation': 'automation',
+  'default-plan': 'default-plan',
   'user': 'system',
+  'usermgmt': 'system',
+  'account-config': 'strategy',
   'notification': 'system',
   'capture': 'system',
-  'usermgmt': 'system',
+  'performance': 'system',
 }
 
 function getInitialSettingsTab(): SettingsTabKey {
@@ -75,12 +79,13 @@ watch(() => userStore.isSuperAdmin, (isSuper) => {
 const tabs = computed(() => {
   const all = [
     { key: 'account', label: '账号管理', icon: 'i-carbon-user-settings' },
-    { key: 'account-config', label: '账号设置', icon: 'i-carbon-settings-adjust' },
-    { key: 'performance', label: '界面性能', icon: 'i-carbon-dashboard' },
+    { key: 'strategy', label: '策略设置', icon: 'i-carbon-settings-adjust' },
+    { key: 'automation', label: '自动控制', icon: 'i-carbon-settings' },
+    { key: 'default-plan', label: '默认方案', icon: 'i-carbon-renew' },
     { key: 'system', label: '系统配置', icon: 'i-carbon-settings-services' },
     { key: 'cardkey', label: '卡密设置', icon: 'i-carbon-ticket' },
   ] as const
-  // 卡密设置仅超级管理员可见；系统配置对全部用户开放（普通用户其中仅见用户管理）
+  // 卡密设置仅超级管理员可见；系统配置对全部用户开放（普通用户其中仅见用户管理和通知设置）
   return userStore.isSuperAdmin ? all : all.filter(tab => tab.key !== 'cardkey')
 })
 
@@ -279,7 +284,7 @@ async function saveAutoCodeRefreshSettings() {
 
 async function openAccountSettings(account: any) {
   selectAccount(account)
-  activeTab.value = 'account-config'
+  activeTab.value = 'strategy'
 }
 
 async function saveSystemSettings() {
@@ -472,15 +477,22 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="settings-page">
-    <div class="mb-4">
+  <div class="settings-page relative">
+    <!-- 液态玻璃氛围光斑：给磨砂卡片提供可被模糊折射的色彩层次 -->
+    <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
+      <div class="bg-blob settings-blob settings-blob-1" />
+      <div class="bg-blob settings-blob settings-blob-2" />
+      <div class="bg-blob settings-blob settings-blob-3" />
+    </div>
+
+    <div class="relative mb-4">
       <h1 class="text-2xl text-gray-900 font-bold dark:text-gray-100">
         设置
       </h1>
     </div>
 
-    <div class="border border-gray-200 rounded-lg bg-white shadow dark:border-gray-700 dark:bg-gray-800">
-      <div class="border-b border-gray-200 dark:border-gray-700">
+    <div class="liquid-glass liquid-glass-static relative z-10 rounded-2xl">
+      <div class="border-b border-white/50 dark:border-white/10">
         <nav ref="settingsTabsNav" class="flex gap-1 overflow-x-auto p-2">
           <button
             v-for="tab in tabs"
@@ -489,7 +501,7 @@ onMounted(async () => {
             class="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-all"
             :class="activeTab === tab.key
               ? 'text-white shadow-sm'
-              : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700'"
+              : 'text-gray-600 hover:bg-white/50 dark:text-gray-400 dark:hover:bg-white/10'"
             :style="activeTab === tab.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
             @click="activeTab = tab.key"
           >
@@ -541,10 +553,10 @@ onMounted(async () => {
           @confirm-clear-stopped="confirmClearStopped"
         />
 
-        <AccountFeatureSettings
-          v-else-if="activeTab === 'account-config'"
-          v-model:strategy="localStrategySettings"
-          v-model:automation="localAutomationSettings"
+        <!-- 策略设置 -->
+        <StrategySettingsPanel
+          v-else-if="activeTab === 'strategy'"
+          v-model:settings="localStrategySettings"
           :current-account-name="currentAccountName"
           :current-account-id="currentAccountId"
           :loading="accountSettingsLoading"
@@ -553,43 +565,67 @@ onMounted(async () => {
           :bag-fallback-strategy-options="bagFallbackStrategyOptions"
           :strategy-preview-label="strategyPreviewLabel"
           :strategy-preview-loading="strategyPreviewLoading"
-          :fertilizer-land-type-options="fertilizerLandTypeOptions"
-          :fertilizer-options="fertilizerOptions"
-          @save="saveCurrentAccountSettings"
+          @save="saveCurrentAccountSettings('strategy')"
         />
 
-        <div v-else-if="activeTab === 'performance'" class="space-y-4">
-          <div>
-            <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-              界面性能
-            </h3>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              控制前端动效强度，用于在低端设备上换取更流畅的操作体验。
-            </p>
-          </div>
-          <PerformanceModeCard />
+        <!-- 自动控制 -->
+        <div v-else-if="activeTab === 'automation'" class="space-y-5">
+          <AutomationControlPanel
+            v-model:automation="localAutomationSettings"
+            :current-account-name="currentAccountName"
+            :current-account-id="currentAccountId"
+            :loading="accountSettingsLoading"
+            :saving="accountSettingsSaving"
+            :fertilizer-land-type-options="fertilizerLandTypeOptions"
+            :fertilizer-options="fertilizerOptions"
+            @save="saveCurrentAccountSettings('automation')"
+          />
+
+          <!-- 定时刷新重登按账号保存，可见范围由账号归属决定，因此对所有用户开放 -->
+          <AutoCodeRefreshCard
+            v-model:config="localAutoCodeRefresh"
+            :current-account-name="currentAccountName"
+            :current-account-id="currentAccountId"
+            :loading="accountSettingsLoading"
+            :saving="autoCodeRefreshSaving"
+            :refreshing="autoCodeRefreshing"
+            @save="saveAutoCodeRefreshSettings"
+            @refresh="runAutoCodeRefreshNow"
+          />
         </div>
 
+        <!-- 默认方案 -->
+        <DefaultPlanTab
+          v-else-if="activeTab === 'default-plan'"
+          :current-account-id="currentAccountId"
+          :current-account-name="currentAccountName"
+          :planting-strategy-options="plantingStrategyOptions"
+          :bag-fallback-strategy-options="bagFallbackStrategyOptions"
+          :fertilizer-land-type-options="fertilizerLandTypeOptions"
+          :fertilizer-options="fertilizerOptions"
+        />
+
         <div v-else-if="activeTab === 'system'" class="space-y-5">
-          <!-- 用户管理（含修改密码）对所有用户开放，固定在系统配置最上方 -->
+          <!-- 系统配置标题与保存按钮（吸顶），置于页签最顶部 -->
+          <div v-if="userStore.isSuperAdmin" class="sticky top-0 z-10 flex items-center justify-between py-1">
+            <div>
+              <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
+                系统配置
+              </h3>
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                统一管理用户账号、连接参数、设备协议、抓包服务和离线通知。
+              </p>
+            </div>
+            <BaseButton size="sm" :loading="anySystemSaving" @click="saveSystemSettings">
+              保存系统配置
+            </BaseButton>
+          </div>
+
+          <!-- 用户管理（含修改密码）对所有用户开放 -->
           <ChangePasswordCard />
 
           <!-- 连接参数、设备协议、抓包服务均为超管专属，普通用户不渲染也不请求 -->
           <template v-if="userStore.isSuperAdmin">
-            <div class="sticky top-0 z-10 flex items-center justify-between border border-gray-200 rounded-xl bg-white/95 p-4 shadow-sm backdrop-blur dark:border-gray-700 dark:bg-gray-800/95">
-              <div>
-                <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-                  系统配置
-                </h3>
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  统一管理连接参数、设备协议、抓包服务、离线通知和用户账号。
-                </p>
-              </div>
-              <BaseButton size="sm" :loading="anySystemSaving" @click="saveSystemSettings">
-                保存系统配置
-              </BaseButton>
-            </div>
-
             <AdminSystemPanel
               v-model:local-system-config="localSystemConfig"
               v-model:local-capture-config="localCaptureConfig"
@@ -635,18 +671,6 @@ onMounted(async () => {
             />
           </template>
 
-          <!-- 定时刷新重登按账号保存，可见范围由账号归属决定，因此对所有用户开放 -->
-          <AutoCodeRefreshCard
-            v-model:config="localAutoCodeRefresh"
-            :current-account-name="currentAccountName"
-            :current-account-id="currentAccountId"
-            :loading="accountSettingsLoading"
-            :saving="autoCodeRefreshSaving"
-            :refreshing="autoCodeRefreshing"
-            @save="saveAutoCodeRefreshSettings"
-            @refresh="runAutoCodeRefreshNow"
-          />
-
           <div class="flex flex-wrap items-center justify-between gap-3">
             <div class="min-w-0">
               <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
@@ -670,6 +694,17 @@ onMounted(async () => {
             @open-docs="openChannelDocs"
             @test="handleTestOffline"
           />
+
+          <!-- 界面性能：原独立页签并入系统配置（原 performance 页签已移除） -->
+          <div>
+            <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
+              界面性能
+            </h3>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              控制前端动效强度，用于在低端设备上换取更流畅的操作体验。开启后将关闭地块变异光效、天气粒子等装饰性动画，并去掉毛玻璃模糊。
+            </p>
+          </div>
+          <PerformanceModeCard />
         </div>
 
         <div v-else-if="activeTab === 'cardkey'" class="space-y-4">
@@ -710,3 +745,62 @@ onMounted(async () => {
     />
   </div>
 </template>
+
+<style scoped>
+/* 液态玻璃氛围光斑：缓慢漂浮的大色块，被卡片的 backdrop-blur 折射出磨砂层次。
+   带 bg-blob 类：perf-lite（界面性能模式）下会被全局规则直接隐藏。 */
+.settings-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(56px);
+  opacity: 0.6;
+  animation: settings-blob-float 32s ease-in-out infinite;
+}
+
+.settings-blob-1 {
+  top: -150px;
+  left: -90px;
+  width: 560px;
+  height: 560px;
+  background: color-mix(in srgb, var(--theme-primary) 62%, transparent);
+}
+
+.settings-blob-2 {
+  top: 26%;
+  right: -130px;
+  width: 500px;
+  height: 500px;
+  background: rgba(45, 212, 191, 0.44);
+  animation-delay: -7s;
+}
+
+.settings-blob-3 {
+  bottom: -170px;
+  left: 18%;
+  width: 580px;
+  height: 580px;
+  background: rgba(244, 114, 182, 0.38);
+  animation-delay: -14s;
+}
+
+.dark .settings-blob {
+  opacity: 0.42;
+}
+
+@keyframes settings-blob-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(32px, -26px, 0) scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-blob {
+    animation: none;
+  }
+}
+</style>

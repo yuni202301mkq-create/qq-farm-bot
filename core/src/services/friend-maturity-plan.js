@@ -118,7 +118,10 @@ function selectCalibrationFriends(friends, options = {}) {
 function getNextStealDelayMs(options = {}) {
   const nowMs = Number(options.nowMs) || Date.now();
   const nowSec = Number(options.nowSec) || getServerTimeSec();
-  const fallbackMs = Math.max(60_000, Number(options.fallbackMs) || DEFAULT_CALIBRATION_INTERVAL_MS);
+  // 兜底窗口下限 1 秒：跟随调用方传入的用户配置上限（stealMax 允许秒级暴力轮询）。
+  // 全量好友列表的 60 秒校准频率保护由 markCalibrated 的间隔底限承担，这里不再二次抬底，
+  // 否则用户设置的 <60s 偷菜巡查间隔会被强制抬回 1 分钟（表现为倒计时永远 ≈1 分钟）。
+  const fallbackMs = Math.max(1_000, Number(options.fallbackMs) || DEFAULT_CALIBRATION_INTERVAL_MS);
   let wakeAt = nextCalibrationAt || nowMs;
   for (const plan of plans.values()) {
     if (plan.matureAt <= 0) continue;
