@@ -5,7 +5,9 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 
+import RenewCardModal from '@/components/RenewCardModal.vue'
 import { menuRoutes } from '@/router/menu'
+import { accountAvatarUrl } from '@/utils/avatar'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { useShopStore } from '@/stores/shop'
@@ -178,6 +180,78 @@ watch(
 )
 
 const showThemeDropdown = ref(false)
+
+// ============ 侧栏账号卡：登录用户时长/额度/过期时间 + 续费与退出 ============
+const showAccountCard = ref(false)
+const showRenewModal = ref(false)
+const nowMs = ref(Date.now())
+useIntervalFn(() => {
+  nowMs.value = Date.now()
+}, 30_000)
+
+const expireMs = computed(() => {
+  const value = Number(userStore.expiresAt)
+  return Number.isFinite(value) && value > 0 ? value : 0
+})
+const userExpired = computed(() =>
+  !userStore.isSuperAdmin && expireMs.value > 0 && expireMs.value <= nowMs.value)
+// 剩余天数向上取整：29天23小时显示为「剩30天」（与问候卡「还有30天到期」同口径）
+const remainingDays = computed(() => {
+  if (!expireMs.value || userExpired.value)
+    return null
+  return Math.max(1, Math.ceil((expireMs.value - nowMs.value) / 86_400_000))
+})
+const remainingBadge = computed(() => {
+  if (userStore.isSuperAdmin || !expireMs.value)
+    return '永久'
+  if (userExpired.value)
+    return '已过期'
+  return `剩${remainingDays.value}天`
+})
+const remainingBadgeStyle = computed(() => {
+  if (userExpired.value || (remainingDays.value ?? 99) <= 3)
+    return 'color: #ef4444; font-weight: 600;'
+  if (userStore.isSuperAdmin || !expireMs.value)
+    return 'opacity: 0.6; color: var(--theme-text);'
+  return 'color: #f59e0b; font-weight: 600;'
+})
+const remainingDurationText = computed(() => {
+  if (userStore.isSuperAdmin || !expireMs.value)
+    return '永久'
+  if (userExpired.value)
+    return '已过期'
+  const diff = expireMs.value - nowMs.value
+  const days = Math.floor(diff / 86_400_000)
+  const hours = Math.floor((diff % 86_400_000) / 3_600_000)
+  return `${days}天${hours}小时`
+})
+const expireAtText = computed(() => {
+  if (userStore.isSuperAdmin || !expireMs.value)
+    return '永久'
+  const date = new Date(expireMs.value)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+})
+// 剩余额度 = 账号数上限 - 已添加账号数；超管不设限
+const remainingQuota = computed(() => {
+  if (userStore.isSuperAdmin)
+    return null
+  return Math.max(0, Number(userStore.accountLimit || 0) - accountStore.accounts.length)
+})
+const roleLabel = computed(() => (userStore.isSuperAdmin ? '超级管理员' : '普通用户'))
+const userInitial = computed(() => (userStore.username || '用').slice(0, 1).toUpperCase())
+// 账号卡头像：显示登录用户当前农场账号的 QQ 头像（按账号 id 走后端代理，同账号管理页），无账号时回退用户名首字
+const accountAvatar = computed(() => accountAvatarUrl(currentAccount.value))
+
+function handleLogout() {
+  const refreshToken = userStore.refreshToken
+  // 接口失败也要退出本地，所以不 await、不阻塞跳转
+  api
+    .post('/api/logout', refreshToken ? { refreshToken } : {}, { skipErrorToast: true } as any)
+    .catch(() => {})
+  userStore.clearSession()
+  router.replace('/login')
+}
 </script>
 
 <template>
@@ -187,34 +261,125 @@ const showThemeDropdown = ref(false)
     :style="{ background: 'color-mix(in srgb, var(--surface-1) 90%, transparent)', color: 'var(--theme-text)' }"
   >
     <!-- Brand -->
-    <div class="relative h-16 flex flex-none items-center justify-between px-2">
-      <div class="flex min-w-0 items-center gap-3">
-        <div
-          class="h-11 w-11 flex flex-none items-center justify-center rounded-2xl text-white shadow-lg"
-          style="background: linear-gradient(135deg, #f472b6 0%, #a855f7 55%, #6366f1 100%); box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);"
+    <div class="liquid-glass liquid-glass-static relative mb-3 flex-none rounded-2xl p-3">
+      <div class="flex items-center justify-between">
+        <div class="flex min-w-0 items-center gap-3">
+          <div
+            class="h-11 w-11 flex flex-none items-center justify-center rounded-2xl text-white shadow-lg"
+            style="background: linear-gradient(135deg, #f472b6 0%, #a855f7 55%, #6366f1 100%); box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);"
+          >
+            <div class="i-carbon-sprout text-2xl" />
+          </div>
+          <div class="min-w-0">
+            <div class="truncate text-[15px] font-bold tracking-tight" style="color: var(--theme-text);">
+              {{ loginPageConfig.title || '农场智能助手' }}
+            </div>
+          </div>
+        </div>
+        <!-- Mobile Close Button -->
+        <button
+          class="h-10 w-10 flex flex-none items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+          @click="appStore.closeSidebar"
         >
-          <div class="i-carbon-sprout text-2xl" />
-        </div>
-        <div class="min-w-0">
-          <div class="truncate text-[15px] font-bold tracking-tight" style="color: var(--theme-text);">
-            {{ loginPageConfig.title || 'QQ农场智能助手' }}
-          </div>
-          <div class="truncate text-[11px] font-mono opacity-45" style="color: var(--theme-text);">
-            QQ FARM ASSISTANT
-          </div>
-        </div>
+          <div class="i-carbon-close text-xl" />
+        </button>
       </div>
-      <!-- Mobile Close Button -->
-      <button
-        class="h-10 w-10 flex flex-none items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-        @click="appStore.closeSidebar"
-      >
-        <div class="i-carbon-close text-xl" />
-      </button>
     </div>
 
     <!-- 渐变分隔线 -->
     <div class="mx-2 mb-3 h-px flex-none" style="background: linear-gradient(90deg, color-mix(in srgb, var(--theme-primary) 45%, transparent), transparent);" />
+
+    <!-- 账号卡：登录用户时长/额度/过期时间 + 续费与退出 -->
+    <div class="liquid-glass mb-3 flex-none rounded-2xl">
+      <button
+        class="flex w-full items-center gap-2.5 p-3 text-left"
+        :aria-expanded="showAccountCard"
+        @click="showAccountCard = !showAccountCard"
+      >
+        <div
+          class="h-9 w-9 flex flex-none items-center justify-center overflow-hidden rounded-full text-sm text-white font-bold shadow"
+          style="background: var(--theme-gradient);"
+        >
+          <img
+            v-if="accountAvatar"
+            :src="accountAvatar"
+            :alt="userStore.username"
+            class="h-full w-full object-cover"
+          >
+          <span v-else>{{ userInitial }}</span>
+        </div>
+        <div class="min-w-0 flex-1">
+          <div class="truncate text-sm font-semibold" style="color: var(--theme-text);">
+            {{ userStore.username || '未登录' }}
+          </div>
+          <div class="mt-0.5 flex items-center gap-1.5 text-[11px]">
+            <span
+              class="rounded px-1 py-0.2 text-[10px] leading-tight"
+              :style="{ background: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)', color: 'var(--theme-primary)' }"
+            >
+              {{ roleLabel }}
+            </span>
+            <span :style="remainingBadgeStyle">{{ remainingBadge }}</span>
+            <span v-if="remainingQuota !== null" class="opacity-60" style="color: var(--theme-text);">
+              {{ remainingQuota }}额度
+            </span>
+            <span v-else class="opacity-60" style="color: var(--theme-text);">∞额度</span>
+          </div>
+        </div>
+        <div
+          class="i-carbon-chevron-down shrink-0 text-xs opacity-50 transition-transform duration-200"
+          :class="{ 'rotate-180': showAccountCard }"
+          style="color: var(--theme-text);"
+        />
+      </button>
+
+      <div
+        v-show="showAccountCard"
+        class="space-y-1.5 border-t px-3 pb-3 pt-2.5 text-xs"
+        style="border-color: color-mix(in srgb, var(--theme-text) 10%, transparent);"
+      >
+        <div class="flex items-center justify-between">
+          <span class="opacity-55" style="color: var(--theme-text);">角色</span>
+          <span style="color: var(--theme-text);">{{ roleLabel }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="opacity-55" style="color: var(--theme-text);">时长</span>
+          <span class="font-medium" :class="userExpired ? 'text-red-500' : ''" style="color: var(--theme-text);">{{ remainingDurationText }}</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="opacity-55" style="color: var(--theme-text);">剩余额度</span>
+          <span style="color: var(--theme-text);">{{ remainingQuota === null ? '∞' : remainingQuota }}</span>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <span class="shrink-0 opacity-55" style="color: var(--theme-text);">过期时间</span>
+          <span class="truncate font-mono" style="color: var(--theme-text);">{{ expireAtText }}</span>
+        </div>
+
+        <div class="space-y-1.5 pt-2">
+          <button
+            class="flex w-full items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium transition hover:brightness-105"
+            style="border-color: color-mix(in srgb, #f59e0b 45%, transparent); background: color-mix(in srgb, #f59e0b 12%, transparent); color: #f59e0b;"
+            @click="showRenewModal = true"
+          >
+            <div class="i-carbon-renew text-base" />
+            续费卡密/额度
+          </button>
+          <button
+            class="flex w-full items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium text-red-500 transition hover:brightness-105"
+            style="border-color: color-mix(in srgb, #ef4444 40%, transparent); background: color-mix(in srgb, #ef4444 10%, transparent);"
+            @click="handleLogout"
+          >
+            <div class="i-carbon-logout text-base" />
+            退出登录
+          </button>
+        </div>
+      </div>
+
+      <!-- Teleport 到 body：liquid-glass 的 backdrop-filter 会把 fixed 定位框在卡片内，导致弹窗居中失效 -->
+      <Teleport to="body">
+        <RenewCardModal :show="showRenewModal" @close="showRenewModal = false" />
+      </Teleport>
+    </div>
 
     <!-- Navigation -->
     <nav class="custom-scrollbar flex-1 overflow-y-auto px-1 py-1 space-y-1">

@@ -5,6 +5,7 @@ import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import api from '@/api'
 import ConsumptionModal from '@/components/ConsumptionModal.vue'
+import RenewCardModal from '@/components/RenewCardModal.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
@@ -12,6 +13,7 @@ import { useAccountStore } from '@/stores/account'
 import { useBagStore } from '@/stores/bag'
 import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
+import { useUserStore } from '@/stores/user'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
 import { compactRuntimeLogs, matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
 
@@ -19,6 +21,7 @@ const statusStore = useStatusStore()
 const accountStore = useAccountStore()
 const bagStore = useBagStore()
 const toastStore = useToastStore()
+const userStore = useUserStore()
 
 const {
   status,
@@ -55,6 +58,38 @@ const hasActiveLogFilter = computed(() =>
 const currentAccountDisconnected = computed(() =>
   currentStatusReady.value && !status.value?.connection?.connected,
 )
+
+// 账号到期提醒：与侧栏账号卡同口径（天数向上取整，29天23小时显示为「还有30天到期」）
+const nowMs = ref(Date.now())
+useIntervalFn(() => {
+  nowMs.value = Date.now()
+}, 60_000)
+const expireMs = computed(() => {
+  const value = Number(userStore.expiresAt)
+  return Number.isFinite(value) && value > 0 ? value : 0
+})
+const userExpired = computed(() =>
+  !userStore.isSuperAdmin && expireMs.value > 0 && expireMs.value <= nowMs.value,
+)
+const daysLeft = computed(() => {
+  if (!expireMs.value || userExpired.value)
+    return null
+  return Math.max(1, Math.ceil((expireMs.value - nowMs.value) / 86_400_000))
+})
+// 到期角标：所有人可见——超管/未设到期显示「永久」，普通用户显示剩余天数/已过期
+const expiryBadgeText = computed(() => {
+  if (userStore.isSuperAdmin || !expireMs.value)
+    return '永久'
+  return userExpired.value ? '已过期' : `还有${daysLeft.value}天到期`
+})
+const expiryBadgeClass = computed(() => {
+  if (userStore.isSuperAdmin || !expireMs.value)
+    return 'rounded-lg bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-white/5 dark:text-gray-400'
+  if (userExpired.value || (daysLeft.value ?? 99) <= 3)
+    return 'rounded-lg bg-red-100 px-2 py-0.5 text-xs font-medium text-red-600 dark:bg-red-900/30 dark:text-red-300'
+  return 'rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-600 dark:bg-amber-900/30 dark:text-amber-300'
+})
+const showRenewModal = ref(false)
 
 const allLogs = computed(() => {
   const merged = [
@@ -217,6 +252,14 @@ function syncCountdownTotal(total: typeof farmCountdownTotal, remain: number, pr
     total.value = Math.max(1, remain)
 }
 
+// 倒计时防「时间倒流」：本地还在递减（>0）且推送值更大时保持本地值，
+// 减到 0（检查中）后无条件采用推送值，保证任务真正跑完后能刷新新一轮倒计时。
+function clampNextRemain(local: number, pushed: number) {
+  if (local > 0 && pushed > local)
+    return local
+  return pushed
+}
+
 function getCountdownProgress(remain: number, total: number) {
   return Math.max(0, Math.min(100, (remain / Math.max(1, total)) * 100))
 }
@@ -313,8 +356,10 @@ function updateCountdowns() {
 watch(status, (newVal) => {
   if (newVal?.nextChecks) {
     const farmRemainSec = newVal.nextChecks.farmRemainSec || 0
-    const helpRemainSec = newVal.nextChecks.helpRemainSec || 0
-    const stealRemainSec = newVal.nextChecks.stealRemainSec || 0
+    // 帮助/偷菜倒计时做防倒流钳制：推送值比本地还大时（调度被推迟、重新随机等），
+    // 保持本地值继续递减到 0（检查中）后再刷新，避免界面时间「往回跳」。
+    const helpRemainSec = clampNextRemain(localNextHelpRemainSec, newVal.nextChecks.helpRemainSec || 0)
+    const stealRemainSec = clampNextRemain(localNextStealRemainSec, newVal.nextChecks.stealRemainSec || 0)
     syncCountdownTotal(farmCountdownTotal, farmRemainSec, localNextFarmRemainSec)
     syncCountdownTotal(helpCountdownTotal, helpRemainSec, localNextHelpRemainSec)
     syncCountdownTotal(stealCountdownTotal, stealRemainSec, localNextStealRemainSec)
@@ -617,8 +662,19 @@ useIntervalFn(updateCountdowns, 1000)
             <div class="i-fas-user-circle" />
             账号
           </div>
-          <div class="rounded-lg bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-            Lv.{{ status?.status?.level || 0 }}
+          <div class="flex max-w-[62%] flex-wrap items-center justify-end gap-1.5">
+            <span class="shrink-0" :class="expiryBadgeClass">{{ expiryBadgeText }}</span>
+            <button
+              type="button"
+              title="续费卡密"
+              class="shrink-0 rounded-lg bg-amber-500 px-2 py-0.5 text-xs font-medium text-white transition-colors hover:bg-amber-600"
+              @click="showRenewModal = true"
+            >
+              续费
+            </button>
+            <div class="rounded-lg bg-blue-100 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+              Lv.{{ status?.status?.level || 0 }}
+            </div>
           </div>
         </div>
         <div class="mb-1 truncate text-xl font-bold" :title="displayName">
@@ -1015,5 +1071,12 @@ useIntervalFn(updateCountdowns, 1000)
       :account-id="currentAccountId"
       @close="showConsumption = false"
     />
+
+    <Teleport to="body">
+      <RenewCardModal
+        :show="showRenewModal"
+        @close="showRenewModal = false"
+      />
+    </Teleport>
   </div>
 </template>

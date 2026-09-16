@@ -2,29 +2,23 @@
 import type { Account } from '@/stores/account'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from 'vue'
-import { useRouter } from 'vue-router'
 import api from '@/api'
 import AccountCareerModal from '@/components/AccountCareerModal.vue'
 import AccountModal from '@/components/AccountModal.vue'
 import AccountStartupModal from '@/components/AccountStartupModal.vue'
 import RemarkModal from '@/components/RemarkModal.vue'
-import RenewCardModal from '@/components/RenewCardModal.vue'
 import { getPlatformClass, getPlatformLabel, useAccountStore } from '@/stores/account'
 import { useStatusStore } from '@/stores/status'
-import { useUserStore } from '@/stores/user'
 import { accountAvatarUrl } from '@/utils/avatar'
 
 const accountStore = useAccountStore()
 const statusStore = useStatusStore()
-const userStore = useUserStore()
-const router = useRouter()
 const { accounts, currentAccount } = storeToRefs(accountStore)
 const { currentStatusReady, status } = storeToRefs(statusStore)
 
 const showAccountDropdown = ref(false)
 const showAccountModal = ref(false)
 const showRemarkModal = ref(false)
-const showRenewModal = ref(false)
 const showCareerModal = ref(false)
 const careerLoading = ref(false)
 const careerError = ref('')
@@ -232,18 +226,6 @@ async function handleAccountSaved(payload?: { created?: { id?: string, name?: st
   }
   await accountStore.fetchAccounts()
 }
-
-function handleLogout() {
-  closeDropdown()
-  const refreshToken = userStore.refreshToken
-  // 通知服务端撤销 session 与长期 refresh token；
-  // 接口失败也要退出本地，所以不 await、不阻塞跳转
-  api
-    .post('/api/logout', refreshToken ? { refreshToken } : {}, { skipErrorToast: true } as any)
-    .catch(() => {})
-  userStore.clearSession()
-  router.replace('/login')
-}
 </script>
 
 <template>
@@ -384,21 +366,6 @@ function handleLogout() {
             <div class="i-carbon-add-alt" />
             <span>管理账号</span>
           </router-link>
-          <button
-            class="w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-100/50 dark:hover:bg-gray-700/50"
-            :style="{ color: 'var(--theme-primary)' }"
-            @click="showRenewModal = true; closeDropdown()"
-          >
-            <div class="i-carbon-renew" />
-            <span>续费卡密/额度</span>
-          </button>
-          <button
-            class="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 transition-colors hover:bg-red-50/60 dark:hover:bg-red-900/20"
-            @click="handleLogout"
-          >
-            <div class="i-carbon-logout" />
-            <span>退出登录</span>
-          </button>
         </div>
       </div>
     </Teleport>
@@ -422,11 +389,6 @@ function handleLogout() {
         :account="accountToEdit"
         @close="showRemarkModal = false"
         @saved="handleAccountSaved"
-      />
-
-      <RenewCardModal
-        :show="showRenewModal"
-        @close="showRenewModal = false"
       />
 
       <AccountCareerModal

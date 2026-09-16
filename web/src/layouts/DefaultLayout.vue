@@ -1,16 +1,54 @@
 <script setup lang="ts">
+import axios from 'axios'
 import { storeToRefs } from 'pinia'
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
+import UpdateLogModal from '@/components/login/UpdateLogModal.vue'
 import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import TopAccountMenu from '@/components/TopAccountMenu.vue'
 import { useAppStore } from '@/stores/app'
+import { useMemorialDay } from '@/composables/useMemorialDay'
 
 const appStore = useAppStore()
 const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
+const { memorialText } = useMemorialDay()
+
+// ============ 更新日志：登录成功进入主界面后自动弹出一次 ============
+const showUpdateLog = ref(false)
+const changelogContent = ref('')
+const changelogLoading = ref(false)
+const changelogError = ref('')
+
+async function loadChangelog(autoOpen = false) {
+  if (changelogLoading.value)
+    return
+  changelogLoading.value = true
+  changelogError.value = ''
+  try {
+    const { data } = await axios.get('/api/changelog')
+    if (!data?.ok)
+      throw new Error(data?.error || '获取更新日志失败')
+    changelogContent.value = String(data.data || '')
+  }
+  catch (error: any) {
+    // 自动弹出时接口失败：静默收起，避免每次进入都顶一个错误框
+    if (autoOpen) {
+      if (!changelogContent.value)
+        showUpdateLog.value = false
+      return
+    }
+    changelogError.value = error?.response?.data?.error || error?.message || '获取更新日志失败'
+  }
+  finally {
+    changelogLoading.value = false
+  }
+}
 
 onMounted(() => {
   appStore.fetchLoginPageConfig()
+  // 登录成功进入主界面后弹出更新日志：先开弹窗（自带加载态），再异步取内容，避免弹出延迟
+  showUpdateLog.value = true
+  loadChangelog(true)
 })
 
 onUnmounted(() => {
@@ -38,12 +76,20 @@ onUnmounted(() => {
           >
             <div class="i-carbon-menu text-xl" />
           </button>
-          <div class="min-w-0">
-            <div class="truncate text-base text-gray-900 font-semibold md:text-lg dark:text-gray-100">
-              {{ loginPageConfig.title || 'QQ农场智能助手' }}
+          <div class="flex min-w-0 items-center gap-2.5">
+            <div
+              class="h-9 w-9 flex flex-none items-center justify-center rounded-xl text-white shadow-md"
+              style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #f97316 100%); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);"
+            >
+              <div class="i-carbon-sprout text-lg" />
             </div>
-            <div class="hidden truncate text-xs text-gray-500 sm:block dark:text-gray-400">
-              自动化工作台 · 账号状态、策略、日志与后台管理集中处理
+            <div class="min-w-0">
+              <div class="truncate text-base text-gray-900 font-bold md:text-lg dark:text-gray-100">
+                {{ loginPageConfig.title || '农场智能助手' }}
+              </div>
+              <div v-if="memorialText" class="truncate text-xs text-gray-900 font-bold sm:block dark:text-white">
+                {{ memorialText }}
+              </div>
             </div>
           </div>
         </div>
@@ -63,6 +109,16 @@ onUnmounted(() => {
         </div>
       </div>
     </main>
+
+    <!-- 更新日志弹窗：登录进入主界面后自动弹出 -->
+    <UpdateLogModal
+      :show="showUpdateLog"
+      :content="changelogContent"
+      :loading="changelogLoading"
+      :error="changelogError"
+      @close="showUpdateLog = false"
+      @retry="loadChangelog()"
+    />
   </div>
 </template>
 

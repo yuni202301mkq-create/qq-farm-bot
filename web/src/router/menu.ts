@@ -17,6 +17,8 @@ export const menuRoutes: MenuItem[] = [
     icon: 'i-carbon-ticket',
     component: () => import('@/views/MyCardKey.vue'),
     normalUserOnly: true,
+    // 按用户要求从左侧导航移除；路由保留，直达 URL 仍可访问
+    showInNav: false,
   },
   {
     path: '',

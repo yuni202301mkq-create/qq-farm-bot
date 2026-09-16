@@ -90,6 +90,18 @@ function buildSettingsPayload(store, accountId, currentUser) {
       accountId && typeof store.getPrioritize2x2Crops === "function"
         ? store.getPrioritize2x2Crops(accountId)
         : true,
+    plantRandomOrder:
+      accountId && typeof store.getPlantRandomOrder === "function"
+        ? store.getPlantRandomOrder(accountId)
+        : false,
+    plantDelaySec:
+      accountId && typeof store.getPlantDelaySec === "function"
+        ? store.getPlantDelaySec(accountId)
+        : 2,
+    stealDelaySec:
+      accountId && typeof store.getStealDelaySec === "function"
+        ? store.getStealDelaySec(accountId)
+        : 1,
     friendQuietHours: accountId ? store.getFriendQuietHours(accountId) : null,
     automation: accountId ? store.getAutomation(accountId) : {},
     autoCodeRefresh:

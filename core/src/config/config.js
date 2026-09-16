@@ -48,6 +48,8 @@ const CONFIG = {
     farmCheckIntervalMax: 5000,        // 农场检查最大间隔 5秒
     friendCheckIntervalMin: 12000,     // 好友检查最小间隔 12秒
     friendCheckIntervalMax: 15000,     // 好友检查最大间隔 15秒
+    stealCheckIntervalMin: 180000,     // 偷菜兜底轮询最小间隔 180秒（策略设置 stealMin）
+    stealCheckIntervalMax: 300000,     // 偷菜兜底轮询最大间隔 300秒（策略设置 stealMax）
     adminPort: Number(process.env.ADMIN_PORT),
     adminPassword: process.env.ADMIN_PASSWORD
 };

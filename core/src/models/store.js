@@ -408,7 +408,9 @@ const DEFAULT_INTERVALS = {
     farmMin: 2,
     farmMax: 5,
     helpMin: 30,
-    helpMax: 35
+    helpMax: 35,
+    stealMin: 180,
+    stealMax: 300
 };
 
 /** 默认静默时段（默认关闭，需要时由用户在策略设置里自行开启） */
@@ -432,6 +434,13 @@ function normalizeCapitalMode(value, fallback = DEFAULT_CAPITAL_MODE) {
     };
 }
 
+/** 将「种植/偷菜延迟(秒)」规范化为 0-120 的整数；非法输入回退到 fallback。 */
+function normalizeDelaySeconds(value, fallback) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed)) return Math.max(0, Number(fallback) || 0);
+    return Math.max(0, Math.min(120, parsed));
+}
+
 /** 默认账号配置 */
 const DEFAULT_ACCOUNT_CONFIG = {
     automation: DEFAULT_AUTOMATION,
@@ -442,6 +451,12 @@ const DEFAULT_ACCOUNT_CONFIG = {
     plantingStrategy: 'max_exp',
     prioritize2x2Crops: false,
     prioritizeGrowthTasks: false,
+    // 种植与偷菜延迟（旧版「种植与偷菜延迟设置」）：
+    // plantRandomOrder 开启后按随机顺序访问地块种植；
+    // plantDelaySec/stealDelaySec 控制每次种植请求之间 / 每次偷取好友作物之后的节奏。
+    plantRandomOrder: false,
+    plantDelaySec: 2,
+    stealDelaySec: 1,
     friendBadRetryDate: '',
     intervals: DEFAULT_INTERVALS,
     friendQuietHours: DEFAULT_QUIET_HOURS,
@@ -668,7 +683,11 @@ function normalizeIntervals(raw) {
     let helpMax = toInt(input.helpMax, 35);
     if (helpMin > helpMax) [helpMin, helpMax] = [helpMax, helpMin];
 
-    return { ...input, farm, farmMin, farmMax, helpMin, helpMax };
+    let stealMin = toInt(input.stealMin, 180);
+    let stealMax = toInt(input.stealMax, 300);
+    if (stealMin > stealMax) [stealMin, stealMax] = [stealMax, stealMin];
+
+    return { ...input, farm, farmMin, farmMax, helpMin, helpMax, stealMin, stealMax };
 }
 
 // ==================== 配置克隆/合并 ====================
@@ -700,7 +719,7 @@ function cloneAccountConfig(config = DEFAULT_ACCOUNT_CONFIG) {
             enabled: config.autoCodeRefresh && config.autoCodeRefresh.enabled === true,
             intervalMinutes: Math.max(1, Math.min(1440, Number(config.autoCodeRefresh && config.autoCodeRefresh.intervalMinutes) || 60))
         },
-        intervals: { ...config.intervals || DEFAULT_ACCOUNT_CONFIG.intervals },
+        intervals: { ...DEFAULT_ACCOUNT_CONFIG.intervals, ...(config.intervals || {}) },
         friendQuietHours: { ...config.friendQuietHours || DEFAULT_ACCOUNT_CONFIG.friendQuietHours },
         knownFriendGids,
         friendBlacklist: friendBlacklist.map(Number).filter(n => Number.isFinite(n) && n > 0),
@@ -736,7 +755,7 @@ function resolveAccountId(accountId) {
 
 const DEFAULT_LOGIN_LINKS = {
     logoUrl: '',
-    title: 'QQ农场智能助手',
+    title: '农场智能助手',
     loginSubtitle: '欢迎回来，开启智慧农耕之旅',
     registerSubtitle: '创建账号，开启智慧农耕之旅',
     purchaseUrl: '',
@@ -830,6 +849,15 @@ function normalizeAccountConfig(raw, fallbackConfig = accountFallbackConfig) {
     }
     if (input.prioritizeGrowthTasks !== undefined && input.prioritizeGrowthTasks !== null) {
         cfg.prioritizeGrowthTasks = input.prioritizeGrowthTasks === true;
+    }
+    if (input.plantRandomOrder !== undefined && input.plantRandomOrder !== null) {
+        cfg.plantRandomOrder = input.plantRandomOrder === true;
+    }
+    if (input.plantDelaySec !== undefined && input.plantDelaySec !== null) {
+        cfg.plantDelaySec = normalizeDelaySeconds(input.plantDelaySec, cfg.plantDelaySec);
+    }
+    if (input.stealDelaySec !== undefined && input.stealDelaySec !== null) {
+        cfg.stealDelaySec = normalizeDelaySeconds(input.stealDelaySec, cfg.stealDelaySec);
     }
     cfg.friendBadRetryDate = /^\d{4}-\d{2}-\d{2}$/.test(String(input.friendBadRetryDate || ''))
         ? String(input.friendBadRetryDate) : '';
@@ -1307,6 +1335,9 @@ function getConfigSnapshot(accountId) {
         plantingStrategy: cfg.plantingStrategy,
         prioritize2x2Crops: cfg.prioritize2x2Crops === true,
         prioritizeGrowthTasks: cfg.prioritizeGrowthTasks === true || cfg.plantingStrategy === 'task_priority',
+        plantRandomOrder: cfg.plantRandomOrder === true,
+        plantDelaySec: normalizeDelaySeconds(cfg.plantDelaySec, DEFAULT_ACCOUNT_CONFIG.plantDelaySec),
+        stealDelaySec: normalizeDelaySeconds(cfg.stealDelaySec, DEFAULT_ACCOUNT_CONFIG.stealDelaySec),
         friendBadRetryDate: String(cfg.friendBadRetryDate || ''),
         intervals: { ...cfg.intervals },
         friendQuietHours: { ...cfg.friendQuietHours },
@@ -1503,6 +1534,21 @@ function getPrioritizeGrowthTasks(accountId) {
 
 function getPrioritize2x2Crops(accountId) {
     return getAccountConfigSnapshot(accountId).prioritize2x2Crops === true;
+}
+
+/** 「种植顺序随机」：开启后按随机顺序访问地块种植。 */
+function getPlantRandomOrder(accountId) {
+    return getAccountConfigSnapshot(accountId).plantRandomOrder === true;
+}
+
+/** 种植延迟（秒）：两次种植请求之间的最小间隔，0 表示仅保留基础随机间隔。 */
+function getPlantDelaySec(accountId) {
+    return normalizeDelaySeconds(getAccountConfigSnapshot(accountId).plantDelaySec, DEFAULT_ACCOUNT_CONFIG.plantDelaySec);
+}
+
+/** 偷菜延迟（秒）：偷取一位好友的作物之后的等待时间，0 表示仅保留基础随机间隔。 */
+function getStealDelaySec(accountId) {
+    return normalizeDelaySeconds(getAccountConfigSnapshot(accountId).stealDelaySec, DEFAULT_ACCOUNT_CONFIG.stealDelaySec);
 }
 
 function getFriendBadRetryDate(accountId) {
@@ -2150,6 +2196,9 @@ module.exports = {
     getPlantingStrategy,
     getPrioritize2x2Crops,
     getPrioritizeGrowthTasks,
+    getPlantRandomOrder,
+    getPlantDelaySec,
+    getStealDelaySec,
     getFriendBadRetryDate,
     getBagSeedPriority,
     syncBagSeedPriority,

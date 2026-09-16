@@ -54,7 +54,7 @@ async function save() {
 
 <template>
   <div v-if="show" class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
-    <div class="max-w-sm w-full overflow-hidden rounded-lg bg-white shadow-xl dark:bg-gray-800">
+    <div class="max-w-sm w-full overflow-hidden rounded-lg bg-white shadow-xl" :style="{ background: 'var(--theme-bg)' }">
       <div class="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
         <h3 class="text-lg font-semibold">
           修改备注

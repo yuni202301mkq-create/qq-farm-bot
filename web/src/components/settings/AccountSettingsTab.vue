@@ -106,7 +106,7 @@ function accountAvatar(acc: any) {
       <div>加载中...</div>
     </div>
 
-    <div v-else-if="accounts.length === 0" class="rounded-lg bg-white py-12 text-center shadow dark:bg-gray-800">
+    <div v-else-if="accounts.length === 0" class="liquid-glass rounded-2xl py-12 text-center">
       <div i-carbon-user-avatar class="mb-4 inline-block text-4xl text-gray-400" />
       <p class="mb-4 text-gray-500">
         暂无账号
@@ -126,7 +126,7 @@ function accountAvatar(acc: any) {
       <div
         v-for="acc in accounts"
         :key="acc.id"
-        class="cursor-pointer border rounded-lg bg-white p-3 shadow transition-all duration-200 dark:bg-gray-800 sm:p-4"
+        class="liquid-glass cursor-pointer rounded-2xl p-3 shadow transition-all duration-200 sm:p-4"
         :class="String(currentAccountId) === String(acc.id)
           ? 'ring-2'
           : 'border-transparent'"
@@ -283,11 +283,14 @@ function accountAvatar(acc: any) {
       @saved="emit('saved', $event)"
     />
 
-    <AccountStartupModal
-      :show="!!startupAccount"
-      :account="startupAccount"
-      @close="emit('closeStartup')"
-    />
+    <!-- Teleport 到 body：设置页玻璃外壳的 backdrop-filter 会困住 fixed 弹窗 -->
+    <Teleport to="body">
+      <AccountStartupModal
+        :show="!!startupAccount"
+        :account="startupAccount"
+        @close="emit('closeStartup')"
+      />
+    </Teleport>
 
     <ConfirmModal
       :show="showDeleteConfirm"

@@ -12,6 +12,8 @@ const {
   getBagSeedFallbackStrategy,
   getPrioritize2x2Crops,
   getPrioritizeGrowthTasks,
+  getPlantRandomOrder,
+  getPlantDelaySec,
   getSeedLocks,
 } = require('../models/store');
 const { getPlantRankings } = require('./analytics');
@@ -50,6 +52,22 @@ function getPlantingStrategyLabel(strategy) {
 function getCurrentAccountId() {
   const userState = getUserState();
   return String((userState && userState.accountId) || process.env.FARM_ACCOUNT_ID || '').trim();
+}
+
+// 「种植顺序随机」：只打乱地块访问顺序（Fisher-Yates），不改变背包种子的优先顺序。
+function shuffleLandIds(landIds) {
+  const ids = [...landIds];
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+  return ids;
+}
+
+// 「种植延迟(秒)」→ 相邻两次种植请求之间的等待区间；0 表示仅保留 200-400ms 基础随机间隔。
+function getPlantPacingRange(accountId) {
+  const delayMs = Math.max(0, Number(getPlantDelaySec(accountId)) || 0) * 1000;
+  return delayMs > 0 ? [delayMs, delayMs + 400] : [200, 400];
 }
 
 // ─── 编码/解码 ───
@@ -360,6 +378,34 @@ function select2x2Reservations(groups, emptyLandIds, desiredCount, lands) {
   return selected;
 }
 
+/**
+ * 背包优先策略内的 2x2 选组：
+ * 跑批过程中 lands 快照不会随本次种植刷新，通用比较器里的清空时间/锁地成本会整体退化，
+ * 仅按品级与主地块编号挑组时，可能选中一块与剩余空地毫无交集的区域，
+ * 导致等待中的四格种子“预留”落空（一块空地都保不住）。
+ * 这里先按「覆盖当前空地数量」取最优——完整空闲组覆盖 4 格必然胜出，保持能种先种；
+ * 覆盖数相同时再沿用通用比较器（品级、清空时间、锁地成本、已预留、主地块编号）取舍。
+ */
+function select2x2GroupForBagSeed(groups, remainingIds, lands) {
+  const freeSet = new Set((remainingIds || []).map(toNum).filter(Boolean));
+  if (freeSet.size === 0) return null;
+  const activeFootprints = getActive2x2Footprints(lands);
+  const candidates = (groups || []).filter((group) => {
+    // 与剩余空地无交集的区域没有预留价值：它想要的空地早已被本次跑批种上其他作物。
+    if (!group.landIds.some(id => freeSet.has(id))) return false;
+    return !activeFootprints.some(footprint => overlapsLandIds(group.landIds, footprint.landIds));
+  });
+  if (candidates.length === 0) return null;
+  const coverageOf = group => group.landIds.filter(id => freeSet.has(id)).length;
+  const maxCoverage = Math.max(...candidates.map(coverageOf));
+  const finalists = candidates.filter(group => coverageOf(group) === maxCoverage);
+  const landMap = buildLandMap(lands);
+  const previousReservations = new Set(reserved2x2GroupKeys);
+  const metrics = finalists.map(group => get2x2GroupMetrics(group, landMap, freeSet, previousReservations));
+  metrics.sort((a, b) => compare2x2Plans([b], [a]));
+  return metrics[0] ? metrics[0].group : null;
+}
+
 function expandRemoved2x2Lands(emptyLandIds, removedLandIds, lands) {
   const result = new Set((emptyLandIds || []).map(toNum).filter(Boolean));
   const landMap = buildLandMap(lands);
@@ -561,7 +607,8 @@ async function plantPrioritized2x2Crops(emptyLandIds, lands, accountId) {
         break;
       }
     }
-    await sleep(200, 400);
+    // 组与组之间按「种植延迟(秒)」控制节奏
+    await sleep(pacingMinMs, pacingMaxMs);
   }
 
   if (reservations.length > readyGroups.length) {
@@ -606,12 +653,15 @@ async function plantSeeds(seedId, landIds, options = {}) {
   const plantedLandIds = [];
   const occupiedSet = new Set();
   const maxPlantCount = Math.max(1, toNum(options.maxPlantCount) || 1) || Number.POSITIVE_INFINITY;
-  const remainingLandIds = new Set(
-    (Array.isArray(landIds) ? landIds : []).map(id => toNum(id)).filter(Boolean)
-  );
+  const accountId = options.accountId || getCurrentAccountId();
+  const normalizedIds = (Array.isArray(landIds) ? landIds : []).map(id => toNum(id)).filter(Boolean);
+  const remainingLandIds = new Set(normalizedIds);
+  // 「种植顺序随机」只影响访问顺序，不影响种植结果集合。
+  const visitOrder = getPlantRandomOrder(accountId) ? shuffleLandIds(normalizedIds) : normalizedIds;
+  const [pacingMinMs, pacingMaxMs] = getPlantPacingRange(accountId);
 
-  for (const rawLandId of landIds) {
-    const landId = toNum(rawLandId);
+  for (let index = 0; index < visitOrder.length; index++) {
+    const landId = visitOrder[index];
     if (!landId || !remainingLandIds.has(landId)) continue;
     if (planted >= maxPlantCount) break;
 
@@ -643,8 +693,10 @@ async function plantSeeds(seedId, landIds, options = {}) {
       }
       logWarn('种植', `土地#${landId} 失败: ${err.message}`);
     }
-    // 多地种植时加间隔
-    if (landIds.length > 1) await sleep(200, 400);
+    // 多地种植时按「种植延迟(秒)」控制节奏；末一块或已无可用地块时不再空等。
+    if (index < visitOrder.length - 1 && remainingLandIds.size > 0) {
+      await sleep(pacingMinMs, pacingMaxMs);
+    }
   }
 
   const result = {
@@ -720,9 +772,9 @@ function sortBagSeedsForPlanting(bagSeeds, priorityList, excludedSeedIds) {
 /**
  * 使用背包种子种植（bag_priority 策略）
  *
- * 1x1 与 2x2 种子统一按「背包种子优先顺序」交错消耗：轮到某颗种子时，
- * 2x2 需要一整块空闲四格地，暂时凑不齐就预留该区域并继续下一颗。
- * 2x2 是否参与由「优先种植四格作物」开关决定（总闸）。
+ * 按「背包种子优先顺序」消耗种子：「优先种植四格作物」开关是 2x2 参与的总闸——
+ * 开启时 2x2 整体插队到 1x1 之前先种（两类内部仍按列表顺序；2x2 需要一整块
+ * 空闲四格地，暂时凑不齐就预留该区域），关闭时 2x2 不参与，仅 1x1 按顺序消耗。
  *
  * @param {number[]} emptyLandIds - 空地 ID 列表
  * @param {string} [accountId] - 账号 ID
@@ -771,10 +823,12 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
     : [];
 
   // The synchronized list is the same order shown in the settings page.
-  // 1x1 与 2x2 共用同一份顺序；只要能拿到土地布局，2x2 就按列表顺序参与。
-  // 「优先种植四格作物」开关只控制“插队先种”，不影响背包优先策略内的参与权。
-  const size2Enabled = lands.length > 0;
-  const orderedSeeds = sortBagSeedsForPlanting(
+  // 「优先种植四格作物」开关是 2x2 参与的总闸：开启时 2x2 整体插队到 1x1 之前
+  // 先种（2x2 / 1x1 各自内部仍按列表顺序，凑不齐四格地时预留区域）；关闭时
+  // 2x2 不参与、不预留，仅 1x1 按列表顺序种植（其他策略的插队路径
+  // plantPrioritized2x2Crops 同样受该开关控制）。
+  const size2Enabled = lands.length > 0 && getPrioritize2x2Crops(accountId);
+  const sortedSeeds = sortBagSeedsForPlanting(
     plantableBagSeeds.filter((seed) => {
       if (Number(seed && seed.count) <= 0) return false;
       const plantSize = Number(seed && seed.plantSize) || 1;
@@ -784,6 +838,13 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
     seedPriority,
     excludedSeedIds
   );
+  // 开关开启时四格种子整体排前：先把 2x2 种完（含预留等待），再按顺序种 1x1。
+  const orderedSeeds = size2Enabled
+    ? [
+        ...sortedSeeds.filter(seed => Number(seed && seed.plantSize) === 2),
+        ...sortedSeeds.filter(seed => Number(seed && seed.plantSize) !== 2),
+      ]
+    : sortedSeeds;
 
   // 等级未解锁的种子直接跳过（200 级按项目约定不参与本地等级判断）。
   // 取不到用户等级时不做过滤，避免误伤。
@@ -840,6 +901,7 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
   let totalOccupied = 0;
   const allPlantedIds = [];
   const batches = [];
+  const [pacingMinMs, pacingMaxMs] = getPlantPacingRange(accountId);
 
   for (const seed of availableSeeds) {
     if (remainingIds.length === 0) break;
@@ -851,7 +913,7 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
       let unavailableReason = '';
 
       while (count > 0) {
-        const group = select2x2Reservations(size2Groups, remainingIds, 1, lands)[0];
+        const group = select2x2GroupForBagSeed(size2Groups, remainingIds, lands);
         if (!group) break;
         const retryAt = failed2x2Retries.get(`${group.key}:${seed.seedId}`) || 0;
         if (retryAt > Date.now()) break;
@@ -882,6 +944,8 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
             strategy: 'bag_priority', seedId: seed.seedId,
             masterLandId: planted.masterLandId, landIds: planted.occupiedLandIds,
           });
+          // 同一颗种子连续占用多个 2x2 区域时，按「种植延迟(秒)」控制节奏
+          if (count > 0) await sleep(pacingMinMs, pacingMaxMs);
         } catch (err) {
           if (isLockedPlantError(err)) {
             // 与旧的 2x2 行为一致：该种子本轮不再尝试，直接换下一优先种子。
@@ -1319,8 +1383,10 @@ async function autoPlantEmptyLands(deadLandIds, emptyLandIds, lands = []) {
       return result;
     }
   }
-  // 背包优先策略：1x1 与 2x2 统一按「背包种子优先顺序」交错种植
-  // （2x2 是否参与由「优先种植四格作物」开关决定），因此这里不再单独跑一遍 2x2 优先。
+  // 背包优先策略：按「背包种子优先顺序」种植。
+  // 「优先种植四格作物」开关是 2x2 参与的总闸：开启时 2x2 整体插队到 1x1 之前先种
+  // （两类内部仍按列表顺序，凑不齐四格空地时会预留完整 2x2 区域等待清空），关闭时
+  // 仅 1x1 按顺序种植；因此背包策略内不再单独跑一遍 2x2 优先插队（plantPrioritized2x2Crops 仅用于其他策略）。
   if (strategy === 'bag_priority') {
     let bagResult;
     try {

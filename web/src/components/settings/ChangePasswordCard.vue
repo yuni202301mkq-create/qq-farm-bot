@@ -59,8 +59,8 @@ async function submit() {
 </script>
 
 <template>
-  <div class="border border-gray-200 rounded-xl bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
-    <div class="border-b border-gray-100 px-4 py-3 dark:border-gray-700">
+  <div class="liquid-glass rounded-2xl">
+    <div class="border-b border-white/50 px-4 py-3 dark:border-white/10">
       <h3 class="flex items-center gap-2 text-base text-gray-900 font-bold dark:text-gray-100">
         <div class="i-carbon-user-role text-lg" :style="{ color: 'var(--theme-primary)' }" />
         用户管理
@@ -68,7 +68,7 @@ async function submit() {
     </div>
 
     <div class="p-4">
-      <div class="border border-gray-100 rounded-lg bg-gray-50/60 p-4 dark:border-gray-700 dark:bg-gray-900/40">
+      <div class="liquid-glass-sub border border-gray-100 rounded-lg bg-gray-50/60 p-4 dark:border-gray-700 dark:bg-gray-900/40">
         <div class="mb-3 flex items-center gap-2 text-sm font-semibold">
           <div class="i-carbon-password text-base" :style="{ color: 'var(--theme-primary)' }" />
           修改用户密码

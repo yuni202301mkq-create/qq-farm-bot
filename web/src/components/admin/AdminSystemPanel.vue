@@ -46,7 +46,7 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
     </div>
 
     <div class="space-y-4">
-      <div v-if="props.section === 'system'" class="border border-gray-200 rounded-lg bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <div v-if="props.section === 'system'" class="liquid-glass rounded-2xl p-4">
         <h4 class="mb-3 flex items-center gap-2 text-base text-gray-900 font-bold dark:text-gray-100">
           <div class="i-carbon-settings" />
           系统配置
@@ -79,12 +79,14 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
           </div>
         </div>
 
-        <div class="mb-3 rounded-2xl bg-gray-50 px-4 py-3 text-xs text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
-          服务器地址与客户端版本通常需要成对调整，建议先在测试环境验证，再同步到生产使用。
+        <div class="liquid-glass-sub mb-3 mt-3 flex items-start gap-2 rounded-2xl bg-gray-50/80 px-4 py-3 text-xs text-gray-500 dark:bg-gray-900/40 dark:text-gray-400">
+          <div class="i-carbon-information mt-0.5 shrink-0 text-sm" />
+          <span>服务器地址与客户端版本通常需要成对调整，建议先在测试环境验证，再同步到生产使用。</span>
         </div>
 
-        <div class="mb-3 rounded-2xl bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
-          保存后会立刻影响全局连接参数。若服务器地址、平台或系统版本不匹配，可能导致后续账号连接异常。
+        <div class="liquid-glass-sub mb-3 flex items-start gap-2 rounded-2xl bg-amber-50 px-4 py-3 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+          <div class="i-carbon-warning-alt mt-0.5 shrink-0 text-sm" />
+          <span>保存后会立刻影响全局连接参数。若服务器地址、平台或系统版本不匹配，可能导致后续账号连接异常。</span>
         </div>
 
         <div class="grid grid-cols-2 gap-3 text-sm">
@@ -159,7 +161,7 @@ const localCaptureConfig = defineModel<CaptureConfig>('localCaptureConfig', { re
         </div>
       </div>
 
-      <div v-if="props.section === 'capture'" class="border border-gray-200 rounded-lg bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <div v-if="props.section === 'capture'" class="liquid-glass rounded-2xl p-4">
         <h4 class="mb-3 flex items-center gap-2 text-base text-gray-900 font-bold dark:text-gray-100">
           <div class="i-carbon-data-connected" />
           Code/GID 抓取服务

@@ -502,6 +502,9 @@ async function getBagDetail() {
 
 // ---- 出售果实 ----
 
+// 连续轮次跳过相同不可售物品时不再重复提示，仅在跳过内容变化时重新提醒
+let lastSellSkipKey = '';
+
 /**
  * 出售所有果实
  */
@@ -534,7 +537,7 @@ async function sellAllFruits() {
     const soldLabels = [];
     let soldKindCount = 0;
     let soldTotalCount = 0;
-    let skippedKindCount = 0;
+    const skippedItems = [];
 
     function recordSoldFruit(item) {
       const id = toNum(item.id);
@@ -545,6 +548,7 @@ async function sellAllFruits() {
     }
 
     // 批量出售
+    const batchFailMessages = new Set();
     for (let i = 0; i < fruits.length; i += SELL_BATCH_SIZE) {
       const batch = fruits.slice(i, i + SELL_BATCH_SIZE);
       try {
@@ -555,8 +559,9 @@ async function sellAllFruits() {
         if (gain > 0) totalGoldFromReply += gain;
         batch.forEach(recordSoldFruit);
       } catch (err) {
-        // 批量失败，逐个重试
-        logWarn('仓库', `批量出售失败，改为逐个重试: ${err.message}`);
+        // 批量失败，逐个重试；失败原因不再单独打一行，
+        // 统一并入下方跳过日志（同一原因合并一条 + skipKey 变更去重），避免同屏重复两条。
+        batchFailMessages.add(String(err.message || '').replace(/^gamepb\.[\w.]+?\s*错误:\s*/, ''));
         for (const fruit of batch) {
           try {
             const result = await sellItems([fruit]);
@@ -568,14 +573,40 @@ async function sellAllFruits() {
           } catch (innerErr) {
             const fid = toNum(fruit.id);
             const fcount = toNum(fruit.count);
-            skippedKindCount += 1;
-            logWarn('仓库', `跳过不可售物品: ID=${fid} x${fcount} (${innerErr.message})`, {
-              module: 'warehouse', event: '跳过不可售物品', result: 'skip', itemId: fid, count: fcount,
-            });
+            skippedItems.push({ id: fid, count: fcount, message: innerErr.message });
           }
         }
       }
       if (i + SELL_BATCH_SIZE < fruits.length) await sleep(300);
+    }
+
+    const skippedKindCount = skippedItems.length;
+    const skipKey = skippedItems
+      .map(item => `${item.id}:${item.count}`)
+      .sort()
+      .join('|');
+    const skipChanged = skipKey !== lastSellSkipKey;
+    lastSellSkipKey = skipKey;
+    const skipSuffix = skippedKindCount > 0 && skipChanged ? `，跳过 ${skippedKindCount} 个不可售物品` : '';
+    if (skipChanged && skippedKindCount > 0) {
+      // 同一错误原因合并为一行：批量失败(原因)，跳过 ID=xxx xN、ID=yyy xM
+      const byMessage = new Map();
+      for (const item of skippedItems) {
+        const shortMsg = String(item.message || '').replace(/^gamepb\.[\w.]+?\s*错误:\s*/, '') || item.message;
+        if (!byMessage.has(shortMsg)) byMessage.set(shortMsg, []);
+        byMessage.get(shortMsg).push(item);
+      }
+      for (const [shortMsg, group] of byMessage) {
+        const label = group.map(item => `ID=${item.id} x${item.count}`).join('、');
+        logWarn('仓库', `批量出售失败(${shortMsg})，跳过 ${label}`, {
+          module: 'warehouse', event: '跳过不可售物品', result: 'skip', count: group.length,
+        });
+      }
+    } else if (skipChanged && batchFailMessages.size > 0) {
+      // 整批失败但逐个重试全部补售成功：仅在新情况时提示一次，不逐轮刷屏
+      logWarn('仓库', `批量出售失败，逐个重试后全部售出 (${[...batchFailMessages].join('；')})`, {
+        module: 'warehouse', event: '批量出售重试成功', result: 'retry_ok',
+      });
     }
 
     // 等待金币更新
@@ -615,7 +646,7 @@ async function sellAllFruits() {
     }
 
     if (soldLabels.length === 0) {
-      logWarn('仓库', `本轮果实出售未成功${skippedKindCount > 0 ? `，已跳过 ${skippedKindCount} 个不可售物品` : ''}`, {
+      logWarn('仓库', `本轮果实出售未成功${skipSuffix}`, {
         module: 'warehouse',
         event: 'sell_done',
         result: 'skipped',
@@ -629,7 +660,7 @@ async function sellAllFruits() {
       return;
     }
 
-    log('仓库', `出售 ${soldLabels.join(', ')}${skippedKindCount > 0 ? `，跳过 ${skippedKindCount} 个不可售物品` : ''}${totalGoldGain > 0 ? `，获得 ${totalGoldGain} 金币` : ''}`, {
+    log('仓库', `出售 ${soldLabels.join(', ')}${skipSuffix}${totalGoldGain > 0 ? `，获得 ${totalGoldGain} 金币` : ''}`, {
       module: 'warehouse',
       event: totalGoldGain > 0 ? 'sell_success' : 'sell_done',
       result: totalGoldGain > 0 ? 'ok' : 'unknown_gain',

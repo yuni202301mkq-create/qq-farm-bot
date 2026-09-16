@@ -199,7 +199,7 @@ watch(expanded, cancelDrag)
         <button type="button" class="h-8 shrink-0 text-xs text-[var(--theme-primary)] disabled:opacity-50" :disabled="loading || dragging !== null" @click="refresh">
           {{ loading ? '读取中…' : '刷新' }}
         </button>
-        <span tabindex="0" aria-label="按从左到右、从上到下的顺序种植；拖动或置顶调整，保存设置后生效。四格（2×2）作物同样按此顺序参与种植。" title="按从左到右、从上到下的顺序种植；拖动或置顶调整，保存设置后生效。四格（2×2）作物同样按此顺序参与种植。" class="i-carbon-information h-4 w-4 shrink-0 text-gray-400" />
+        <span tabindex="0" aria-label="按从左到右、从上到下的顺序种植；拖动或置顶调整，保存设置后生效。开启「优先种植 2×2 作物」后，四格（2×2）作物优先先种，普通种子再按此顺序种植。" title="按从左到右、从上到下的顺序种植；拖动或置顶调整，保存设置后生效。开启「优先种植 2×2 作物」后，四格（2×2）作物优先先种，普通种子再按此顺序种植。" class="i-carbon-information h-4 w-4 shrink-0 text-gray-400" />
       </div>
     </div>
     <div v-show="expanded" class="mt-2">

@@ -158,9 +158,7 @@ function onResetSuccess(resetUsername: string) {
 }
 
 onMounted(() => {
-  // 每次进入/刷新登录页都弹出更新日志：先开弹窗（自带加载态），再异步取内容，避免弹出延迟
-  showUpdateLog.value = true
-  loadChangelog(true)
+  // 更新日志弹窗已移至登录成功后的主界面（DefaultLayout）自动弹出；登录页仅保留手动查看入口
   // 分享链接 /login?mode=forgot 直接唤起找回弹窗，页面本身仍按登录态呈现
   if (String(route.query.mode) === 'forgot')
     showResetModal.value = true
