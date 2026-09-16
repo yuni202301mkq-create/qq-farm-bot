@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import axios from 'axios'
 import { storeToRefs } from 'pinia'
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
+import UpdateLogModal from '@/components/login/UpdateLogModal.vue'
 import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import TopAccountMenu from '@/components/TopAccountMenu.vue'
@@ -9,8 +11,42 @@ import { useAppStore } from '@/stores/app'
 const appStore = useAppStore()
 const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
 
+// ============ 更新日志：登录成功进入主界面后自动弹出一次 ============
+const showUpdateLog = ref(false)
+const changelogContent = ref('')
+const changelogLoading = ref(false)
+const changelogError = ref('')
+
+async function loadChangelog(autoOpen = false) {
+  if (changelogLoading.value)
+    return
+  changelogLoading.value = true
+  changelogError.value = ''
+  try {
+    const { data } = await axios.get('/api/changelog')
+    if (!data?.ok)
+      throw new Error(data?.error || '获取更新日志失败')
+    changelogContent.value = String(data.data || '')
+  }
+  catch (error: any) {
+    // 自动弹出时接口失败：静默收起，避免每次进入都顶一个错误框
+    if (autoOpen) {
+      if (!changelogContent.value)
+        showUpdateLog.value = false
+      return
+    }
+    changelogError.value = error?.response?.data?.error || error?.message || '获取更新日志失败'
+  }
+  finally {
+    changelogLoading.value = false
+  }
+}
+
 onMounted(() => {
   appStore.fetchLoginPageConfig()
+  // 登录成功进入主界面后弹出更新日志：先开弹窗（自带加载态），再异步取内容，避免弹出延迟
+  showUpdateLog.value = true
+  loadChangelog(true)
 })
 
 onUnmounted(() => {
@@ -63,6 +99,16 @@ onUnmounted(() => {
         </div>
       </div>
     </main>
+
+    <!-- 更新日志弹窗：登录进入主界面后自动弹出 -->
+    <UpdateLogModal
+      :show="showUpdateLog"
+      :content="changelogContent"
+      :loading="changelogLoading"
+      :error="changelogError"
+      @close="showUpdateLog = false"
+      @retry="loadChangelog()"
+    />
   </div>
 </template>
 
