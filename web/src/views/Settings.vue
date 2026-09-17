@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import api from '@/api'
 import AdminSystemPanel from '@/components/admin/AdminSystemPanel.vue'
@@ -57,17 +57,10 @@ function getInitialSettingsTab(): SettingsTabKey {
 }
 
 const activeTab = ref<SettingsTabKey>(getInitialSettingsTab())
-const settingsTabsNav = ref<HTMLElement | null>(null)
 
-async function scrollActiveTabIntoView() {
-  await nextTick()
-  const button = settingsTabsNav.value?.querySelector<HTMLElement>(`[data-settings-tab="${activeTab.value}"]`)
-  button?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-}
-
+// 标签栏在移动端改为网格换行布局（无横向滚动），这里只负责记忆页签
 watch(activeTab, (newTab) => {
   localStorage.setItem('settings-active-tab', newTab)
-  void scrollActiveTabIntoView()
 })
 
 // 普通用户没有卡密设置页签，避免停留在不可见的 tab 上
@@ -471,7 +464,6 @@ onMounted(async () => {
   if (String(currentAccountId.value || '') === accountIdBeforeFetch)
     await loadCurrentAccountSettings()
 
-  await scrollActiveTabIntoView()
   void systemConfigTask
 })
 </script>
@@ -479,33 +471,33 @@ onMounted(async () => {
 <template>
   <div class="settings-page relative">
     <!-- 液态玻璃氛围光斑：给磨砂卡片提供可被模糊折射的色彩层次 -->
-    <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
-      <div class="bg-blob settings-blob settings-blob-1" />
-      <div class="bg-blob settings-blob settings-blob-2" />
-      <div class="bg-blob settings-blob settings-blob-3" />
-    </div>
+      <div aria-hidden="true" class="settings-blob-layer pointer-events-none absolute inset-0 overflow-hidden">
+        <div class="bg-blob settings-blob settings-blob-1" />
+        <div class="bg-blob settings-blob settings-blob-2" />
+        <div class="bg-blob settings-blob settings-blob-3" />
+      </div>
 
-    <div class="relative mb-4">
-      <h1 class="text-2xl text-gray-900 font-bold dark:text-gray-100">
+    <div class="relative mb-3 md:mb-4">
+      <h1 class="text-xl text-gray-900 font-bold md:text-2xl dark:text-gray-100">
         设置
       </h1>
     </div>
 
     <div class="liquid-glass liquid-glass-static relative z-10 rounded-2xl">
       <div class="border-b border-white/50 dark:border-white/10">
-        <nav ref="settingsTabsNav" class="flex gap-1 overflow-x-auto p-2">
+        <!-- 移动端用 3 列网格换行，标签不再横向滚动裁切；sm 起自动换行横排 -->
+        <nav class="grid grid-cols-3 gap-1.5 p-2 sm:flex sm:flex-wrap">
           <button
             v-for="tab in tabs"
             :key="tab.key"
-            :data-settings-tab="tab.key"
-            class="flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium transition-all"
+            class="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all"
             :class="activeTab === tab.key
               ? 'text-white shadow-sm'
               : 'text-gray-600 hover:bg-white/50 dark:text-gray-400 dark:hover:bg-white/10'"
             :style="activeTab === tab.key ? { backgroundColor: 'var(--theme-primary)' } : {}"
             @click="activeTab = tab.key"
           >
-            <div :class="tab.icon" />
+            <div :class="tab.icon" class="hidden shrink-0 sm:block" />
             {{ tab.label }}
           </button>
         </nav>
@@ -546,6 +538,7 @@ onMounted(async () => {
           @delete="handleDelete"
           @saved="handleSaved"
           @close-startup="closeStartupModal"
+          @startup-finished="fetchAccounts"
           @close-modal="showModal = false"
           @close-delete-confirm="showDeleteConfirm = false"
           @confirm-delete="confirmDelete"
@@ -607,8 +600,11 @@ onMounted(async () => {
 
         <div v-else-if="activeTab === 'system'" class="space-y-5">
           <!-- 系统配置标题与保存按钮（吸顶），置于页签最顶部 -->
-          <div v-if="userStore.isSuperAdmin" class="sticky top-0 z-10 flex items-center justify-between py-1">
-            <div>
+          <div
+            v-if="userStore.isSuperAdmin"
+            class="sticky top-0 z-10 -mx-4 mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-b-xl bg-white/75 px-4 py-2.5 backdrop-blur-md dark:bg-gray-900/75"
+          >
+            <div class="min-w-0">
               <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
                 系统配置
               </h3>
@@ -616,7 +612,7 @@ onMounted(async () => {
                 统一管理用户账号、连接参数、设备协议、抓包服务和离线通知。
               </p>
             </div>
-            <BaseButton size="sm" :loading="anySystemSaving" @click="saveSystemSettings">
+            <BaseButton size="sm" class="shrink-0 whitespace-nowrap" :loading="anySystemSaving" @click="saveSystemSettings">
               保存系统配置
             </BaseButton>
           </div>
@@ -680,7 +676,7 @@ onMounted(async () => {
                 配置账号离线后的通知渠道和消息内容。
               </p>
             </div>
-            <BaseButton size="sm" :loading="offlineSaving" :disabled="offlineTesting" @click="handleSaveOffline">
+            <BaseButton size="sm" class="shrink-0 whitespace-nowrap" :loading="offlineSaving" :disabled="offlineTesting" @click="handleSaveOffline">
               保存通知设置
             </BaseButton>
           </div>
@@ -749,11 +745,18 @@ onMounted(async () => {
 <style scoped>
 /* 液态玻璃氛围光斑：缓慢漂浮的大色块，被卡片的 backdrop-blur 折射出磨砂层次。
    带 bg-blob 类：perf-lite（界面性能模式）下会被全局规则直接隐藏。 */
+/* 光斑层垂直渐隐遮罩：标题区没有玻璃卡片遮挡，色斑会裸露成突兀色带；
+   底边硬裁切线会从卡片圆角缝隙漏出。两端渐隐后颜色只保留在卡片背后。 */
+.settings-blob-layer {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, transparent 36px, #000 96px, #000 calc(100% - 72px), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, transparent 36px, #000 96px, #000 calc(100% - 72px), transparent 100%);
+}
+
 .settings-blob {
   position: absolute;
   border-radius: 9999px;
   filter: blur(56px);
-  opacity: 0.6;
+  opacity: 0.48;
   animation: settings-blob-float 32s ease-in-out infinite;
 }
 
@@ -767,18 +770,18 @@ onMounted(async () => {
 
 .settings-blob-2 {
   top: 26%;
-  right: -130px;
-  width: 500px;
-  height: 500px;
+  right: -90px;
+  width: 460px;
+  height: 460px;
   background: rgba(45, 212, 191, 0.44);
   animation-delay: -7s;
 }
 
 .settings-blob-3 {
   bottom: -170px;
-  left: 18%;
-  width: 580px;
-  height: 580px;
+  left: 12%;
+  width: 560px;
+  height: 560px;
   background: rgba(244, 114, 182, 0.38);
   animation-delay: -14s;
 }

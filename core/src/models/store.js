@@ -1400,6 +1400,17 @@ function applyConfigSnapshot(patch = {}, opts = {}) {
     if (patch.prioritizeGrowthTasks !== undefined && patch.prioritizeGrowthTasks !== null) {
         cfg.prioritizeGrowthTasks = patch.prioritizeGrowthTasks === true;
     }
+    // 「种植顺序随机」+ 种植/偷菜延迟：settings/save 的 patch 路径此前漏了这三个字段，
+    // 导致保存被静默丢弃（GET 返回默认值，开关保存后弹回）。
+    if (patch.plantRandomOrder !== undefined && patch.plantRandomOrder !== null) {
+        cfg.plantRandomOrder = patch.plantRandomOrder === true;
+    }
+    if (patch.plantDelaySec !== undefined && patch.plantDelaySec !== null) {
+        cfg.plantDelaySec = normalizeDelaySeconds(patch.plantDelaySec, cfg.plantDelaySec);
+    }
+    if (patch.stealDelaySec !== undefined && patch.stealDelaySec !== null) {
+        cfg.stealDelaySec = normalizeDelaySeconds(patch.stealDelaySec, cfg.stealDelaySec);
+    }
     if (patch.friendBadRetryDate !== undefined && patch.friendBadRetryDate !== null) {
         const retryDate = String(patch.friendBadRetryDate || '');
         cfg.friendBadRetryDate = /^\d{4}-\d{2}-\d{2}$/.test(retryDate) ? retryDate : '';

@@ -41,6 +41,7 @@ const emit = defineEmits<{
   delete: [account: any]
   saved: [payload?: any]
   closeStartup: []
+  startupFinished: [{ ok: boolean }]
   closeModal: []
   closeDeleteConfirm: []
   confirmDelete: []
@@ -276,12 +277,15 @@ function accountAvatar(acc: any) {
       </div>
     </div>
 
-    <AccountModal
-      :show="showModal"
-      :edit-data="editingAccount"
-      @close="emit('closeModal')"
-      @saved="emit('saved', $event)"
-    />
+    <!-- Teleport 到 body：设置页玻璃外壳的 backdrop-filter 会困住 fixed 弹窗 -->
+    <Teleport to="body">
+      <AccountModal
+        :show="showModal"
+        :edit-data="editingAccount"
+        @close="emit('closeModal')"
+        @saved="emit('saved', $event)"
+      />
+    </Teleport>
 
     <!-- Teleport 到 body：设置页玻璃外壳的 backdrop-filter 会困住 fixed 弹窗 -->
     <Teleport to="body">
@@ -289,6 +293,7 @@ function accountAvatar(acc: any) {
         :show="!!startupAccount"
         :account="startupAccount"
         @close="emit('closeStartup')"
+        @finished="emit('startupFinished', $event)"
       />
     </Teleport>
 

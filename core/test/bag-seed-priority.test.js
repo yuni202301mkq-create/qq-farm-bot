@@ -203,3 +203,31 @@ test('settings API persists task priority and custom bag order per account', asy
   });
   assert.equal(store.getPrioritizeGrowthTasks('settings-one'), false);
 });
+
+test('settings API persists plantRandomOrder and operation delays', async () => {
+  const schedulerPath = require.resolve('../src/services/scheduler');
+  const cachedScheduler = require.cache[schedulerPath];
+  require.cache[schedulerPath] = { id: schedulerPath, filename: schedulerPath, loaded: true, exports: { getSchedulerRegistrySnapshot: () => [] } };
+  const { createDataProvider } = require('../src/runtime/data-provider');
+  if (cachedScheduler) require.cache[schedulerPath] = cachedScheduler;
+  else delete require.cache[schedulerPath];
+  const provider = createDataProvider({
+    store: { ...store, applyConfigSnapshot: (patch, options) => store.applyConfigSnapshot(patch, { ...options, persist: false }) },
+    getAccounts: () => ({ accounts: [{ id: 'settings-delays' }] }),
+    nextConfigRevision: () => 1,
+    broadcastConfigToWorkers: () => {},
+  });
+  // 回归：patch 路径此前漏掉这三个字段，保存被静默丢弃（开关保存后弹回 false）。
+  await provider.saveSettings('settings-delays', {
+    plantRandomOrder: true,
+    plantDelaySec: 7,
+    stealDelaySec: 11,
+  });
+  assert.equal(store.getPlantRandomOrder('settings-delays'), true);
+  assert.equal(store.getPlantDelaySec('settings-delays'), 7);
+  assert.equal(store.getStealDelaySec('settings-delays'), 11);
+
+  // 再关掉也能落盘。
+  await provider.saveSettings('settings-delays', { plantRandomOrder: false });
+  assert.equal(store.getPlantRandomOrder('settings-delays'), false);
+});

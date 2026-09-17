@@ -466,7 +466,7 @@ async function plantPrioritized2x2Crops(emptyLandIds, lands, accountId) {
   const userLevel = Number(userState && userState.level) || 0;
   const { plantable: unlockedBagSeeds, locked: lockedBagSeeds } = splitLockedBagSeeds(bagSeeds, accountId);
   if (lockedBagSeeds.length > 0) {
-    log('种植', `已跳过被锁定的背包种子: ${lockedBagSeeds.map(seed => seed.name || seed.seedId).join('，')}`, {
+    logLockedBagSeedsOnce(lockedBagSeeds, {
       module: 'farm',
       event: '种植2x2作物',
       result: 'skip_seed_locked',
@@ -734,6 +734,22 @@ function splitLockedBagSeeds(seeds, accountId) {
   };
 }
 
+// 「已跳过被锁定的背包种子」日志去重：锁定种子集合不变时不再重复播报
+// （种植巡查秒级一轮，否则这条日志会一直刷屏）；集合变化（新锁定/解锁/
+// 该种子耗尽出包）时才再报一次。
+let lastLockedBagSeedsSig = '';
+
+function logLockedBagSeedsOnce(lockedBagSeeds, meta) {
+  const list = Array.isArray(lockedBagSeeds) ? lockedBagSeeds : [];
+  if (list.length === 0)
+    return;
+  const sig = list.map(seed => Number(seed && seed.seedId) || 0).sort((a, b) => a - b).join(',');
+  if (sig === lastLockedBagSeedsSig)
+    return;
+  lastLockedBagSeedsSig = sig;
+  log('种植', `已跳过被锁定的背包种子: ${list.map(seed => seed.name || seed.seedId).join('，')}`, meta);
+}
+
 /**
  * 按背包优先级排序背包种子
  * @param {Array} bagSeeds - 背包种子列表
@@ -797,7 +813,7 @@ async function plantFromBagSeeds(emptyLandIds, accountId = getCurrentAccountId()
   const allSeeds = Array.isArray(bagSeeds) ? bagSeeds : [];
   const { plantable: plantableBagSeeds, locked: lockedBagSeeds } = splitLockedBagSeeds(allSeeds, accountId);
   if (lockedBagSeeds.length > 0) {
-    log('种植', `已跳过被锁定的背包种子: ${lockedBagSeeds.map(seed => seed.name || seed.seedId).join('，')}`, {
+    logLockedBagSeedsOnce(lockedBagSeeds, {
       module: 'farm',
       event: '种植种子',
       result: 'skip_seed_locked',

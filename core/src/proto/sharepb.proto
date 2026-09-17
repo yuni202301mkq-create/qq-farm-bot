@@ -5,6 +5,11 @@ package gamepb.sharepb;
 import "corepb.proto";
 
 // ============ 分享服务 ============
+// 字段定义来自参考实现抓包确认（qq-farm-bot-master）：
+// - ReportShareRequest：field_1=来源，field_4=场景码（每日礼包 1/42，青梅酿 11/215）。
+//   旧版误写为 bool shared 单字段，缺场景码会被服务器拒绝（success=false）。
+// - ReportShareReply：field_1 是 bytes result，没有 success 布尔字段。
+// - ClaimShareRewardReply：items 在字段 1（旧版误写在字段 3，导致解不出奖励列表）。
 
 // --- 检查是否可以分享 ---
 message CheckCanShareRequest {}
@@ -13,22 +18,21 @@ message CheckCanShareReply {
     bool can_share = 1;  // 是否可以分享
 }
 
-// --- 报告分享 ---
+// --- 分享上报（每日礼包：field_1=1/field_4=42；青梅酿：field_1=11/field_4=215） ---
 message ReportShareRequest {
-    bool shared = 1;  // 是否已分享
+    int32 field_1 = 1;
+    int32 field_4 = 4;
 }
 
 message ReportShareReply {
-    bool success = 1;  // 是否成功
+    bytes result = 1;
 }
 
-// --- 领取分享奖励 ---
+// --- 领取分享奖励（抓包确认：field_1=true） ---
 message ClaimShareRewardRequest {
-    bool claimed = 1;  // 请求领取
+    bool field_1 = 1;
 }
 
 message ClaimShareRewardReply {
-    bool success = 1;           // 是否成功
-    bool has_reward = 2;        // 是否有奖励
-    repeated corepb.Item items = 3;  // 奖励物品列表
+    repeated corepb.Item items = 1;
 }

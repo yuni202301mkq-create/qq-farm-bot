@@ -68,53 +68,56 @@ function confirm() {
 </script>
 
 <template>
-  <Transition name="confirm-modal">
-    <div
-      v-if="show"
-      class="confirm-modal-overlay"
-      @click="closeModal"
-    >
+  <!-- Teleport 到 body：玻璃容器（backdrop-filter/transform 祖先）会把 fixed 遮罩收编为局部定位 -->
+  <Teleport to="body">
+    <Transition name="confirm-modal">
       <div
-        class="confirm-modal"
-        :data-tone="modalTone"
-        @click.stop
+        v-if="show"
+        class="confirm-modal-overlay"
+        @click="closeModal"
       >
-        <div class="confirm-modal-icon">
-          <div :class="iconClass" />
-        </div>
+        <div
+          class="confirm-modal"
+          :data-tone="modalTone"
+          @click.stop
+        >
+          <div class="confirm-modal-icon">
+            <div :class="iconClass" />
+          </div>
 
-        <div class="confirm-modal-content">
-          <h3 class="confirm-modal-title">
-            {{ title }}
-          </h3>
-          <p class="confirm-modal-message">
-            {{ message }}
-          </p>
-        </div>
+          <div class="confirm-modal-content">
+            <h3 class="confirm-modal-title">
+              {{ title }}
+            </h3>
+            <p class="confirm-modal-message">
+              {{ message }}
+            </p>
+          </div>
 
-        <div class="confirm-modal-actions" :class="{ 'is-alert': isAlert }">
-          <BaseButton
-            v-if="!isAlert"
-            class="confirm-modal-button"
-            variant="secondary"
-            :disabled="loading"
-            @click="cancel"
-          >
-            {{ cancelText }}
-          </BaseButton>
-          <BaseButton
-            class="confirm-modal-button"
-            :variant="confirmVariant"
-            :loading="loading"
-            :disabled="confirmDisabled"
-            @click="confirm"
-          >
-            {{ confirmText }}
-          </BaseButton>
+          <div class="confirm-modal-actions" :class="{ 'is-alert': isAlert }">
+            <BaseButton
+              v-if="!isAlert"
+              class="confirm-modal-button"
+              variant="secondary"
+              :disabled="loading"
+              @click="cancel"
+            >
+              {{ cancelText }}
+            </BaseButton>
+            <BaseButton
+              class="confirm-modal-button"
+              :variant="confirmVariant"
+              :loading="loading"
+              :disabled="confirmDisabled"
+              @click="confirm"
+            >
+              {{ confirmText }}
+            </BaseButton>
+          </div>
         </div>
       </div>
-    </div>
-  </Transition>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>

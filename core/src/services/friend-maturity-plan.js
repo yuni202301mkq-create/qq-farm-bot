@@ -122,13 +122,17 @@ function getNextStealDelayMs(options = {}) {
   // 全量好友列表的 60 秒校准频率保护由 markCalibrated 的间隔底限承担，这里不再二次抬底，
   // 否则用户设置的 <60s 偷菜巡查间隔会被强制抬回 1 分钟（表现为倒计时永远 ≈1 分钟）。
   const fallbackMs = Math.max(1_000, Number(options.fallbackMs) || DEFAULT_CALIBRATION_INTERVAL_MS);
+  // 唤醒下限（可选）：调用方传入用户配置的偷菜间隔下限（stealMin）后，「贴成熟点唤醒」
+  // 也不会早于该下限，避免倒计时被压到秒级反复跳变；未传时保持 1 秒（兼容旧调用方；
+  // 暴力模式等秒级配置传入的 minMs 本身就很小，行为不变）。
+  const wakeMinMs = Math.max(1_000, Number(options.minMs) || 1_000);
   let wakeAt = nextCalibrationAt || nowMs;
   for (const plan of plans.values()) {
     if (plan.matureAt <= 0) continue;
     const matureMs = nowMs + Math.max(0, plan.matureAt - nowSec) * 1000;
     if (!wakeAt || matureMs < wakeAt) wakeAt = matureMs;
   }
-  return Math.max(1_000, Math.min(fallbackMs, wakeAt - nowMs));
+  return Math.max(wakeMinMs, Math.min(fallbackMs, wakeAt - nowMs));
 }
 
 function resetFriendMaturityPlans() {

@@ -95,7 +95,7 @@ onBeforeUnmount(() => {
 <template>
   <Transition name="career-fade">
     <div v-if="show" class="fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm" @click.self="emit('close')">
-      <section class="career-panel relative max-h-[72vh] w-[min(84vw,380px)] flex flex-col overflow-hidden rounded-3xl bg-gradient-to-b from-[#fdfaf2] to-[#f4eddc] shadow-2xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:border dark:border-amber-500/15 dark:from-[#232030] dark:via-[#1c1928] dark:to-gray-900">
+      <section class="career-panel relative max-h-[72vh] w-[min(94vw,400px)] flex flex-col overflow-hidden rounded-3xl bg-gradient-to-b from-[#fdfaf2] to-[#f4eddc] shadow-2xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:border dark:border-amber-500/15 dark:from-[#232030] dark:via-[#1c1928] dark:to-gray-900">
         <!-- 顶部氛围光 -->
         <div class="pointer-events-none absolute -top-20 left-1/2 h-44 w-72 -translate-x-1/2 rounded-full bg-amber-400/15 blur-3xl sm:h-56 sm:w-96" />
         <div class="pointer-events-none absolute -left-16 top-24 h-36 w-36 rounded-full bg-orange-400/10 blur-3xl" />
@@ -123,7 +123,7 @@ onBeforeUnmount(() => {
               角色编号：{{ gid }}
             </p>
           </div>
-          <button class="absolute right-3 top-3 h-8 w-8 flex items-center justify-center rounded-full text-gray-400 transition hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-white" aria-label="关闭" @click="emit('close')">
+          <button class="absolute right-2.5 top-2.5 h-10 w-10 flex items-center justify-center rounded-full text-gray-400 transition hover:bg-black/5 hover:text-gray-700 dark:hover:bg-white/10 dark:hover:text-white" aria-label="关闭" @click="emit('close')">
             <div class="i-carbon-close text-xl sm:text-2xl" />
           </button>
         </header>

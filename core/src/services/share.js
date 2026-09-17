@@ -83,8 +83,10 @@ async function checkCanShare() {
 }
 
 async function reportShare() {
+  // 抓包确认：每日礼包场景 field_1=1 / field_4=42；缺 field_4 服务器会拒绝。
+  // Reply 的 field_1 是 bytes result（无 success 布尔字段）， resolves 即视为上报成功。
   const request = types.ReportShareRequest.encode(
-    types.ReportShareRequest.create({ shared: true })
+    types.ReportShareRequest.create({ field_1: 1, field_4: 42 })
   ).finish();
   const { body } = await sendMsgAsync('gamepb.sharepb.ShareService', 'ReportShare', request);
   return types.ReportShareReply.decode(body);
@@ -92,7 +94,7 @@ async function reportShare() {
 
 async function claimShareReward() {
   const request = types.ClaimShareRewardRequest.encode(
-    types.ClaimShareRewardRequest.create({ claimed: true })
+    types.ClaimShareRewardRequest.create({ field_1: true })
   ).finish();
   const { body } = await sendMsgAsync('gamepb.sharepb.ShareService', 'ClaimShareReward', request);
   return types.ClaimShareRewardReply.decode(body);
@@ -120,12 +122,9 @@ async function performDailyShare(force = false) {
       return false;
     }
 
-    // 上报分享
-    const reportResult = await reportShare();
-    if (!reportResult || !reportResult.success) {
-      log('分享', '上报分享状态失败', { module: 'task', event: DAILY_KEY, result: 'error' });
-      return false;
-    }
+    // 上报分享：服务器无 success 应答语义，RPC 不抛错即视为已上报
+    // （旧版误检查不存在的 success 字段，导致永远判为「上报失败」而跳过领取）。
+    await reportShare();
 
     // 领取奖励
     let claimResult = null;
@@ -140,12 +139,7 @@ async function performDailyShare(force = false) {
       throw err;
     }
 
-    if (!claimResult || !claimResult.success) {
-      log('分享', '领取分享礼包失败', { module: 'task', event: DAILY_KEY, result: 'error' });
-      return false;
-    }
-
-    const items = Array.isArray(claimResult.items) ? claimResult.items : [];
+    const items = Array.isArray(claimResult && claimResult.items) ? claimResult.items : [];
     const summary = getRewardSummary(items);
 
     log('分享',

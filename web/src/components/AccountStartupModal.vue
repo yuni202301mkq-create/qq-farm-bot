@@ -23,6 +23,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: []
+  /** 轮询出启动终态（成功或失败）时触发，父级据此刷新账号列表，卡片状态即时同步 */
+  finished: [{ ok: boolean }]
 }>()
 
 // 后端的新增账号启动是「排队 + 后台执行」，没有细粒度的阶段事件，
@@ -113,6 +115,7 @@ function succeed() {
     return
   phase.value = 'success'
   stopTimers()
+  emit('finished', { ok: true })
 }
 
 function fail(message: string) {
@@ -121,6 +124,7 @@ function fail(message: string) {
   phase.value = 'failed'
   errorText.value = message
   stopTimers()
+  emit('finished', { ok: false })
 }
 
 async function checkStatusSignal() {
@@ -219,7 +223,11 @@ onBeforeUnmount(stopTimers)
     class="fixed inset-0 z-[10000] flex items-center justify-center bg-black/50 p-4"
     @click.self="handleClose"
   >
-    <div class="liquid-glass liquid-glass-static max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl">
+    <!-- 不透明实底：磨砂玻璃底会冲淡正文与提醒文字的对比度（桌面/移动端均如此） -->
+    <div
+      class="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl border shadow-2xl"
+      style="background: var(--theme-bg); border-color: var(--surface-border);"
+    >
       <!-- 启动中 -->
       <template v-if="phase === 'starting'">
         <div class="flex items-center gap-4 p-5">

@@ -455,6 +455,8 @@ async function keepWxCredentialAlive(acc) {
                     loginBuffer: refreshed.loginBuffer,
                     refreshtoken: refreshed.refreshtoken,
                     accesstoken: refreshed.accesstoken || latestAccount.accesstoken || '',
+                    // 记录保活成功时间：启动/重登时 25 分钟内可跳过重复保活（外部接口约 30s）
+                    lastCredentialRefreshAt: Date.now(),
                 });
             }
             logger.info('wx credential keepalive ok', { accountId: account.id });

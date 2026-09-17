@@ -201,7 +201,9 @@ watch(() => props.currentAccountId, loadQixiFriends)
         <BaseSwitch v-model="settings.automation.golden_bug_clear" label="自动清除黄金虫" />
       </div>
 
-      <Transition name="fade">
+      <!-- Teleport 到 body：玻璃卡 backdrop-filter 会困住 fixed 弹窗 -->
+      <Teleport to="body">
+        <Transition name="fade">
         <div v-if="mysteryShopSettingsVisible" class="fixed inset-0 z-50 grid items-start justify-items-center overflow-y-auto bg-gray-950/45 p-4 backdrop-blur-[2px]" @click.self="mysteryShopSettingsVisible = false">
           <div class="my-auto max-h-[calc(100dvh-2rem)] max-w-lg w-full overflow-y-auto border border-gray-200 rounded-2xl bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
             <div class="flex items-start justify-between border-b border-gray-100 px-6 py-5 dark:border-gray-700">
@@ -270,7 +272,8 @@ watch(() => props.currentAccountId, loadQixiFriends)
             </div>
           </div>
         </div>
-      </Transition>
+        </Transition>
+      </Teleport>
 
       <div class="border border-gray-200 rounded-lg bg-gray-50/70 p-4 dark:border-gray-700 dark:bg-gray-900/20">
         <div class="mb-3 flex items-center gap-2">

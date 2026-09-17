@@ -39,7 +39,6 @@ const {
   visitFriendForSteal,
   visitFriendForHelp,
 } = require('./friend-visit');
-const { buildFriendVisitPlan } = require('./friend-visit-plan');
 const { selectFriendVisitBatch } = require('./friend-visit-pacing');
 const {
   observeFriendSummary,
@@ -58,12 +57,11 @@ const {
 } = require('./friend-land-analyzer');
 
 // 单个好友的重复访问冷却：跟随策略设置的最大巡查间隔（原先固定 10 分钟）。
-// help/bad 用帮助间隔上限，steal 用偷菜间隔上限，combined 取两者较大值。
+// help/bad 用帮助间隔上限，steal 用偷菜间隔上限。
 function visitCooldownMs(mode) {
   const helpMax = Math.max(1000, Number(CONFIG.helpCheckIntervalMax) || 35000);
   const stealMax = Math.max(1000, Number(CONFIG.stealCheckIntervalMax) || 300000);
   if (mode === 'steal') return stealMax;
-  if (mode === 'combined') return Math.max(helpMax, stealMax);
   return helpMax;
 }
 
@@ -358,30 +356,8 @@ async function checkFriends(options = {}) {
     // ---- Execute ----
     const tally = { steal: 0, water: 0, weed: 0, bug: 0, putBug: 0, putWeed: 0 };
 
-    const combinedVisitPlanRaw = doSteal && doHelp && !helpExpReached
-      ? buildFriendVisitPlan({ stealTargets, helpTargets })
-      : [];
-    const combinedVisitPlan = selectFriendVisitBatch(combinedVisitPlanRaw, {
-      accountId,
-      mode: 'combined',
-      cooldownMs: visitCooldownMs('combined'),
-    });
-
-    // A combined visit lets visitFriend perform all enabled operations while the
-    // friend farm is open, so a friend present in both lists is entered once.
-    if (combinedVisitPlan.length > 0) {
-      for (const target of combinedVisitPlan) {
-        try {
-          await visitFriend(target, tally, userState.gid, userState.accountId);
-        } catch {
-          // Skip individual failures
-        }
-        await randomDelay(500, 1200);
-      }
-    }
-
     // Steal-only runs retain their narrower behaviour.
-    if (combinedVisitPlan.length === 0 && stealTargets.length > 0 && doSteal) {
+    if (stealTargets.length > 0 && doSteal) {
       const visitBatch = selectFriendVisitBatch(stealTargets, { accountId, mode: 'steal', cooldownMs: visitCooldownMs('steal') });
       for (const target of visitBatch) {
         if (!canOperate(0x2714)) break; // 10004 = steal
@@ -404,7 +380,7 @@ async function checkFriends(options = {}) {
     }
 
     // Help
-    if (combinedVisitPlan.length === 0 && helpTargets.length > 0 && doHelp) {
+    if (helpTargets.length > 0 && doHelp) {
       const visitBatch = selectFriendVisitBatch(helpTargets, { accountId, mode: 'help', cooldownMs: visitCooldownMs('help') });
       for (const target of visitBatch) {
         try {
@@ -532,7 +508,9 @@ async function runScheduledStealCheck() {
   const accountId = process.env.FARM_ACCOUNT_ID || '';
   const userState = getUserState();
   if (!isAutomationOn('friend') || !isAutomationOn('friend_steal') || !isConnected()) {
-    return getNextStealDelayMs();
+    // 自动化关闭/未连接的兜底唤醒也带上下限，避免成熟点临近时把倒计时压到秒级。
+    const { minMs, maxMs } = getStealIntervalRangeMs();
+    return getNextStealDelayMs({ fallbackMs: maxMs, minMs });
   }
   if (isCheckingFriends || !userState.gid || inFriendQuietHours()) {
     return 60 * 1000;
@@ -605,8 +583,10 @@ async function runScheduledStealCheck() {
   } finally {
     isCheckingFriends = false;
   }
-  // 成熟时间驱动唤醒，兜底不超过用户配置的偷菜巡查区间上限（stealMin/stealMax）。
-  return getNextStealDelayMs({ fallbackMs: getStealIntervalRangeMs().maxMs });
+  // 成熟时间驱动唤醒：兜底不超过偷菜巡查区间上限（stealMax），且不早于区间下限
+  // （stealMin）——好友即将成熟只会把唤醒提前到下限，不再把倒计时压到秒级跳变。
+  const { minMs, maxMs } = getStealIntervalRangeMs();
+  return getNextStealDelayMs({ fallbackMs: maxMs, minMs });
 }
 
 // 偷菜兜底轮询区间（毫秒）：来自策略设置 intervals.stealMin/stealMax（秒），

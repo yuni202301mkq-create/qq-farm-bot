@@ -61,6 +61,28 @@ test('next wake chooses maturity before low-frequency calibration', () => {
   assert.equal(getFriendMaturityPlanSnapshot().plans.length, 1);
 });
 
+test('maturity wake respects the caller-provided minimum interval', () => {
+  const now = 1788188000;
+  markCalibrated(100_000, 15 * 60 * 1000);
+  observeFriendLands(11, [
+    { plant: { phases: [{ phase: 6, phase_id: 19, begin_time: now + 15 }] } },
+  ], { nowSec: now, nowMs: 100_000 });
+  // 未传 minMs：贴成熟点 15 秒唤醒（旧行为）
+  assert.equal(getNextStealDelayMs({ nowSec: now, nowMs: 100_000 }), 15_000);
+  // 传入 stealMin=35s：好友 15 秒后成熟也只提前到 35 秒，不再秒级跳变
+  assert.equal(getNextStealDelayMs({ nowSec: now, nowMs: 100_000, minMs: 35_000 }), 35_000);
+});
+
+test('maturity later than the minimum interval still wakes on maturity', () => {
+  const now = 1788188000;
+  markCalibrated(100_000, 15 * 60 * 1000);
+  // 成熟点 60 秒后（晚于 35 秒下限）：仍按成熟点唤醒，下限不拖慢成熟即偷
+  observeFriendLands(12, [
+    { plant: { phases: [{ phase: 6, phase_id: 19, begin_time: now + 60 }] } },
+  ], { nowSec: now, nowMs: 101_000 });
+  assert.equal(getNextStealDelayMs({ nowSec: now, nowMs: 101_000, minMs: 35_000 }), 60_000);
+});
+
 test('partial land notifications do not erase an earlier cached maturity', () => {
   const now = 1788188000;
   observeFriendLands(10, [

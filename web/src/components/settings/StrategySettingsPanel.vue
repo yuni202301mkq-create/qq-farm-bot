@@ -93,20 +93,32 @@ function isBagFallbackStrategySelected(value: string | number) {
   return settings.value.bagSeedFallbackStrategy === value
 }
 
+// 数字输入采用「草稿 + 失焦提交」模式：输入过程中不做任何解析/夹紧（否则删掉
+// 旧值的瞬间就被强制写回最小值，光标重置，无法正常清空重输），blur 时才校验落值。
+const intervalDrafts: Record<string, number | string | undefined> = {}
+
 function intervalModel(key: keyof StrategySettings['intervals']) {
   return computed({
-    get: () => settings.value.intervals[key],
+    get: () => intervalDrafts[key] !== undefined ? intervalDrafts[key] : settings.value.intervals[key],
     set: (value: number | string) => {
-      const parsed = Number.parseInt(String(value), 10)
-      settings.value = {
-        ...settings.value,
-        intervals: {
-          ...settings.value.intervals,
-          [key]: Number.isFinite(parsed) ? parsed : 1,
-        },
-      }
+      intervalDrafts[key] = value
     },
   })
+}
+
+function commitInterval(key: keyof StrategySettings['intervals']) {
+  if (intervalDrafts[key] === undefined)
+    return
+  const parsed = Number.parseInt(String(intervalDrafts[key]), 10)
+  const clamped = Number.isFinite(parsed) ? Math.max(1, parsed) : settings.value.intervals[key]
+  settings.value = {
+    ...settings.value,
+    intervals: {
+      ...settings.value.intervals,
+      [key]: clamped || 1,
+    },
+  }
+  delete intervalDrafts[key]
 }
 
 const farmMin = intervalModel('farmMin')
@@ -116,18 +128,28 @@ const helpMax = intervalModel('helpMax')
 const stealMin = intervalModel('stealMin')
 const stealMax = intervalModel('stealMax')
 
-// 种植/偷菜操作延迟（秒）：与巡查间隔同一套数字输入与校验口径，0 表示仅保留基础随机间隔。
+// 种植/偷菜操作延迟（秒）：与巡查间隔同一套「草稿 + 失焦提交」口径，0 表示仅保留基础随机间隔。
+const delayDrafts: Record<string, number | string | undefined> = {}
+
 function delayModel(key: 'plantDelaySec' | 'stealDelaySec') {
   return computed({
-    get: () => settings.value[key],
+    get: () => delayDrafts[key] !== undefined ? delayDrafts[key] : settings.value[key],
     set: (value: number | string) => {
-      const parsed = Number.parseInt(String(value), 10)
-      settings.value = {
-        ...settings.value,
-        [key]: Number.isFinite(parsed) ? Math.max(0, Math.min(120, parsed)) : 0,
-      }
+      delayDrafts[key] = value
     },
   })
+}
+
+function commitDelay(key: 'plantDelaySec' | 'stealDelaySec') {
+  if (delayDrafts[key] === undefined)
+    return
+  const parsed = Number.parseInt(String(delayDrafts[key]), 10)
+  const clamped = Number.isFinite(parsed) ? Math.max(0, Math.min(120, parsed)) : settings.value[key]
+  settings.value = {
+    ...settings.value,
+    [key]: clamped ?? 0,
+  }
+  delete delayDrafts[key]
 }
 
 const plantDelaySec = delayModel('plantDelaySec')
@@ -157,7 +179,7 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
       <h3 class="flex min-w-0 items-center gap-2 text-lg text-gray-900 font-bold dark:text-gray-100">
         <span class="i-carbon-settings-adjust shrink-0 text-lg" />
         <span class="truncate">{{ title }}</span>
-        <span v-if="currentAccountName" class="text-sm text-gray-500 font-normal dark:text-gray-400">
+        <span v-if="currentAccountName" class="min-w-0 max-w-32 truncate text-sm text-gray-500 font-normal sm:max-w-48 dark:text-gray-400">
           ({{ currentAccountName }})
         </span>
       </h3>
@@ -284,6 +306,7 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
                 min="0"
                 max="120"
                 class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                @blur="commitDelay('plantDelaySec')"
               >
             </label>
             <label class="flex flex-col gap-1.5">
@@ -294,6 +317,7 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
                 min="0"
                 max="120"
                 class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+                @blur="commitDelay('stealDelaySec')"
               >
             </label>
           </div>
@@ -309,14 +333,16 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
           巡查间隔
         </h4>
 
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <!-- 移动端也保持「最小/最大」成对并排（grid-cols-2），避免 6 个输入框竖向堆满一屏 -->
+        <div class="grid grid-cols-2 gap-x-3 gap-y-4 sm:grid-cols-2">
           <label class="flex flex-col gap-1.5">
             <span class="text-sm text-gray-700 font-medium dark:text-gray-300">农场巡查最小 (秒)</span>
             <input
               v-model.number="farmMin"
               type="number"
               min="1"
-              class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              class="h-10 w-full border border-gray-200 rounded-lg bg-white px-3 text-base text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              @blur="commitInterval('farmMin')"
             >
           </label>
           <label class="flex flex-col gap-1.5">
@@ -325,7 +351,8 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
               v-model.number="farmMax"
               type="number"
               min="1"
-              class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              class="h-10 w-full border border-gray-200 rounded-lg bg-white px-3 text-base text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              @blur="commitInterval('farmMax')"
             >
           </label>
           <label class="flex flex-col gap-1.5">
@@ -334,7 +361,8 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
               v-model.number="helpMin"
               type="number"
               min="1"
-              class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              class="h-10 w-full border border-gray-200 rounded-lg bg-white px-3 text-base text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              @blur="commitInterval('helpMin')"
             >
           </label>
           <label class="flex flex-col gap-1.5">
@@ -343,7 +371,8 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
               v-model.number="helpMax"
               type="number"
               min="1"
-              class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              class="h-10 w-full border border-gray-200 rounded-lg bg-white px-3 text-base text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              @blur="commitInterval('helpMax')"
             >
           </label>
           <label class="flex flex-col gap-1.5">
@@ -352,7 +381,8 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
               v-model.number="stealMin"
               type="number"
               min="1"
-              class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              class="h-10 w-full border border-gray-200 rounded-lg bg-white px-3 text-base text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              @blur="commitInterval('stealMin')"
             >
           </label>
           <label class="flex flex-col gap-1.5">
@@ -361,7 +391,8 @@ function handleBagSeedPriorityChange(payload: { priority: number[], excludedIds:
               v-model.number="stealMax"
               type="number"
               min="1"
-              class="h-9 w-full border border-gray-200 rounded bg-white px-3 text-sm text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              class="h-10 w-full border border-gray-200 rounded-lg bg-white px-3 text-base text-gray-900 outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-white"
+              @blur="commitInterval('stealMax')"
             >
           </label>
         </div>

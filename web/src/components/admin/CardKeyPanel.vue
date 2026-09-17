@@ -491,12 +491,13 @@ onMounted(refresh)
       </div>
     </div>
 
-    <!-- 重置密码弹窗 -->
-    <div
-      v-if="resetVisible"
-      class="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 p-4"
-      @click.self="resetVisible = false"
-    >
+    <!-- 重置密码弹窗（Teleport 到 body：玻璃卡 backdrop-filter 会困住 fixed 弹窗） -->
+    <Teleport to="body">
+      <div
+        v-if="resetVisible"
+        class="fixed inset-0 z-[10001] flex items-center justify-center bg-black/50 p-4"
+        @click.self="resetVisible = false"
+      >
       <div class="max-w-sm w-full rounded-2xl bg-white p-5 shadow-2xl" :style="{ background: 'var(--theme-bg)' }">
         <h4 class="mb-3 text-base font-bold">
           重置「{{ resetTarget }}」的密码
@@ -512,5 +513,6 @@ onMounted(refresh)
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 </template>

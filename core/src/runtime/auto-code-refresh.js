@@ -54,14 +54,28 @@ function createAutoCodeRefreshService(deps) {
     };
   }
 
+  // 保活调度间隔 30 分钟；25 分钟内视为「刚续过期」。启动/重登时凭据仍新鲜
+  // 就跳过重复保活（refreshLoginBuffer 是两次串行外部请求，实测约 30 秒+），
+  // 直接用现有 loginBuffer 换 Code，启动从 ~40s 缩到 ~10s。
+  const FRESH_CREDENTIAL_WINDOW_MS = 25 * 60 * 1000;
+
   async function requestFarmCode(account) {
     const wxid = String(account && account.wxid || '').trim();
     if (!wxid) throw new Error('账号缺少 wxid，无法自动刷新 Code');
 
     if (!account.loginBuffer) throw new Error('账号缺少应用宝登录凭据，请重新扫码登录');
     if (account.refreshtoken) {
-      const keepalive = await wxLoginAdapter.keepWxCredentialAlive(account);
-      if (!keepalive.Success) throw new Error(keepalive.Message || '微信凭证续期失败');
+      const lastRefreshAt = Number(account.lastCredentialRefreshAt) || 0;
+      const freshMs = lastRefreshAt > 0 ? Date.now() - lastRefreshAt : -1;
+      if (freshMs >= 0 && freshMs < FRESH_CREDENTIAL_WINDOW_MS) {
+        log('系统', `凭据 ${Math.round(freshMs / 60000)} 分钟前刚续期，跳过保活直接获取 Code`, {
+          accountId: String(account.id || ''),
+          accountName: account.name || '',
+        });
+      } else {
+        const keepalive = await wxLoginAdapter.keepWxCredentialAlive(account);
+        if (!keepalive.Success) throw new Error(keepalive.Message || '微信凭证续期失败');
+      }
     }
     const local = await wxLoginAdapter.getFarmCode(wxid, { accountId: account.id });
     if (local.Success && local.Data && local.Data.code) return String(local.Data.code);

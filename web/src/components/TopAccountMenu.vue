@@ -232,7 +232,7 @@ async function handleAccountSaved(payload?: { created?: { id?: string, name?: st
   <div class="relative">
     <button
       ref="trigger"
-      class="max-w-[min(76vw,280px)] flex items-center gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-gray-100/70 dark:hover:bg-gray-700/50"
+      class="max-w-[min(52vw,280px)] flex shrink-0 items-center gap-2 rounded-xl px-2 py-2 text-left transition sm:gap-3 sm:px-3 hover:bg-gray-100/70 dark:hover:bg-gray-700/50"
       @click="toggleDropdown"
     >
       <span
@@ -269,7 +269,10 @@ async function handleAccountSaved(payload?: { created?: { id?: string, name?: st
           >
             {{ platform }}
           </span>
-          <span v-if="currentSubtitle" class="truncate">{{ currentSubtitle }}</span>
+          <span
+          v-if="currentSubtitle"
+          class="hidden truncate sm:block"
+        >{{ currentSubtitle }}</span>
         </span>
       </div>
       <div
@@ -382,6 +385,7 @@ async function handleAccountSaved(payload?: { created?: { id?: string, name?: st
         :show="!!startupAccount"
         :account="startupAccount"
         @close="startupAccount = null"
+        @finished="accountStore.fetchAccounts()"
       />
 
       <RemarkModal

@@ -807,45 +807,39 @@ useIntervalFn(updateCountdowns, 1000)
         </div>
       </div>
 
-      <div class="ui-card metric-card min-h-[168px] flex flex-col justify-between rounded-lg p-5">
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <div class="flex items-center gap-1 text-xs text-gray-400">
-              <img src="/game-config/resource-icons/fertilizer-normal.png" alt="普通化肥" class="h-5 w-5 shrink-0 object-contain">
-              普通
-            </div>
-            <div class="font-bold">
-              {{ formatBucketTime(fertilizerNormal) }}
-            </div>
-          </div>
-          <div>
-            <div class="flex items-center gap-1 text-xs text-gray-400">
-              <img src="/game-config/resource-icons/fertilizer-organic.png" alt="有机化肥" class="h-5 w-5 shrink-0 object-contain">
-              有机
-            </div>
-            <div class="font-bold">
-              {{ formatBucketTime(fertilizerOrganic) }}
+      <div class="ui-card metric-card min-h-[168px] flex flex-col rounded-lg p-5">
+        <!-- 2×2 独立小卡片：格子高度有限（约 60px），横向排布（图标左、文字右）避免三行堆叠挤压 -->
+        <div class="grid flex-1 grid-cols-2 content-center gap-2 sm:gap-3">
+          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <img src="/game-config/resource-icons/fertilizer-normal.png" alt="普通化肥" class="h-8 w-8 shrink-0 object-contain">
+            <div class="min-w-0 flex flex-col">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">普通化肥</span>
+              <span class="truncate font-bold tabular-nums" :title="formatBucketTime(fertilizerNormal)">
+                {{ formatBucketTime(fertilizerNormal) }}
+              </span>
             </div>
           </div>
-        </div>
-        <div class="my-3 border-t border-gray-100/80 dark:border-gray-700/80" />
-        <div class="grid grid-cols-2 gap-2">
-          <div>
-            <div class="flex items-center gap-1 text-xs text-gray-400">
-              <img src="/game-config/resource-icons/illustrated-crop.png" alt="作物图鉴" class="h-6 w-6 shrink-0 object-contain">
-              作物图鉴
-            </div>
-            <div class="font-bold">
-              Lv.{{ illustratedLevels.crop }}
+          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <img src="/game-config/resource-icons/fertilizer-organic.png" alt="有机化肥" class="h-8 w-8 shrink-0 object-contain">
+            <div class="min-w-0 flex flex-col">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">有机化肥</span>
+              <span class="truncate font-bold tabular-nums" :title="formatBucketTime(fertilizerOrganic)">
+                {{ formatBucketTime(fertilizerOrganic) }}
+              </span>
             </div>
           </div>
-          <div>
-            <div class="flex items-center gap-1 text-xs text-gray-400">
-              <img src="/game-config/resource-icons/illustrated-mutant.png" alt="超变图鉴" class="h-6 w-6 shrink-0 object-contain">
-              超变图鉴
+          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <img src="/game-config/resource-icons/illustrated-crop.png" alt="作物图鉴" class="h-8 w-8 shrink-0 object-contain">
+            <div class="min-w-0 flex flex-col">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">作物图鉴</span>
+              <span class="truncate font-bold tabular-nums">Lv.{{ illustratedLevels.crop }}</span>
             </div>
-            <div class="font-bold">
-              Lv.{{ illustratedLevels.mutant }}
+          </div>
+          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <img src="/game-config/resource-icons/illustrated-mutant.png" alt="超变图鉴" class="h-8 w-8 shrink-0 object-contain">
+            <div class="min-w-0 flex flex-col">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">超变图鉴</span>
+              <span class="truncate font-bold tabular-nums">Lv.{{ illustratedLevels.mutant }}</span>
             </div>
           </div>
         </div>

@@ -1292,20 +1292,18 @@ async function reportQingmeiShareForDouble() {
     throw new Error('当前不可分享，无法执行青梅酿售卖翻倍');
   }
 
+  // 抓包确认：青梅酿场景 field_1=11 / field_4=215（旧版缺 field_4 会被服务器拒绝）。
+  // Reply 的 field_1 是 bytes result，无 success 布尔字段，RPC 不抛错即视为已上报。
   const reportRequest = types.ReportShareRequest.encode(
-    types.ReportShareRequest.create({ shared: true })
+    types.ReportShareRequest.create({ field_1: 11, field_4: 215 })
   ).finish();
   const { body: reportBody } = await sendMsgAsync('gamepb.sharepb.ShareService', 'ReportShare', reportRequest);
-  const reportResult = types.ReportShareReply.decode(reportBody);
-
-  if (reportResult && Object.hasOwn(reportResult, 'success') && !reportResult.success) {
-    throw new Error('青梅酿分享上报失败');
-  }
+  types.ReportShareReply.decode(reportBody);
 
   return {
     canShare: !!checkResult?.can_share,
     shared: true,
-    success: reportResult?.success !== false,
+    success: true,
   };
 }
 

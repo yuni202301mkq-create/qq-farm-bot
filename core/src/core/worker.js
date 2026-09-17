@@ -1078,9 +1078,9 @@ let nextHelpRunAt = 0;
 
 async function runHelpTick(autoConfig) {
     if (helpTaskRunning || friendSyncPaused) return;
-    if (!autoConfig.friend_help && !autoConfig.friend_golden_bug) {
-        // 帮助自动化全关时也必须推进 nextHelpRunAt，
-        // 否则 nextHelpRunAt 永远停在过去，统一调度器会以 ~100ms 间隔空转。
+    // 帮助/偷菜/捣乱自动化全关时也必须推进 nextHelpRunAt，
+    // 否则 nextHelpRunAt 永远停在过去，统一调度器会以 ~100ms 间隔空转。
+    if (!autoConfig.friend_help && !autoConfig.friend_steal && !autoConfig.friend_bad && !autoConfig.friend_golden_bug) {
         nextHelpRunAt = Date.now() + 60 * 1000;
         return;
     }
@@ -1091,7 +1091,7 @@ async function runHelpTick(autoConfig) {
     }
     helpTaskRunning = true;
 
-    // 帮助巡查按策略设置的帮助间隔执行（helpCheckIntervalMin/Max，秒→毫秒）。
+    // 统一好友巡查按策略设置的帮助间隔执行（helpCheckIntervalMin/Max，秒→毫秒）。
     const nextDelay = randomIntervalMs(
         CONFIG.helpCheckIntervalMin || 30000,
         CONFIG.helpCheckIntervalMax || 35000
@@ -1099,7 +1099,12 @@ async function runHelpTick(autoConfig) {
 
     try {
         await runWithRequestPriority('friend', async () => {
-            if (autoConfig.friend_help) await checkFriends({ onlyHelp: true });
+            // 统一巡查：一轮完成 帮助+偷菜+捣乱，三个开关各自生效；帮助与偷菜
+            // 各自独立进入好友农场（不合并访问）。偷菜另有成熟驱动的 steal tick
+            // 作为补充唤醒（带 stealMin 下限，不会秒级跳变）。
+            if (autoConfig.friend_help || autoConfig.friend_steal || autoConfig.friend_bad) {
+                await checkFriends();
+            }
             if (autoConfig.friend_golden_bug) await runGoldenBugPlacement();
         });
     } catch (err) {
@@ -1724,6 +1729,33 @@ function onReconnectFailed(info) {
 
 // ==================== API 调用处理 ====================
 
+/**
+ * 等待登录就绪（连接打开）。面板在账号「连接中」的窗口期就会拉取游戏数据
+ * （种子列表、土地详情等），此时 WS 尚未打开，查询必然失败并触发本地兜底告警
+ * （如「获取商店失败: 连接未打开」）。这里轮询等待登录完成，超时后放行走原
+ * 失败路径（不无限挂起）。
+ */
+const LOCAL_API_METHODS = new Set([
+    'getConsumptionRecords',   // 本地消费记录
+    'getAnalytics',            // 本地统计排行
+    'getSchedulers',           // 本地调度快照
+    'setAutomation',           // 写运行时配置，不依赖连接
+    'clearFriendsCache',       // 清本地好友缓存
+]);
+
+function waitForLoginReady(timeoutMs = 20000) {
+    if (loginReady) return Promise.resolve();
+    return new Promise((resolve) => {
+        const startedAt = Date.now();
+        const timer = setInterval(() => {
+            if (loginReady || Date.now() - startedAt >= timeoutMs) {
+                clearInterval(timer);
+                resolve();
+            }
+        }, 200);
+    });
+}
+
 async function handleApiCall(msg) {
     const { id, method, args } = msg;
     let result = null;
@@ -1749,6 +1781,11 @@ async function handleApiCall(msg) {
         // 吞掉（例如 getSeeds 会静默回退到本地备选列表）。这里统一等待就绪再执行，
         // 加载失败时 waitForProtoReady 会抛出可读错误，由下方 catch 回给调用方。
         await waitForProtoReady();
+
+        // 游戏数据查询依赖已打开的连接：连接窗口期到达的请求等登录完成再执行。
+        // 纯本地操作（读本地记录/写运行时配置/清本地缓存）不依赖连接，跳过等待，
+        // 避免登录失败期间面板开关与本地查询被拖住 20 秒才响应。
+        if (!loginReady && !LOCAL_API_METHODS.has(method)) await waitForLoginReady();
 
         switch (method) {
             case 'getLands':
