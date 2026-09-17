@@ -94,8 +94,9 @@ onBeforeUnmount(() => {
 
 <template>
   <Transition name="career-fade">
-    <div v-if="show" class="fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm" @click.self="emit('close')">
-      <section class="career-panel relative max-h-[72vh] w-[min(94vw,400px)] flex flex-col overflow-hidden rounded-3xl bg-gradient-to-b from-[#fdfaf2] to-[#f4eddc] shadow-2xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:border dark:border-amber-500/15 dark:from-[#232030] dark:via-[#1c1928] dark:to-gray-900">
+    <div v-if="show" class="fixed inset-0 z-[10020] flex items-center justify-center bg-black/45 backdrop-blur-sm p-2 sm:p-3" @click.self="emit('close')">
+      <!-- 移动端窄留白 + 适中圆角，避免大圆角在屏幕边缘形成明显楔口；sm 起恢复原卡片 -->
+      <section class="career-panel relative max-h-[78vh] w-full flex flex-col overflow-hidden rounded-2xl bg-gradient-to-b from-[#fdfaf2] to-[#f4eddc] shadow-2xl sm:max-h-[72vh] sm:w-[min(94vw,400px)] sm:rounded-3xl md:max-h-[min(88vh,820px)] md:max-w-2xl md:w-full dark:border dark:border-amber-500/15 dark:from-[#232030] dark:via-[#1c1928] dark:to-gray-900">
         <!-- 顶部氛围光 -->
         <div class="pointer-events-none absolute -top-20 left-1/2 h-44 w-72 -translate-x-1/2 rounded-full bg-amber-400/15 blur-3xl sm:h-56 sm:w-96" />
         <div class="pointer-events-none absolute -left-16 top-24 h-36 w-36 rounded-full bg-orange-400/10 blur-3xl" />
@@ -131,7 +132,7 @@ onBeforeUnmount(() => {
         <div class="custom-scrollbar relative min-h-0 flex-1 overflow-y-auto p-4 md:p-7 sm:p-5">
           <div class="mb-3 flex items-center justify-center gap-3 sm:mb-4">
             <span class="h-px w-10 bg-gradient-to-r from-transparent to-amber-400/60 sm:w-16" />
-            <span class="bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-lg font-extrabold tracking-widest text-transparent sm:text-2xl dark:from-amber-300 dark:to-orange-300">生涯</span>
+            <span class="text-lg font-extrabold tracking-widest text-amber-600 sm:text-2xl dark:text-amber-300">生涯</span>
             <span class="h-px w-10 bg-gradient-to-l from-transparent to-amber-400/60 sm:w-16" />
           </div>
 
@@ -164,7 +165,8 @@ onBeforeUnmount(() => {
                   </div>
                   <span class="text-xs text-amber-600/90 font-medium sm:text-sm dark:text-amber-300/90">历史累计收获</span>
                 </div>
-                <div class="mt-2 bg-gradient-to-r from-amber-500 to-orange-500 bg-clip-text text-right text-2xl font-extrabold text-transparent tabular-nums sm:mt-3 sm:text-3xl">
+                <!-- 固定实色：iOS 上 bg-clip-text 渐变字在主题切换后易失效成深色，且避免继承主题文字色 -->
+                <div class="mt-2 text-right text-2xl font-extrabold text-amber-600 tabular-nums sm:mt-3 sm:text-3xl dark:text-amber-300">
                   {{ formatCompactNumber(totalHarvest) }}
                 </div>
               </div>
@@ -179,7 +181,7 @@ onBeforeUnmount(() => {
                   </div>
                   <span class="text-xs text-rose-600/90 font-medium sm:text-sm dark:text-rose-300/90">摘取好友作物</span>
                 </div>
-                <div class="mt-2 bg-gradient-to-r from-rose-500 to-pink-500 bg-clip-text text-right text-2xl font-extrabold text-transparent tabular-nums sm:mt-3 sm:text-3xl">
+                <div class="mt-2 text-right text-2xl font-extrabold text-rose-500 tabular-nums sm:mt-3 sm:text-3xl dark:text-rose-300">
                   {{ formatCompactNumber(totalStealCount) }}
                 </div>
                 <div class="mt-0.5 text-right text-[10px] text-gray-400">

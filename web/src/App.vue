@@ -182,8 +182,8 @@ body {
 }
 
 .liquid-glass-sub {
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  /* 不加 backdrop-filter：sub 面板一页可达十个，滚动时每个都在采样模糊背景，
+     是设置页桌面端滚动卡顿的主因；其背板是主玻璃卡的平滑渐变，去掉模糊肉眼无差异 */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.6),
     0 10px 22px -14px rgba(15, 23, 42, 0.18);

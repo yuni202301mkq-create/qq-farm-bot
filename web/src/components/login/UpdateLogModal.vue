@@ -539,16 +539,16 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  color: #374151;
-  font-size: 0.86rem;
-  line-height: 1.6;
+  color: #1f2937;
+  font-size: 0.9rem;
+  line-height: 1.65;
 }
 
 .ulm-item__tag {
   flex: 0 0 auto;
   margin-top: 2px;
-  padding: 2px 8px;
-  font-size: 0.7rem;
+  padding: 2px 9px;
+  font-size: 0.74rem;
   font-weight: 700;
   white-space: nowrap;
   border-radius: 5px;
@@ -763,24 +763,46 @@ onBeforeUnmount(() => {
 
 /* ============== 移动端 ============== */
 @media (max-width: 640px) {
+  /* 移动端阅读为主，字号整体上调一档 */
+  .ulm-item {
+    font-size: 0.95rem;
+    line-height: 1.7;
+  }
+
+  .ulm-item__tag {
+    margin-top: 3px;
+    font-size: 0.76rem;
+  }
+
+  .ulm-entry__head {
+    margin-bottom: 10px;
+  }
+
+  .ulm-entry__version {
+    font-size: 1.02rem;
+  }
+
+  .ulm-entry__date {
+    font-size: 0.8rem;
+  }
+
+  .ulm-raw {
+    font-size: 0.95rem;
+    line-height: 1.78;
+  }
+
+  /* 居中紧凑弹窗：不做贴底全屏面板，四周留边 + 四角圆角 + 更低的高度上限 */
   .ulm-overlay {
-    align-items: flex-end;
-    /* 面板一旦高于遮罩，flex-end 会把溢出部分顶出遮罩顶部且滚不到（标题被裁的根因之一），
-       遮罩自身可滚作为兜底 */
-    overflow-y: auto;
-    padding: 0;
+    align-items: center;
+    padding: 24px 20px;
   }
 
   .ulm-panel {
-    width: 100%;
-    /* 90vh 是「大视口」（含 iOS 地址栏/底栏后面的区域），面板会比可视区高、标题被顶出屏幕外。
-       dvh 跟随可视高度收缩；老浏览器回退到 88vh。 */
-    max-height: 88vh;
-    max-height: calc(100dvh - 0.75rem);
-    border-right: 0;
-    border-bottom: 0;
-    border-left: 0;
-    border-radius: 18px 18px 0 0;
+    width: min(100%, 420px);
+    /* dvh 跟随可视高度收缩（避开 iOS 地址栏）；老浏览器回退到 62vh */
+    max-height: 62vh;
+    max-height: calc(100dvh - 5rem);
+    border-radius: 16px;
   }
 
   .ulm-header {

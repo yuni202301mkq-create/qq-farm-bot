@@ -702,54 +702,55 @@ useIntervalFn(updateCountdowns, 1000)
       </div>
 
       <div class="ui-card metric-card min-h-[168px] flex flex-col justify-between rounded-lg p-5">
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div class="min-w-0 text-center sm:text-left">
-            <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 sm:justify-start">
-              <img src="/game-config/resource-icons/gold.png" alt="金币" class="h-5 w-5 shrink-0 object-contain">
-              金币
+        <!-- 金币/点券/钻石/金豆：四张独立小卡片；数值独占一行（与图标同行时窄卡放不下完整数字） -->
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center gap-1.5">
+              <img src="/game-config/resource-icons/gold.png" alt="金币" class="h-7 w-7 shrink-0 object-contain">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">金币</span>
             </div>
-            <div class="truncate text-base text-yellow-600 font-bold tabular-nums sm:text-base lg:text-lg 2xl:text-xl dark:text-yellow-500" :title="formatGoldAmount(status?.status?.gold || 0)">
+            <div class="mt-0.5 truncate text-sm text-yellow-600 font-bold tabular-nums dark:text-yellow-500" :title="formatGoldAmount(status?.status?.gold || 0)">
               {{ formatGoldAmount(status?.status?.gold || 0) }}
             </div>
             <div
               v-if="(status?.sessionGoldGained || 0) !== 0"
-              class="text-[10px]"
+              class="truncate text-[10px]"
               :class="(status?.sessionGoldGained || 0) > 0 ? 'text-green-500' : 'text-red-500'"
             >
               {{ (status?.sessionGoldGained || 0) > 0 ? '+' : '' }}{{ formatGoldAmount(status?.sessionGoldGained || 0) }}
             </div>
           </div>
-          <div class="min-w-0 text-center">
-            <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500">
-              <img src="/game-config/resource-icons/coupon.png" alt="点券" class="h-5 w-5 shrink-0 object-contain">
-              点券
+          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center gap-1.5">
+              <img src="/game-config/resource-icons/coupon.png" alt="点券" class="h-7 w-7 shrink-0 object-contain">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">点券</span>
             </div>
-            <div class="truncate text-base text-emerald-500 font-bold tabular-nums sm:text-base lg:text-lg 2xl:text-xl dark:text-emerald-400" :title="formatCouponAmount(status?.status?.coupon || 0)">
+            <div class="mt-0.5 truncate text-sm text-emerald-500 font-bold tabular-nums dark:text-emerald-400" :title="formatCouponAmount(status?.status?.coupon || 0)">
               {{ formatCouponAmount(status?.status?.coupon || 0) }}
             </div>
             <div
               v-if="(status?.sessionCouponGained || 0) !== 0"
-              class="text-[10px]"
+              class="truncate text-[10px]"
               :class="(status?.sessionCouponGained || 0) > 0 ? 'text-green-500' : 'text-red-500'"
             >
               {{ (status?.sessionCouponGained || 0) > 0 ? '+' : '' }}{{ formatCouponAmount(status?.sessionCouponGained || 0) }}
             </div>
           </div>
-          <div class="min-w-0 text-center">
-            <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500">
-              <img src="/game-config/resource-icons/diamond.png" alt="钻石" class="h-5 w-5 shrink-0 object-contain">
-              钻石
+          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center gap-1.5">
+              <img src="/game-config/resource-icons/diamond.png" alt="钻石" class="h-7 w-7 shrink-0 object-contain">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">钻石</span>
             </div>
-            <div class="truncate text-base text-cyan-600 font-bold tabular-nums sm:text-base lg:text-lg 2xl:text-xl dark:text-cyan-400" :title="formatCouponAmount(status?.status?.diamond || 0)">
+            <div class="mt-0.5 truncate text-sm text-cyan-600 font-bold tabular-nums dark:text-cyan-400" :title="formatCouponAmount(status?.status?.diamond || 0)">
               {{ formatCouponAmount(status?.status?.diamond || 0) }}
             </div>
           </div>
-          <div class="min-w-0 text-center sm:text-right">
-            <div class="flex items-center justify-center gap-1.5 text-xs text-gray-500 sm:justify-end">
-              <img src="/game-config/resource-icons/gold-bean.png" alt="金豆豆" class="h-5 w-5 shrink-0 object-contain">
-              金豆
+          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center gap-1.5">
+              <img src="/game-config/resource-icons/gold-bean.png" alt="金豆豆" class="h-7 w-7 shrink-0 object-contain">
+              <span class="truncate text-xs text-gray-500 dark:text-gray-400">金豆</span>
             </div>
-            <div class="truncate text-base text-amber-500 font-bold tabular-nums sm:text-base lg:text-lg 2xl:text-xl dark:text-amber-400" :title="formatGoldBeanAmount(status?.status?.goldBean || 0)">
+            <div class="mt-0.5 truncate text-sm text-amber-500 font-bold tabular-nums dark:text-amber-400" :title="formatGoldBeanAmount(status?.status?.goldBean || 0)">
               {{ formatGoldBeanAmount(status?.status?.goldBean || 0) }}
             </div>
           </div>

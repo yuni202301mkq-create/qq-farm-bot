@@ -599,20 +599,28 @@ onMounted(async () => {
         />
 
         <div v-else-if="activeTab === 'system'" class="space-y-5">
-          <!-- 系统配置标题与保存按钮（吸顶），置于页签最顶部 -->
+          <!-- 系统配置标题与保存按钮（吸顶悬浮卡片），置于页签最顶部 -->
           <div
             v-if="userStore.isSuperAdmin"
-            class="sticky top-0 z-10 -mx-4 mb-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-b-xl bg-white/75 px-4 py-2.5 backdrop-blur-md dark:bg-gray-900/75"
+            class="sticky top-1 z-10 mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-xl border border-gray-200/80 bg-white/85 px-4 py-3 shadow-sm backdrop-blur-md dark:border-gray-700/60 dark:bg-gray-900/85"
           >
-            <div class="min-w-0">
-              <h3 class="text-lg text-gray-900 font-bold dark:text-gray-100">
-                系统配置
-              </h3>
-              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                统一管理用户账号、连接参数、设备协议、抓包服务和离线通知。
-              </p>
+            <div class="flex min-w-0 items-center gap-3">
+              <span
+                class="h-10 w-10 flex shrink-0 items-center justify-center rounded-xl text-white shadow-md"
+                style="background: var(--theme-gradient);"
+              >
+                <div class="i-carbon-settings-services text-lg" />
+              </span>
+              <div class="min-w-0">
+                <h3 class="truncate text-base text-gray-900 font-bold dark:text-gray-100">
+                  系统配置
+                </h3>
+                <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">
+                  统一管理用户账号、连接参数、设备协议、抓包服务和离线通知。
+                </p>
+              </div>
             </div>
-            <BaseButton size="sm" class="shrink-0 whitespace-nowrap" :loading="anySystemSaving" @click="saveSystemSettings">
+            <BaseButton size="sm" class="ml-auto shrink-0 whitespace-nowrap" :loading="anySystemSaving" @click="saveSystemSettings">
               保存系统配置
             </BaseButton>
           </div>
@@ -757,7 +765,7 @@ onMounted(async () => {
   border-radius: 9999px;
   filter: blur(56px);
   opacity: 0.48;
-  animation: settings-blob-float 32s ease-in-out infinite;
+  /* 不做漂浮动画：3 个大模糊层的持续合成是设置页桌面端卡顿的主因，静止后外观几乎无差异 */
 }
 
 .settings-blob-1 {
@@ -788,22 +796,5 @@ onMounted(async () => {
 
 .dark .settings-blob {
   opacity: 0.42;
-}
-
-@keyframes settings-blob-float {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  50% {
-    transform: translate3d(32px, -26px, 0) scale(1.06);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .settings-blob {
-    animation: none;
-  }
 }
 </style>
