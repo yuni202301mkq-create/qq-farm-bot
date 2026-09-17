@@ -221,7 +221,7 @@ let starActivityClaimRunning = false;
 const workerScheduler = createScheduler('worker');
 const resourceMonitor = createResourceMonitor();
 let offlinePollDelayMs = resourcePolicy.offlinePollMinMs;
-let nextPermitId = 1;
+const nextPermitId = 1;
 const pendingPermits = new Map();
 
 // 许可请求超时：主进程可能因 worker 重启、队列丢弃或 send 失败而永不回包。

@@ -561,7 +561,7 @@ async function sellAllFruits() {
       } catch (err) {
         // 批量失败，逐个重试；失败原因不再单独打一行，
         // 统一并入下方跳过日志（同一原因合并一条 + skipKey 变更去重），避免同屏重复两条。
-        batchFailMessages.add(String(err.message || '').replace(/^gamepb\.[\w.]+?\s*错误:\s*/, ''));
+        batchFailMessages.add(String(err.message || '').replace(/^gamepb\.[\w.]+\s*错误:\s*/, ''));
         for (const fruit of batch) {
           try {
             const result = await sellItems([fruit]);
@@ -592,7 +592,7 @@ async function sellAllFruits() {
       // 同一错误原因合并为一行：批量失败(原因)，跳过 ID=xxx xN、ID=yyy xM
       const byMessage = new Map();
       for (const item of skippedItems) {
-        const shortMsg = String(item.message || '').replace(/^gamepb\.[\w.]+?\s*错误:\s*/, '') || item.message;
+        const shortMsg = String(item.message || '').replace(/^gamepb\.[\w.]+\s*错误:\s*/, '') || item.message;
         if (!byMessage.has(shortMsg)) byMessage.set(shortMsg, []);
         byMessage.get(shortMsg).push(item);
       }
