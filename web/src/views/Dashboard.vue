@@ -871,7 +871,9 @@ useIntervalFn(updateCountdowns, 1000)
               <h3 class="flex items-center gap-2 text-lg font-medium">
                 <div class="i-carbon-document" />
                 <span>运行日志</span>
-                <span class="text-xs text-gray-400 font-normal">{{ visibleLogs.length }} 条</span>
+                <!-- 计数用折叠前的原始条数：visibleLogs 是 2 分钟窗口折叠后的行数，
+                     补发旧日志合并折叠区时行数会不增反降（如 65→64），看起来像丢日志 -->
+                <span class="text-xs text-gray-400 font-normal">{{ filteredLogs.length }} 条</span>
               </h3>
             </div>
 
