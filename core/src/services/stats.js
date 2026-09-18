@@ -29,6 +29,11 @@ function savePersistedStats(accountId, data) {
 
 // ─── 运行状态 ───
 
+// 本账号 worker 的启动时刻：线程模式下所有账号共享同一进程，
+// process.uptime() 会让每个账号显示完全相同的"运行时间"，
+// worker_threads 每线程模块实例独立，用它才能得到按账号区分的运行时长
+const workerStartedAtMs = Date.now();
+
 /** 每日操作计数（按类型） */
 const operations = {
   harvest: 0,
@@ -444,7 +449,7 @@ function getStats(farmUser, userState, connected, limits) {
       openId: us.openId || fu.openId || fu.open_id || '',
       avatar: us.avatar || fu.avatar || fu.avatarUrl || fu.avatar_url || ''
     },
-    uptime: process.uptime(),
+    uptime: Math.floor((Date.now() - workerStartedAtMs) / 1000),
     operations: ops,
     tongQiGiftCount,
     tongQiGiftLimit: null,
