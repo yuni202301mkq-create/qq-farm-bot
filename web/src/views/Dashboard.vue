@@ -15,7 +15,7 @@ import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { useUserStore } from '@/stores/user'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
-import { compactRuntimeLogs, matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
+import { matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
 
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
@@ -111,7 +111,8 @@ const filteredLogs = computed(() => allLogs.value.filter((log) => {
   return matchesRuntimeLog(log, filter)
 }))
 
-const visibleLogs = computed(() => compactRuntimeLogs(filteredLogs.value))
+// 不做折叠/×N 合并：全部平铺显示，超过 1000 条由 store 自动清理最旧的
+const visibleLogs = computed(() => filteredLogs.value)
 
 const modules = [
   { label: '全部模块', value: '' },
@@ -955,7 +956,6 @@ useIntervalFn(updateCountdowns, 1000)
                   <span class="shrink-0 rounded px-1.5 py-0.5 text-xs font-bold" :class="getLogTagClass(log.tag)">{{ log.tag }}</span>
                   <span v-if="log.event && log.source !== 'account'" class="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-500 dark:bg-blue-900/20 dark:text-blue-400">{{ getEventLabel(log.event) }}</span>
                   <span class="min-w-0 break-words leading-5" :class="getLogMsgClass(log.tag)">{{ log.msg }}</span>
-                  <span v-if="(log.repeatCount || 1) > 1" class="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 font-medium dark:bg-gray-700 dark:text-gray-300">×{{ log.repeatCount }}</span>
                 </div>
               </div>
             </div>
