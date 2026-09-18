@@ -92,6 +92,9 @@ importers:
       socket.io-client:
         specifier: ^4.8.3
         version: 4.8.3
+      solarlunar:
+        specifier: ^3.1.0
+        version: 3.1.0
       sortablejs:
         specifier: ^1.15.7
         version: 1.15.7
@@ -3079,6 +3082,9 @@ packages:
   socket.io@4.8.3:
     resolution: {integrity: sha512-2Dd78bqzzjE6KPkD5fHZmDAKRNe3J15q+YHDrIsy9WEkqttc7GY+kT9OBLSMaPbQaEd0x1BjcmtMtXkfpc+T5A==}
     engines: {node: '>=10.2.0'}
+
+  solarlunar@3.1.0:
+    resolution: {integrity: sha512-PCJsIeSaMyQVK6TZk+tlPNaoAlk02+2UxhI/DS+K0zdLkwTihMp4px6S+Jv6HPPC0p7QsUM18WSs2/HEC1o0wQ==}
 
   sortablejs@1.14.0:
     resolution: {integrity: sha512-pBXvQCs5/33fdN1/39pPL0NZF20LeRbLQ5jtnheIPN9JQAaufGjKdWduZn4U7wCtVuzKhmRkI0DFYHYRbB2H1w==}
@@ -6821,6 +6827,8 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
+
+  solarlunar@3.1.0: {}
 
   sortablejs@1.14.0: {}
 
