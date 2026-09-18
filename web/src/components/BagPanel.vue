@@ -160,11 +160,11 @@ async function toggleSeedLock(item: any) {
       await syncOfficialLock(uids, !wasLocked)
     if (wasLocked) {
       await seedLockStore.unlockSeedIds(id)
-      toastStore.success(`已解锁 ${item.name || '种子'}（官方已同步）`)
+      toastStore.success(`已解锁 ${item.name || '种子'}`)
     }
     else {
       await seedLockStore.lockSeedIds(id)
-      toastStore.success(`已锁定 ${item.name || '种子'}（官方已同步，出售时将被跳过）`)
+      toastStore.success(`已锁定 ${item.name || '种子'}（出售时将被跳过）`)
     }
   }
   catch (e: any) {
@@ -193,7 +193,7 @@ async function applyBatchLock(lock: boolean) {
       await seedLockStore.lockSeedIds(ids)
     else
       await seedLockStore.unlockSeedIds(ids)
-    toastStore.success(`已${lock ? '锁定' : '解锁'} ${ids.length} 种（官方已同步）`)
+    toastStore.success(`已${lock ? '锁定' : '解锁'} ${ids.length} 种`)
     selectedForLock.value.clear()
   }
   catch (e: any) {
