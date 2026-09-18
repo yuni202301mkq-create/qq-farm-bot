@@ -541,6 +541,7 @@ async function getBagDetail() {
 
 // 连续轮次跳过相同不可售物品时不再重复提示，仅在跳过内容变化时重新提醒
 let lastSellSkipKey = '';
+let lastLockedSkipLog = '';
 
 /**
  * 出售所有果实
@@ -568,9 +569,17 @@ async function sellAllFruits() {
     }
 
     if (fruits.length === 0) {
-      log('仓库', lockedFruitCount > 0
-        ? `无果实可出售（${lockedFruitCount} 个果实已锁定，已跳过）`
-        : '无果实可出售');
+      if (lockedFruitCount > 0) {
+        // 锁定跳过提示只在新情况时显示一次（锁定数量变化才重新提示），避免每轮出售刷屏
+        const lockedSkipKey = `locked:${lockedFruitCount}`;
+        if (lockedSkipKey !== lastLockedSkipLog) {
+          lastLockedSkipLog = lockedSkipKey;
+          log('仓库', `无果实可出售（${lockedFruitCount} 个果实已锁定，已跳过）`);
+        }
+      }
+      else {
+        log('仓库', '无果实可出售');
+      }
       return;
     }
 
