@@ -64,6 +64,7 @@ function createRuntimeEngine(options = {}) {
         buildConfigSnapshotForAccount,
         log,
         addAccountLog,
+        trimExpiredLogs,
         normalizeStatusForPanel,
         buildDefaultStatus,
         filterLogs
@@ -112,6 +113,7 @@ function createRuntimeEngine(options = {}) {
         store,
         log,
         addAccountLog,
+        trimExpiredLogs,
         normalizeStatusForPanel,
         buildConfigSnapshotForAccount,
         getOfflineAutoDeleteMs,

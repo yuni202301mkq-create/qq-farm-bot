@@ -431,6 +431,9 @@ function registerAdminAccountRoutes({
       const accounts = provider.getAccounts();
       const account = findAccountByRef(accounts.accounts || [], req.params.id);
       provider.stopAccount(accountId);
+      // 清掉内存里该账号的运行日志残留；必须在 addAccountLog 之前执行，
+      // 否则会连"删除账号"这条审计记录一起清掉
+      provider.clearLogs(accountId);
       const data = deleteAccount(accountId);
       if (provider.addAccountLog) {
         provider.addAccountLog(
@@ -531,6 +534,7 @@ function registerAdminAccountRoutes({
         const accountLogs = provider.getLogs(accountId, { limit: 100 });
         io.to(`account:${  accountId}`).emit("logs:snapshot", {
           accountId,
+          reset: true,
           logs: Array.isArray(accountLogs) ? accountLogs : [],
         });
         const historicalAccountLogs =
@@ -544,11 +548,13 @@ function registerAdminAccountRoutes({
             : [];
         io.to(`account:${  accountId}`).emit("account-logs:snapshot", {
           accountId,
+          reset: true,
           logs: historicalAccountLogs,
         });
         const allLogs = provider.getLogs("", { limit: 100 });
         io.to("account:all").emit("logs:snapshot", {
           accountId: "all",
+          reset: true,
           logs: Array.isArray(allLogs) ? allLogs : [],
         });
         const allHistoricalAccountLogs =
@@ -557,6 +563,7 @@ function registerAdminAccountRoutes({
             : [];
         io.to("account:all").emit("account-logs:snapshot", {
           accountId: "all",
+          reset: true,
           logs: Array.isArray(allHistoricalAccountLogs)
             ? allHistoricalAccountLogs
             : [],

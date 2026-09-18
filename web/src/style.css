@@ -4,6 +4,47 @@
   height: 8px;
 }
 
+/* ===== 文字颜色跟随主题 =====
+   UnoCSS 的灰色系文字工具类（text-gray-* / dark:text-gray-*）使用固定灰阶，
+   不随 8 套自定义主题的 --theme-text 变化（移动端/桌面端都会出现字体颜色与
+   主题割裂的问题）。这里按明度分层映射到主题文本色：
+   正文(900/800/700 与 dark:100/200/300) = var(--theme-text)；
+   次要(600/500 与 dark:400/500) = 66% 主题文本色；
+   弱化(400 与 dark:600) = 50% 主题文本色。
+   选择器用 body / .dark body 前缀把特异性压过 UnoCSS 工具类（含 Teleport 到
+   body 的弹窗），但不使用 !important——行内状态色仍可正常覆盖；
+   彩色 dark: 变体（如 dark:text-rose-300）不在映射范围，dark 模式下其
+   (0,2,0) 特异性高于基础类规则，不受影响。 */
+body .text-gray-900,
+body .text-gray-800,
+body .text-gray-700 {
+  color: var(--theme-text);
+}
+
+body .text-gray-600,
+body .text-gray-500 {
+  color: color-mix(in srgb, var(--theme-text) 66%, transparent);
+}
+
+body .text-gray-400 {
+  color: color-mix(in srgb, var(--theme-text) 50%, transparent);
+}
+
+.dark body .dark\:text-gray-100,
+.dark body .dark\:text-gray-200,
+.dark body .dark\:text-gray-300 {
+  color: var(--theme-text);
+}
+
+.dark body .dark\:text-gray-400,
+.dark body .dark\:text-gray-500 {
+  color: color-mix(in srgb, var(--theme-text) 66%, transparent);
+}
+
+.dark body .dark\:text-gray-600 {
+  color: color-mix(in srgb, var(--theme-text) 50%, transparent);
+}
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }

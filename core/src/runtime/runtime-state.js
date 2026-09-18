@@ -21,6 +21,11 @@ function formatLocalDateTime24(date = new Date()) {
 
 // ==================== 运行时状态工厂 ====================
 
+// 日志保留策略：不做本地持久化，服务端仅保留最近 24 小时内的实时日志，
+// 过期条目在写入时与每日定时清扫中自动清理；条数上限仅作防刷屏兜底。
+const LOG_RETENTION_MS = 24 * 60 * 60 * 1000;
+const LOG_MAX_ENTRIES = 5000;
+
 function createRuntimeState(deps) {
     const {
         store,
@@ -40,6 +45,25 @@ function createRuntimeState(deps) {
 
     let configRevision = Date.now();
     const moduleLogger = createModuleLogger('runtime');
+
+    /** 清理超过保留期（24 小时）的过期日志，并强制条数兜底上限 */
+    function trimExpiredLogs(list, now = Date.now()) {
+        const threshold = now - LOG_RETENTION_MS;
+        let firstValid = 0;
+        while (firstValid < list.length && (Number(list[firstValid] && list[firstValid].ts) || 0) < threshold) {
+            firstValid += 1;
+        }
+        if (firstValid > 0) list.splice(0, firstValid);
+        while (list.length > LOG_MAX_ENTRIES) list.shift();
+    }
+
+    // 每 24 小时定时清扫一次过期日志（写入时也会清理，双保险）
+    const logSweepTimer = setInterval(() => {
+        const now = Date.now();
+        trimExpiredLogs(globalLogs, now);
+        trimExpiredLogs(accountLogs, now);
+    }, LOG_RETENTION_MS);
+    if (typeof logSweepTimer.unref === 'function') logSweepTimer.unref();
 
     /** 递增配置版本号 */
     function nextConfigRevision() {
@@ -126,7 +150,7 @@ function createRuntimeState(deps) {
             ...meta
         };
         accountLogs.push(entry);
-        if (accountLogs.length > 2000) accountLogs.shift();
+        trimExpiredLogs(accountLogs);
         runtimeEvents.emit('account_log', entry);
     }
 
@@ -257,6 +281,7 @@ function createRuntimeState(deps) {
         buildConfigSnapshotForAccount,
         log,
         addAccountLog,
+        trimExpiredLogs,
         normalizeStatusForPanel,
         buildDefaultStatus,
         filterLogs

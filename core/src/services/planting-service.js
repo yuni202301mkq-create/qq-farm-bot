@@ -551,6 +551,8 @@ async function plantPrioritized2x2Crops(emptyLandIds, lands, accountId) {
     }) || null;
   }
 
+  const [pacingMinMs, pacingMaxMs] = getPlantPacingRange(accountId);
+
   for (const group of readyGroups) {
     let seed = pickNext2x2Seed(group);
     if (!seed && !hasRetryBlocked2x2Seed(group)) {
