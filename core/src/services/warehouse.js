@@ -103,6 +103,35 @@ async function sellItems(items) {
 }
 
 /**
+ * 锁定/解锁背包物品（同步官方客户端 2026-09-19 抓包协议）。
+ * 目标是物品 uid（实例 ID），请求/响应线格式：field1 = packed uid 列表。
+ * Lock 与 Unlock 仅方法名不同，编解码结构完全一致。
+ */
+async function setItemsLocked(uids, locked) {
+  const list = (Array.isArray(uids) ? uids : [uids])
+    .map(toNum)
+    .filter((n) => n > 0);
+  if (!list.length) return { item_uids: [] };
+
+  const RequestType = locked ? types.LockItemsRequest : types.UnlockItemsRequest;
+  const ReplyType = locked ? types.LockItemsReply : types.UnlockItemsReply;
+  const request = RequestType.encode(
+    RequestType.create({ item_uids: list })
+  ).finish();
+  const method = locked ? 'LockItems' : 'UnlockItems';
+  const { body } = await sendMsgAsync('gamepb.itempb.ItemService', method, request);
+  return ReplyType.decode(body);
+}
+
+async function lockItems(uids) {
+  return setItemsLocked(uids, true);
+}
+
+async function unlockItems(uids) {
+  return setItemsLocked(uids, false);
+}
+
+/**
  * 使用背包物品。官方请求要求携带物品 UID；未显式传入时从背包查找。
  */
 async function useItem(itemId, count = 1, uid = 0) {
@@ -462,9 +491,17 @@ async function getBagDetail() {
         plantSize: seedPlant ? Math.max(1, Number(seedPlant.size || 1)) : 1,
         interactionType,
         hoursText: '',
+        uids: [],        // 各实例 uid（官方锁定/解锁按 uid 操作）
+        lockedUids: [],  // 其中已被官方锁定的 uid
       });
     }
-    merged.get(id).count += count;
+    const entry = merged.get(id);
+    entry.count += count;
+    const itemUid = toNum(item.uid);
+    if (itemUid > 0 && !entry.uids.includes(itemUid))
+      entry.uids.push(itemUid);
+    if (item.locked && itemUid > 0 && !entry.lockedUids.includes(itemUid))
+      entry.lockedUids.push(itemUid);
   }
 
   // 计算容器时间显示
@@ -516,17 +553,24 @@ async function sellAllFruits() {
     const bag = await getBag();
     const items = getBagItems(bag);
     const fruits = [];
+    let lockedFruitCount = 0;
 
     for (const item of items) {
       const id = toNum(item.id);
       const count = toNum(item.count);
-      if (isFruitItemId(id) && count > 0) {
-        fruits.push(item);
+      if (!isFruitItemId(id) || count <= 0) continue;
+      // 官方锁定的物品不参与自动出售（locked 为 proto bool，锁定时为 true）
+      if (item.locked) {
+        lockedFruitCount += count;
+        continue;
       }
+      fruits.push(item);
     }
 
     if (fruits.length === 0) {
-      log('仓库', '无果实可出售');
+      log('仓库', lockedFruitCount > 0
+        ? `无果实可出售（${lockedFruitCount} 个果实已锁定，已跳过）`
+        : '无果实可出售');
       return;
     }
 
@@ -745,6 +789,8 @@ module.exports = {
   getBag,
   getBagDetail,
   sellItems,
+  lockItems,
+  unlockItems,
   useItem,
   batchUseItems,
   openFertilizerGiftPacksSilently,

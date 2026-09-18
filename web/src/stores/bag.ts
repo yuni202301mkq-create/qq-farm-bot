@@ -86,5 +86,13 @@ export const useBagStore = defineStore('bag', () => {
     return res.data
   }
 
-  return { items, allItems, originalItems, dashboardItems, loading, fetchBag, clearBag, useItem, sellItems }
+  // 同步官方物品锁定/解锁（ItemService.LockItems / UnlockItems，按实例 uid）
+  async function setItemsLocked(accountId: string, uids: number[], locked: boolean) {
+    const res = await api.post('/api/bag/lock', { uids, locked }, {
+      headers: { 'x-account-id': accountId },
+    })
+    return res.data
+  }
+
+  return { items, allItems, originalItems, dashboardItems, loading, fetchBag, clearBag, useItem, sellItems, setItemsLocked }
 })

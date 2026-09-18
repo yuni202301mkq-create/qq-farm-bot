@@ -124,6 +124,10 @@ async function loadProtoInner() {
     types.UseRequest = root.lookupType('gamepb.itempb.UseRequest');
     types.UseReply = root.lookupType('gamepb.itempb.UseReply');
     types.BatchUseRequest = root.lookupType('gamepb.itempb.BatchUseRequest');
+    types.LockItemsRequest = root.lookupType('gamepb.itempb.LockItemsRequest');
+    types.LockItemsReply = root.lookupType('gamepb.itempb.LockItemsReply');
+    types.UnlockItemsRequest = root.lookupType('gamepb.itempb.UnlockItemsRequest');
+    types.UnlockItemsReply = root.lookupType('gamepb.itempb.UnlockItemsReply');
     types.BatchUseReply = root.lookupType('gamepb.itempb.BatchUseReply');
     types.PlantRequest = root.lookupType('gamepb.plantpb.PlantRequest');
     types.PlantReply = root.lookupType('gamepb.plantpb.PlantReply');

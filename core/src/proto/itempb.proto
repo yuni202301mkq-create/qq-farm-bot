@@ -45,3 +45,24 @@ message BatchUseReply {
     repeated corepb.Item used_items = 1;
     repeated corepb.Item items = 2;
 }
+
+// ============ 物品锁定/解锁（2026-09-19 官方客户端抓包同步） ============
+// 请求与响应结构相同：field 1 为 packed 的物品 uid（实例 ID）列表。
+// 实测请求 {uids:[1383]} 密文 4 字节，响应回显同一 uid 列表且 error_code=0。
+// Lock 与 Unlock 的请求/响应线格式完全一致，仅方法名不同。
+
+message LockItemsRequest {
+    repeated int64 item_uids = 1;
+}
+
+message LockItemsReply {
+    repeated int64 item_uids = 1;
+}
+
+message UnlockItemsRequest {
+    repeated int64 item_uids = 1;
+}
+
+message UnlockItemsReply {
+    repeated int64 item_uids = 1;
+}

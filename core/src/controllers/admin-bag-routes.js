@@ -183,6 +183,30 @@ function registerAdminBagRoutes({
     }
   });
 
+  // 物品锁定/解锁（同步官方 ItemService.LockItems / UnlockItems）
+  app.post("/api/bag/lock", async (req, res) => {
+    const accountId = requireAccessibleAccount(req, res, getAccountIdFromRequest, canAccessAccount);
+    if (!accountId)
+      return;
+
+    try {
+      const { uids, locked } = req.body || {};
+      const uidList = (Array.isArray(uids) ? uids : [])
+        .map(uid => toNum(uid))
+        .filter(uid => uid > 0);
+      if (!uidList.length)
+        return res.status(400).json({ ok: false, error: "缺少物品 uid 列表" });
+
+      const result = locked === false
+        ? await provider.unlockItems(accountId, uidList)
+        : await provider.lockItems(accountId, uidList);
+      res.json({ ok: true, data: { locked: locked !== false, item_uids: (result && result.item_uids) || [] } });
+    }
+    catch (error) {
+      sendProviderError(res, error);
+    }
+  });
+
   app.get("/api/bag/seeds", async (req, res) => {
     const accountId = requireAccessibleAccount(req, res, getAccountIdFromRequest, canAccessAccount);
     if (!accountId)

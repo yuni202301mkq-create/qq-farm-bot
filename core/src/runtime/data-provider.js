@@ -115,15 +115,17 @@ function createDataProvider(deps) {
             const limit = Math.max(100, Number(options.limit) || 200);
 
             const normalized = normalizeAccountRef(ref);
-            const id = resolveAccountId(ref);
 
             if (!normalized || normalized === 'all') {
                 return filterLogs(globalLogs, options).slice(-limit);
             }
 
+            // 账号在账号列表中已不存在（如刚被删除）时返回空，
+            // 避免把内存缓冲里的残留日志继续暴露给查询方
+            const id = resolveAccountIdByList(getAllAccountList(), normalized);
             if (!id) return [];
 
-            const accountIdStr = String(id || '');
+            const accountIdStr = String(id);
             return filterLogs(
                 globalLogs.filter(e => String(e.accountId || '') === accountIdStr),
                 options
@@ -218,6 +220,8 @@ function createDataProvider(deps) {
         // ========== 仓库 ==========
         useItem: (ref, itemId, count, uid) => callWorkerApi(resolveAccountId(ref), 'useItem', itemId, count, uid),
         sellItems: (ref, items) => callWorkerApi(resolveAccountId(ref), 'sellItems', items),
+        lockItems: (ref, uids) => callWorkerApi(resolveAccountId(ref), 'lockItems', uids),
+        unlockItems: (ref, uids) => callWorkerApi(resolveAccountId(ref), 'unlockItems', uids),
 
         // ========== 每日礼包 ==========
         getDailyGifts: (ref) => callWorkerApi(resolveAccountId(ref), 'getDailyGiftOverview'),

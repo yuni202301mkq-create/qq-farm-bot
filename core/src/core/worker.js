@@ -1899,6 +1899,16 @@ async function handleApiCall(msg) {
                 if (totalCount > 0) recordOperation('sell', totalCount);
                 break;
             }
+            case 'lockItems': {
+                const { lockItems } = require('../services/warehouse');
+                result = await lockItems(Array.isArray(args[0]) ? args[0] : []);
+                break;
+            }
+            case 'unlockItems': {
+                const { unlockItems } = require('../services/warehouse');
+                result = await unlockItems(Array.isArray(args[0]) ? args[0] : []);
+                break;
+            }
             case 'setAutomation': {
                 const item = args && args[0] ? args[0] : {};
                 const patch = { [item.key]: item.value };

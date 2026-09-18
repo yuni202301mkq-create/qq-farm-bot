@@ -118,24 +118,60 @@ function isLockableItem(item: any) {
   return category === 'seed' || category === 'fruit'
 }
 
+function isOfficiallyLocked(item: any) {
+  return Array.isArray(item?.lockedUids) && item.lockedUids.length > 0
+}
+
 function isItemLocked(item: any) {
-  return seedLockStore.isLocked(Number(item.id))
+  return seedLockStore.isLocked(Number(item.id)) || isOfficiallyLocked(item)
+}
+
+// 收集物品的全部实例 uid（官方锁定按 uid 操作）
+function collectItemUids(list: any[]): number[] {
+  const uids = new Set<number>()
+  for (const item of list) {
+    if (Array.isArray(item?.uids)) {
+      for (const uid of item.uids) {
+        const n = Number(uid)
+        if (n > 0) uids.add(n)
+      }
+    }
+  }
+  return Array.from(uids)
+}
+
+// 官方锁定/解锁（按 uid）；无 uid 的物品仅本地锁定
+async function syncOfficialLock(uids: number[], locked: boolean) {
+  if (!uids.length || !currentAccountId.value)
+    return
+  const res = await bagStore.setItemsLocked(currentAccountId.value, uids, locked)
+  if (!res?.ok)
+    throw new Error(res?.error || '官方锁定同步失败')
+  // 官方成功后刷新背包，更新 items 里的 lockedUids 状态
+  await bagStore.fetchBag(currentAccountId.value)
 }
 
 async function toggleSeedLock(item: any) {
   const id = Number(item.id)
   try {
-    if (isItemLocked(item)) {
+    const wasLocked = isItemLocked(item)
+    const uids = collectItemUids([item])
+    if (uids.length)
+      await syncOfficialLock(uids, !wasLocked)
+    if (wasLocked) {
       await seedLockStore.unlockSeedIds(id)
-      toastStore.success(`已解锁 ${item.name || '种子'}`)
+      toastStore.success(`已解锁 ${item.name || '种子'}（官方已同步）`)
     }
     else {
       await seedLockStore.lockSeedIds(id)
-      toastStore.success(`已锁定 ${item.name || '种子'}，出售时将被跳过`)
+      toastStore.success(`已锁定 ${item.name || '种子'}（官方已同步，出售时将被跳过）`)
     }
   }
   catch (e: any) {
     toastStore.error(`操作失败: ${e?.message || '未知错误'}`)
+    // 官方同步失败时刷新背包，让本地状态与官方保持一致
+    if (currentAccountId.value)
+      bagStore.fetchBag(currentAccountId.value).catch(() => {})
   }
 }
 
@@ -149,15 +185,21 @@ async function applyBatchLock(lock: boolean) {
   }
   lockBusy.value = true
   try {
+    const selectedItems = items.value.filter((it: any) => ids.includes(Number(it.id)))
+    const uids = collectItemUids(selectedItems)
+    if (uids.length)
+      await syncOfficialLock(uids, lock)
     if (lock)
       await seedLockStore.lockSeedIds(ids)
     else
       await seedLockStore.unlockSeedIds(ids)
-    toastStore.success(`已${lock ? '锁定' : '解锁'} ${ids.length} 种种子`)
+    toastStore.success(`已${lock ? '锁定' : '解锁'} ${ids.length} 种（官方已同步）`)
     selectedForLock.value.clear()
   }
   catch (e: any) {
     toastStore.error(`${lock ? '锁定' : '解锁'}失败: ${e?.message || '未知错误'}`)
+    if (currentAccountId.value)
+      bagStore.fetchBag(currentAccountId.value).catch(() => {})
   }
   finally {
     lockBusy.value = false
