@@ -232,7 +232,7 @@ function registerAdminAccountRoutes({
       }
       if (gateway) body.code = gateway.code;
       delete body.gatewayUrl;
-      const startAfterSave = body.startAfterSave === true;
+      // 兼容旧客户端的 startAfterSave 标记：现在编辑路径只要提交了新凭证就会自动启动。
       delete body.startAfterSave;
       const currentUser = req.currentUser;
       const isUpdate = !!body.id;
@@ -340,8 +340,7 @@ function registerAdminAccountRoutes({
 
       let autoRefreshEnabled = false;
       let startQueued = false;
-      // 新增账号时把落盘后的账号 id 回传，前端据此展示启动进度弹窗。
-      // 编辑账号路径不返回，避免把"保存修改"也当成新增启动流程。
+      // 账号落盘后把 id 回传，前端据此展示启动进度弹窗（新增与"编辑并提交新凭证"都算）。
       let createdAccountId = "";
       if (!isUpdate) {
         const created = data.accounts.at(-1);
@@ -380,8 +379,12 @@ function registerAdminAccountRoutes({
             }
           });
         }
-      } else if (!onlyRenaming && (wasRunning || startAfterSave)) {
+      } else if (!onlyRenaming) {
+        // 编辑账号并提交了新凭证（手动填码/微信扫码/QQ 扫码等，非仅改名）：
+        // 与抓包更新路径保持一致，自动拉起账号（运行中则重启）并回传 id，
+        // 让前端弹出启动进度弹窗，而不是保存完就无声无息。
         startQueued = true;
+        createdAccountId = String(nextAccount.id || "");
         const startOperation = wasRunning
           ? provider.restartAccount(nextAccount.id)
           : provider.startAccount(nextAccount.id);

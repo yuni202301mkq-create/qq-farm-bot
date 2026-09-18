@@ -949,10 +949,10 @@ function applyIntervalsToRuntime(intervals) {
     const farmDefault = Math.max(2, Number.parseInt(iv.farm, 10) || 2);
     const farmRange = normalizeIntervalRangeSec(iv.farmMin, iv.farmMax, farmDefault);
     const helpRange = normalizeIntervalRangeSec(iv.helpMin, iv.helpMax, 30);
-    // 偷菜巡查仍由 friend-maturity-plan 的成熟度计划动态唤醒（见 runScheduledStealCheck /
-    // getNextStealDelayMs）；stealMin/stealMax 是「无已知成熟时间时的兜底轮询窗口」：
-    // 校准间隔在区间内随机取值，下一次唤醒不超过区间上限。
     const stealRange = normalizeIntervalRangeSec(iv.stealMin, iv.stealMax, 180);
+    // 偷菜 tick 独立调度：倒计时由 friend-maturity-plan 的成熟度计划动态计算
+    // （见 runScheduledStealCheck / getNextStealDelayMs）；stealMin/stealMax 是
+    // 「无已知成熟时间时的兜底轮询窗口」，也用于单个好友的重复访问冷却。
 
     const next = {
         farmCheckIntervalMin: farmRange.min * 1000,
@@ -1001,7 +1001,7 @@ function resetUnifiedSchedule() {
         CONFIG.helpCheckIntervalMin || 30000,
         CONFIG.helpCheckIntervalMax || 35000
     );
-    // 偷菜首轮延迟落在用户配置的兜底轮询区间内（而非固定 5~15 秒），后续节奏
+    // 偷菜首轮延迟落在用户配置的兜底轮询区间内，后续节奏
     // 仍由 runScheduledStealCheck 返回的 getNextStealDelayMs() 动态决定（根据好友
     // 作物成熟时间计算）。
     const stealDelay = randomIntervalMs(
@@ -1099,9 +1099,10 @@ async function runHelpTick(autoConfig) {
 
     try {
         await runWithRequestPriority('friend', async () => {
-            // 统一巡查：一轮完成 帮助+偷菜+捣乱，三个开关各自生效；帮助与偷菜
-            // 各自独立进入好友农场（不合并访问）。偷菜另有成熟驱动的 steal tick
-            // 作为补充唤醒（带 stealMin 下限，不会秒级跳变）。
+            // 统一巡查按策略设置的帮助间隔执行（helpCheckIntervalMin/Max，秒→毫秒），
+            // 一轮完成 帮助+偷菜+捣乱（好友列表驱动）；帮助与偷菜各自独立进入好友农场
+            // （不合并访问）。另有成熟驱动的偷菜 tick 独立调度（见 runStealTick），
+            // 负责贴成熟点的定向偷菜，与帮助倒计时互不影响。
             if (autoConfig.friend_help || autoConfig.friend_steal || autoConfig.friend_bad) {
                 await checkFriends();
             }
@@ -1122,6 +1123,8 @@ async function runHelpTick(autoConfig) {
 }
 
 // ==================== 偷菜 Tick ====================
+// 独立的偷菜调度线：由 runScheduledStealCheck 根据好友作物成熟时间动态计算
+// 下次唤醒（兜底落在 stealMin~stealMax 区间内），与帮助巡查分开调度与展示。
 
 let stealTaskRunning = false;
 let nextStealRunAt = 0;
@@ -1139,7 +1142,10 @@ async function runStealTick(autoConfig) {
     }
     stealTaskRunning = true;
 
-    let nextDelay = 15 * 60 * 1000;
+    // 异常兜底不再固定 15 分钟（会表现为概览偷菜倒计时「十来分钟」的假象），
+    // 而是跟随用户配置的偷菜巡查区间上限。
+    const errorFallbackMs = Math.max(1000, Number(CONFIG.stealCheckIntervalMax) || 300000);
+    let nextDelay = errorFallbackMs;
 
     try {
         nextDelay = await runWithRequestPriority('friend', () => runScheduledStealCheck());
@@ -1152,7 +1158,7 @@ async function runStealTick(autoConfig) {
             });
         }
     } finally {
-        nextStealRunAt = Date.now() + Math.max(1000, Number(nextDelay) || 15 * 60 * 1000);
+        nextStealRunAt = Date.now() + Math.max(1000, Number(nextDelay) || errorFallbackMs);
         stealTaskRunning = false;
     }
 }

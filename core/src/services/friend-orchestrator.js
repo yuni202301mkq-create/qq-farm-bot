@@ -590,7 +590,7 @@ async function runScheduledStealCheck() {
 }
 
 // 偷菜兜底轮询区间（毫秒）：来自策略设置 intervals.stealMin/stealMax（秒），
-// 无已知好友成熟时间时按此窗口轮询好友列表校准，避免固定 15 分钟才校准一次。
+// 无已知好友成熟时间时按此窗口轮询好友列表校准；单个好友的重复访问冷却取区间上限。
 function getStealIntervalRangeMs() {
   const defaultMin = 180 * 1000;
   const minMs = Math.max(1000, Number(CONFIG.stealCheckIntervalMin) || defaultMin);

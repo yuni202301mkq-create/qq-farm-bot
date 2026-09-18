@@ -236,16 +236,23 @@ export function useAccountSettings(showAlert: (message: string, type?: AlertType
     }
   }
 
-  // AccountModal 保存成功后会带上新账号信息（新增才有 created，编辑为 null）。
-  // 新增账号后端已排队后台启动，这里交给启动进度弹窗跟踪启动结果。
-  function handleSaved(payload?: { created?: { id?: string, name?: string, platform?: string } | null }) {
+  // AccountModal 保存成功后会带上账号信息：新增与「编辑并提交新凭证」都会由
+  // 后端排队后台启动（startup.accountId 回传），这里交给启动进度弹窗跟踪启动结果。
+  function handleSaved(payload?: {
+    created?: { id?: string, name?: string, platform?: string } | null
+    startup?: { queued?: boolean, accountId?: string } | null
+  }) {
     accountStore.fetchAccounts()
     const created = payload?.created
-    if (created?.id) {
+    const startupAccountId = payload?.startup?.accountId ? String(payload.startup.accountId) : ''
+    const target = created?.id
+      ? created
+      : (startupAccountId ? { id: startupAccountId, name: '', platform: '' } : null)
+    if (target?.id) {
       startupAccount.value = {
-        id: String(created.id),
-        name: created.name,
-        platform: created.platform,
+        id: String(target.id),
+        name: target.name || '',
+        platform: target.platform || '',
       }
     }
   }

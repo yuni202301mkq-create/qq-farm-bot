@@ -434,8 +434,10 @@ function scheduleCapturedAccountStart({
 }) {
   const timer = schedule(() => {
     try {
-      if (isUpdate) {
-        if (wasRunning) provider.restartAccount(account.id);
+      // 编辑（更新）账号同样要拉起：运行中走重启，已停止的直接启动，
+      // 保证「编辑账号-抓包登录」后前端启动进度弹窗能跟踪到真实结果。
+      if (wasRunning) {
+        provider.restartAccount(account.id);
       } else {
         provider.startAccount(account.id);
       }

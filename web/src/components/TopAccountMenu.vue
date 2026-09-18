@@ -210,18 +210,26 @@ function openRemarkModal(acc: any) {
   closeDropdown()
 }
 
-async function handleAccountSaved(payload?: { created?: { id?: string, name?: string, platform?: string } | null }) {
+async function handleAccountSaved(payload?: {
+  created?: { id?: string, name?: string, platform?: string } | null
+  startup?: { queued?: boolean, accountId?: string } | null
+}) {
   showAccountModal.value = false
   showRemarkModal.value = false
   accountToEdit.value = null
-  // 新增账号（后端已排队后台启动）才弹启动进度；改备注/编辑账号不会带 created。
-  // 必须先置状态再刷新列表：fetchAccounts 是网络请求，放在前面会让弹窗晚几百毫秒才出现。
+  // 新增账号与「编辑并提交新凭证」（后端已排队后台启动）都弹启动进度；
+  // 改备注/仅改名不会带启动信息。必须先置状态再刷新列表：fetchAccounts 是网络
+  // 请求，放在前面会让弹窗晚几百毫秒才出现。
   const created = payload?.created
-  if (created?.id) {
+  const startupAccountId = payload?.startup?.accountId ? String(payload.startup.accountId) : ''
+  const target = created?.id
+    ? created
+    : (startupAccountId ? { id: startupAccountId, name: '', platform: '' } : null)
+  if (target?.id) {
     startupAccount.value = {
-      id: String(created.id),
-      name: created.name,
-      platform: created.platform,
+      id: String(target.id),
+      name: target.name || '',
+      platform: target.platform || '',
     }
   }
   await accountStore.fetchAccounts()

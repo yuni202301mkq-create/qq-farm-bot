@@ -201,6 +201,52 @@ test('captured accounts start after the post-proxy delay', () => {
   assert.deepEqual(calls, [1500, 'account-1']);
 });
 
+test('captured account updates start stopped accounts and restart running ones', () => {
+  const calls = [];
+  let scheduledCallback = null;
+  const flow = { owner: 'admin', result: { startError: '' } };
+
+  scheduleCapturedAccountStart({
+    provider: {
+      startAccount: accountId => calls.push(['start', accountId]),
+      restartAccount: accountId => calls.push(['restart', accountId]),
+    },
+    logger: { warn() {} },
+    flow,
+    account: { id: 'account-9' },
+    isUpdate: true,
+    wasRunning: false,
+    schedule: (callback) => {
+      scheduledCallback = callback;
+      return null;
+    },
+  });
+
+  scheduledCallback();
+  assert.deepEqual(calls, [['start', 'account-9']]);
+
+  calls.length = 0;
+  scheduledCallback = null;
+  scheduleCapturedAccountStart({
+    provider: {
+      startAccount: accountId => calls.push(['start', accountId]),
+      restartAccount: accountId => calls.push(['restart', accountId]),
+    },
+    logger: { warn() {} },
+    flow,
+    account: { id: 'account-9' },
+    isUpdate: true,
+    wasRunning: true,
+    schedule: (callback) => {
+      scheduledCallback = callback;
+      return null;
+    },
+  });
+
+  scheduledCallback();
+  assert.deepEqual(calls, [['restart', 'account-9']]);
+});
+
 test('complete QQ friend list sources are recognized', () => {
   assert.equal(isCompleteQqFriendSource('gamepb.friendpb.FriendService.GetAll'), true);
   assert.equal(isCompleteQqFriendSource('gamepb.friendpb.FriendService.SyncAll'), true);

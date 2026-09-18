@@ -323,14 +323,16 @@ async function completeCaptureAccount() {
     localStorage.setItem(CAPTURE_SUCCESS_STORAGE_KEY, '1')
     stopCaptureCheck()
     captureFlow.value = null
-    // 抓包接口已返回账号 id 与 updated 标记：新增才弹启动进度，更新不弹。
+    // 抓包接口返回账号 id：新增与更新都会在后台自动拉起账号（更新运行中则重启），
+    // 两种情况都回传账号信息，父级据此弹出启动进度弹窗。
     const result = data.data || {}
-    const capturedId = result.updated ? '' : String(result.accountId || '')
+    const accountId = String(result.accountId || '')
+    const created = accountId
+      ? { id: accountId, name: result.name || '', platform: result.platform || '' }
+      : null
     emit('saved', {
-      created: capturedId
-        ? { id: capturedId, name: result.name || '', platform: result.platform || '' }
-        : null,
-      startup: { queued: !!capturedId, accountId: capturedId },
+      created,
+      startup: { queued: !!accountId, accountId },
     })
     close()
   }
@@ -411,8 +413,8 @@ async function addAccount(data: any) {
   try {
     const res = await api.post('/api/accounts', data)
     if (res.data.ok) {
-      // 新增账号时后端会排队后台启动并回传账号 id，父级据此弹启动进度；
-      // 编辑账号路径 accountId 为空，created 为 null，父级不会弹窗。
+      // 新增账号与「编辑并提交新凭证」后端都会排队后台启动并回传账号 id，
+      // 父级据此弹启动进度；仅改名的编辑不启动、不回传 id，父级不会弹窗。
       const startup = res.data?.startup || {}
       const list = Array.isArray(res.data?.data?.accounts) ? res.data.data.accounts : []
       const saved = startup.accountId

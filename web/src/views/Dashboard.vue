@@ -58,6 +58,11 @@ const hasActiveLogFilter = computed(() =>
 const currentAccountDisconnected = computed(() =>
   currentStatusReady.value && !status.value?.connection?.connected,
 )
+// 自动偷菜开关关闭时，偷菜 tick 会被后端「停放」（占位 15 分钟），倒计时无意义，
+// 概览偷菜栏直接显示「已关闭」。
+const stealAutomationDisabled = computed(() =>
+  status.value?.automation ? status.value.automation.friend_steal === false : false,
+)
 
 // 账号到期提醒：与侧栏账号卡同口径（天数向上取整，29天23小时显示为「还有30天到期」）
 const nowMs = ref(Date.now())
@@ -221,6 +226,7 @@ const fertilizerOrganic = computed(() => dashboardItems.value.find((item: any) =
 
 const nextFarmCheck = ref('--:--:--')
 const nextHelpCheck = ref('--:--:--')
+// 偷菜有独立的调度节奏（成熟驱动 + stealMin/stealMax 兜底），倒计时独立推送。
 const nextStealCheck = ref('--:--:--')
 const localUptime = ref(0)
 
@@ -326,6 +332,12 @@ function updateCountdowns() {
     return
   }
 
+  if (stealAutomationDisabled.value) {
+    nextStealCheck.value = '已关闭'
+    localNextStealRemainSec = 0
+    stealCountdownTotal.value = 1
+  }
+
   localUptime.value++
 
   if (localNextFarmRemainSec > 0) {
@@ -344,7 +356,10 @@ function updateCountdowns() {
     nextHelpCheck.value = '检查中...'
   }
 
-  if (localNextStealRemainSec > 0) {
+  if (stealAutomationDisabled.value) {
+    nextStealCheck.value = '已关闭'
+  }
+  else if (localNextStealRemainSec > 0) {
     localNextStealRemainSec--
     nextStealCheck.value = formatDuration(localNextStealRemainSec)
   }
@@ -358,6 +373,7 @@ watch(status, (newVal) => {
     const farmRemainSec = newVal.nextChecks.farmRemainSec || 0
     // 帮助/偷菜倒计时做防倒流钳制：推送值比本地还大时（调度被推迟、重新随机等），
     // 保持本地值继续递减到 0（检查中）后再刷新，避免界面时间「往回跳」。
+    // 偷菜与帮助各自独立调度：偷菜倒计时来自后端的 stealRemainSec。
     const helpRemainSec = clampNextRemain(localNextHelpRemainSec, newVal.nextChecks.helpRemainSec || 0)
     const stealRemainSec = clampNextRemain(localNextStealRemainSec, newVal.nextChecks.stealRemainSec || 0)
     syncCountdownTotal(farmCountdownTotal, farmRemainSec, localNextFarmRemainSec)
@@ -983,7 +999,7 @@ useIntervalFn(updateCountdowns, 1000)
               >
                 <div class="h-full w-full flex flex-col items-center justify-center rounded-full bg-white dark:bg-gray-800">
                   <div class="i-carbon-user-multiple text-xl text-blue-500" />
-                  <span class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">帮助</span>
+                  <span class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">好友巡查</span>
                 </div>
               </div>
               <div class="mt-1.5 w-full truncate text-sm font-bold font-mono 2xl:text-base" :title="nextHelpCheck">
