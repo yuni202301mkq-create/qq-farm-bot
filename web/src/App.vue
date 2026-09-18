@@ -112,8 +112,9 @@ body {
 
 .glass-panel {
   border: 1px solid var(--surface-border);
-  background: color-mix(in srgb, var(--surface-1) 78%, transparent);
-  backdrop-filter: blur(12px);
+  /* 浮动面板（下拉菜单/顶栏/弹出面板）必须实色：半透明 + backdrop-filter 会让
+     底层文字透出来（perf-lite 关闭模糊后更明显），且逐帧模糊采样拖累滚动性能 */
+  background: var(--surface-1);
   box-shadow: var(--surface-shadow-soft);
 }
 
