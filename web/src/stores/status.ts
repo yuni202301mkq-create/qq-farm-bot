@@ -87,29 +87,9 @@ export const useStatusStore = defineStore('status', () => {
     return /\b(?:ACE|TSDK)\b/i.test(text)
   }
 
-  function getLogIdentity(entry: any, source: 'runtime' | 'account') {
-    if (entry?.logId)
-      return String(entry.logId)
-    const ts = Number(entry?.ts) || Date.parse(String(entry?.time || '').replace(' ', 'T')) || 0
-    return [source, entry?.accountId || entry?.id || '', ts, entry?.action || '', entry?.tag || '', entry?.msg || ''].join('|')
-  }
-
-  function uniqueLogs(list: any[], source: 'runtime' | 'account') {
-    const seen = new Set<string>()
-    return list.filter((entry) => {
-      const identity = getLogIdentity(entry, source)
-      if (seen.has(identity))
-        return false
-      seen.add(identity)
-      return true
-    })
-  }
-
   function pushRealtimeLog(entry: any) {
     const next = normalizeLogEntry(entry)
     if (shouldHideLogEntryInFrontend(next))
-      return
-    if (logs.value.some(item => getLogIdentity(item, 'runtime') === getLogIdentity(next, 'runtime')))
       return
     logs.value.push(next)
     if (logs.value.length > 1000)
@@ -119,8 +99,6 @@ export const useStatusStore = defineStore('status', () => {
   function pushRealtimeAccountLog(entry: any) {
     const next = (entry && typeof entry === 'object') ? entry : {}
     if (shouldHideLogEntryInFrontend(next))
-      return
-    if (accountLogs.value.some(item => getLogIdentity(item, 'account') === getLogIdentity(next, 'account')))
       return
     accountLogs.value.push(next)
     if (accountLogs.value.length > 1000)
@@ -167,10 +145,10 @@ export const useStatusStore = defineStore('status', () => {
     if (currentRealtimeAccountId.value && accountId && accountId !== 'all' && accountId !== currentRealtimeAccountId.value)
       return
     const list = Array.isArray(body.logs) ? body.logs : []
-    const incoming = uniqueLogs(list, 'runtime')
+    const incoming = list
       .map((item: any) => normalizeLogEntry(item))
       .filter((item: any) => !shouldHideLogEntryInFrontend(item))
-    // 不做本地缓存：快照到达时整体替换，面板始终展示服务端当前的实时日志
+    // 不做本地缓存与合并去重：快照到达时整体替换，面板始终展示服务端当前的实时日志
     // （服务端仅保留最近 24 小时，过期的旧日志不应在本地残留）。
     // 只显示当前选中账号：未选中账号时不展示任何合并日志。
     const scopeId = currentRealtimeAccountId.value || ''
@@ -186,9 +164,9 @@ export const useStatusStore = defineStore('status', () => {
   function handleRealtimeAccountLogsSnapshot(payload: any) {
     const body = (payload && typeof payload === 'object') ? payload : {}
     const list = Array.isArray(body.logs) ? body.logs : []
-    const incoming = uniqueLogs(list
-      .filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
-    // 不做本地缓存：快照到达时整体替换，与运行日志同策略；
+    const incoming = list
+      .filter((item: any) => !shouldHideLogEntryInFrontend(item))
+    // 不做本地缓存与合并去重：快照到达时整体替换，与运行日志同策略；
     // 多账号只显示当前选中账号的条目，未选中账号时置空
     const scopeId = currentRealtimeAccountId.value || ''
     accountLogs.value = scopeId
@@ -328,19 +306,12 @@ export const useStatusStore = defineStore('status', () => {
       if (requestedId && requestedId !== 'all' && !isCurrentAccount(requestedId))
         return
       if (data.ok) {
-        const fetchedLogs = Array.isArray(data.data)
-          ? uniqueLogs(data.data
+        // 不做本地缓存与合并去重：HTTP 拉取整体替换，只展示服务端返回的当前账号日志
+        logs.value = Array.isArray(data.data)
+          ? data.data
               .map((item: any) => normalizeLogEntry(item))
-              .filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'runtime')
+              .filter((item: any) => !shouldHideLogEntryInFrontend(item))
           : []
-        // 实时连接下与已有列表合并时，只保留当前查询账号的条目，
-        // 避免切换或删除账号后旧账号的日志残留在面板里
-        const scopedExisting = requestedId && requestedId !== 'all'
-          ? logs.value.filter((item: any) => String(item.accountId || item.id || '') === requestedId)
-          : logs.value
-        logs.value = realtimeConnected.value
-          ? uniqueLogs([...scopedExisting, ...fetchedLogs], 'runtime').slice(-1000)
-          : fetchedLogs
         error.value = ''
       }
     }
@@ -378,13 +349,12 @@ export const useStatusStore = defineStore('status', () => {
       if (Array.isArray(res.data)) {
         if (requestedId && !isCurrentAccount(requestedId))
           return
-        // 不做本地缓存：整体替换，与运行日志同策略；
-        // 多账号只显示当前选中账号的条目，未选中账号时置空
+        // 不做本地缓存与合并去重：整体替换，未选中账号时置空
         accountLogs.value = !requestedId
           ? []
-          : uniqueLogs(res.data
+          : res.data
               .filter((item: any) => String(item?.accountId || item?.id || '') === requestedId)
-              .filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
+              .filter((item: any) => !shouldHideLogEntryInFrontend(item))
       }
     }
     catch (e) {
