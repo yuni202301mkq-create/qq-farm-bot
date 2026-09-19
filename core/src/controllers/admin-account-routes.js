@@ -457,7 +457,7 @@ function registerAdminAccountRoutes({
       const limit = Number.parseInt(req.query.limit) || 100;
       const currentUser = req.currentUser;
       const requestedAccountId = getAccountIdFromRequest(req);
-      let logs = provider.getAccountLogs ? provider.getAccountLogs(limit) : [];
+      let logs = provider.getAccountLogs ? provider.getAccountLogs(requestedAccountId || "", limit) : [];
       if (!Array.isArray(logs)) logs = [];
       if (requestedAccountId) {
         if (!canAccessAccount(req, requestedAccountId)) {
@@ -539,12 +539,7 @@ function registerAdminAccountRoutes({
         });
         const historicalAccountLogs =
           typeof provider.getAccountLogs === "function"
-            ? provider
-                .getAccountLogs(300)
-                .filter(
-                  (log) =>
-                    String(log.accountId || log.id || "") === String(accountId),
-                )
+            ? provider.getAccountLogs(accountId, 600)
             : [];
         io.to(`account:${  accountId}`).emit("account-logs:snapshot", {
           accountId,
@@ -559,7 +554,7 @@ function registerAdminAccountRoutes({
         });
         const allHistoricalAccountLogs =
           typeof provider.getAccountLogs === "function"
-            ? provider.getAccountLogs(300)
+            ? provider.getAccountLogs("", 600)
             : [];
         io.to("account:all").emit("account-logs:snapshot", {
           accountId: "all",

@@ -94,6 +94,8 @@ const PUBLIC_API_PATHS = new Set([
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
 const ONE_MINUTE_MS = 60 * 1000;
 const LOG_SNAPSHOT_LIMIT = 300;
+// 账号日志快照条数：与后端每账号 600 条的保留配额对齐
+const ACCOUNT_LOG_SNAPSHOT_LIMIT = 600;
 const HTTP_REQUEST_TIMEOUT_MS = 120 * 1000;
 const HTTP_HEADERS_TIMEOUT_MS = 16 * 1000;
 const HTTP_KEEP_ALIVE_TIMEOUT_MS = 5 * 1000;
@@ -885,14 +887,12 @@ function startAdminServer(dataProvider) {
         });
       }
       if (provider && typeof provider.getAccountLogs === "function") {
-        let accountLogs = provider.getAccountLogs(LOG_SNAPSHOT_LIMIT);
+        // 服务端按账号直接取（每账号独立 600 条配额），无需先截全局再过滤
+        let accountLogs = provider.getAccountLogs(
+          subscribedAccountId || "",
+          ACCOUNT_LOG_SNAPSHOT_LIMIT,
+        );
         if (!Array.isArray(accountLogs)) accountLogs = [];
-        if (subscribedAccountId) {
-          accountLogs = accountLogs.filter((logEntry) => {
-            const logAccountId = String(logEntry.accountId || logEntry.id || "");
-            return logAccountId === subscribedAccountId;
-          });
-        }
         if (socketUser) {
           const accessibleAccountIds = getAccessibleAccountIdsForUser(socketUser);
           accountLogs = accountLogs.filter((logEntry) => {

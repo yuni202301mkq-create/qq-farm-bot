@@ -132,8 +132,14 @@ function createDataProvider(deps) {
             ).slice(-limit);
         },
 
-        /** 获取账号操作日志 */
-        getAccountLogs: (limit) => accountLogs.slice(-limit).reverse(),
+        /** 获取账号操作日志：accountId 非空时返回该账号自己的最近 limit 条（每账号独立配额），空/'all' 返回全部账号合并的最近 limit 条 */
+        getAccountLogs: (accountId, limit = 300) => {
+            const idStr = String(accountId || '').trim();
+            const list = idStr && idStr !== 'all'
+                ? accountLogs.filter(e => String(e.accountId || '') === idStr)
+                : accountLogs;
+            return list.slice(-limit).reverse();
+        },
 
         /** 清空日志 */
         clearLogs: (ref) => {

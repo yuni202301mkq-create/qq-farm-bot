@@ -474,7 +474,7 @@ async function refreshRuntimeLogs() {
   try {
     await Promise.all([
       statusStore.fetchLogs(currentAccountId.value, { limit: 300 }),
-      statusStore.fetchAccountLogs(currentAccountId.value, 300),
+      statusStore.fetchAccountLogs(currentAccountId.value, 600),
     ])
     toastStore.success('日志已刷新')
   }
@@ -544,7 +544,7 @@ async function pollLogs() {
     return
   await Promise.all([
     statusStore.fetchLogs(currentAccountId.value, { limit: 300 }),
-    statusStore.fetchAccountLogs(currentAccountId.value, 300),
+    statusStore.fetchAccountLogs(currentAccountId.value, 600),
   ])
 }
 

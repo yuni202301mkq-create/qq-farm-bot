@@ -30,6 +30,10 @@ function createRuntimeState(deps) {
     const workers = {};
     const globalLogs = [];
     const accountLogs = [];
+    // 账号日志每个账号各自保留的条数（互不挤占）
+    const ACCOUNT_LOGS_PER_ACCOUNT_CAP = 600;
+    // 账号日志全局硬顶，防止账号数量极多时内存无限增长
+    const ACCOUNT_LOGS_GLOBAL_CAP = 20000;
     const runtimeEvents = new EventEmitter();
     let nextLogSequence = 0;
 
@@ -126,7 +130,24 @@ function createRuntimeState(deps) {
             ...meta
         };
         accountLogs.push(entry);
-        if (accountLogs.length > 2000) accountLogs.shift();
+
+        // 每个账号各自保留最近 ACCOUNT_LOGS_PER_ACCOUNT_CAP 条：
+        // 从尾部往回数该账号的条目，第 CAP+1 条（更旧的）删掉，
+        // 这样多账号场景下各账号日志互不挤占
+        if (accountLogs.length > ACCOUNT_LOGS_PER_ACCOUNT_CAP) {
+            const idStr = String(entry.accountId || '');
+            let seen = 0;
+            for (let i = accountLogs.length - 1; i >= 0; i--) {
+                if (String(accountLogs[i].accountId || '') !== idStr) continue;
+                seen += 1;
+                if (seen > ACCOUNT_LOGS_PER_ACCOUNT_CAP) {
+                    accountLogs.splice(i, 1);
+                    break;
+                }
+            }
+        }
+        while (accountLogs.length > ACCOUNT_LOGS_GLOBAL_CAP) accountLogs.shift();
+
         runtimeEvents.emit('account_log', entry);
     }
 
