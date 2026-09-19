@@ -322,14 +322,12 @@ export const useStatusStore = defineStore('status', () => {
       if (requestedId && requestedId !== 'all' && !isCurrentAccount(requestedId))
         return
       if (data.ok) {
-        const fetchedLogs = Array.isArray(data.data)
-          ? uniqueLogs(data.data
+        // 照 QQ-farm-BOT-GO 版：轮询拉取整列表替换，服务端给什么显示什么
+        logs.value = Array.isArray(data.data)
+          ? data.data
               .map((item: any) => normalizeLogEntry(item))
-              .filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'runtime')
+              .filter((item: any) => !shouldHideLogEntryInFrontend(item))
           : []
-        logs.value = realtimeConnected.value
-          ? uniqueLogs([...logs.value, ...fetchedLogs], 'runtime').slice(-1000)
-          : fetchedLogs
         error.value = ''
       }
     }
@@ -367,14 +365,12 @@ export const useStatusStore = defineStore('status', () => {
       if (Array.isArray(res.data)) {
         if (requestedId && !isCurrentAccount(requestedId))
           return
-        const fetchedAccountLogs = uniqueLogs(requestedId
+        // 照 QQ-farm-BOT-GO 版：整列表替换
+        accountLogs.value = uniqueLogs(requestedId
           ? res.data
               .filter((item: any) => String(item?.accountId || item?.id || '') === requestedId)
               .filter((item: any) => !shouldHideLogEntryInFrontend(item))
           : res.data.filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
-        accountLogs.value = realtimeConnected.value
-          ? uniqueLogs([...accountLogs.value, ...fetchedAccountLogs], 'account').slice(-300)
-          : fetchedAccountLogs
       }
     }
     catch (e) {

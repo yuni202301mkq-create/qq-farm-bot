@@ -15,7 +15,7 @@ import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { useUserStore } from '@/stores/user'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
-import { compactRuntimeLogs, matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
+import { matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
 
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
@@ -111,7 +111,8 @@ const filteredLogs = computed(() => allLogs.value.filter((log) => {
   return matchesRuntimeLog(log, filter)
 }))
 
-const visibleLogs = computed(() => compactRuntimeLogs(filteredLogs.value))
+// 日志显示照 QQ-farm-BOT-GO 版：服务端给什么显示什么，平铺、不折叠、不去重
+const visibleLogs = computed(() => filteredLogs.value)
 
 const modules = [
   { label: '全部模块', value: '' },
@@ -537,7 +538,17 @@ async function refreshIllustratedLevels() {
   }
 }
 
-async function refresh(forceReloadLogs = false) {
+// 运行日志照 QQ-farm-BOT-GO 版：每 5 秒整列表轮询替换，不依赖实时推送
+async function pollLogs() {
+  if (!currentAccountId.value || refreshingLogs.value)
+    return
+  await Promise.all([
+    statusStore.fetchLogs(currentAccountId.value, { limit: 300 }),
+    statusStore.fetchAccountLogs(currentAccountId.value, 300),
+  ])
+}
+
+async function refresh() {
   if (!currentAccountId.value)
     return
 
@@ -545,14 +556,9 @@ async function refresh(forceReloadLogs = false) {
   if (!account)
     return
 
-  // 首次加载、断线回退时走 HTTP；实时连接正常时优先依赖 WS 推送。
-  if (!realtimeConnected.value) {
+  // 断线回退时走 HTTP 拉状态；日志由 pollLogs 每 5 秒整列表轮询
+  if (!realtimeConnected.value)
     await statusStore.fetchStatus(currentAccountId.value)
-    await statusStore.fetchAccountLogs(currentAccountId.value)
-  }
-
-  if (forceReloadLogs || !realtimeConnected.value)
-    await statusStore.fetchLogs(currentAccountId.value, { limit: 300 })
 
   // 仅在账号运行且连接稳定后再拉背包，避免启动阶段出现 500。
   await refreshBag()
@@ -580,7 +586,8 @@ watch(currentAccountId, async (newId, oldId) => {
     resetDashboardState()
   }
   syncRealtimeAccount()
-  await refresh(true)
+  await refresh()
+  await pollLogs()
   await refreshIllustratedLevels()
   scrollToBottom()
 })
@@ -619,7 +626,7 @@ async function clearLogs() {
     const { data } = await api.delete('/api/logs')
     if (data?.ok) {
       toastStore.success('日志已清空')
-      await refresh(true)
+      await pollLogs()
     }
     else {
       toastStore.error(`清空失败: ${data?.error || '未知错误'}`)
@@ -659,12 +666,15 @@ onMounted(async () => {
   statusStore.setRealtimeLogsEnabled(true)
   syncRealtimeAccount()
   await refresh()
+  await pollLogs()
   await refreshIllustratedLevels()
   scrollToBottom()
 })
 
 // Auto refresh fallback every 10s (WS 断开或启用筛选时回退 HTTP)
 useIntervalFn(refresh, 10000)
+// 运行日志每 5 秒整列表轮询替换（照 QQ-farm-BOT-GO 版）
+useIntervalFn(pollLogs, 5000)
 // Countdown timer (every 1s)
 useIntervalFn(updateCountdowns, 1000)
 </script>
@@ -955,7 +965,6 @@ useIntervalFn(updateCountdowns, 1000)
                   <span class="shrink-0 rounded px-1.5 py-0.5 text-xs font-bold" :class="getLogTagClass(log.tag)">{{ log.tag }}</span>
                   <span v-if="log.event && log.source !== 'account'" class="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-500 dark:bg-blue-900/20 dark:text-blue-400">{{ getEventLabel(log.event) }}</span>
                   <span class="min-w-0 break-words leading-5" :class="getLogMsgClass(log.tag)">{{ log.msg }}</span>
-                  <span v-if="(log.repeatCount || 1) > 1" class="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 font-medium dark:bg-gray-700 dark:text-gray-300">×{{ log.repeatCount }}</span>
                 </div>
               </div>
             </div>
