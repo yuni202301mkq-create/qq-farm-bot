@@ -35,6 +35,7 @@ export const useStatusStore = defineStore('status', () => {
   const realtimeConnected = ref(false)
   const realtimeLogsEnabled = ref(true)
   const currentRealtimeAccountId = ref('')
+  const subscribedAccountId = ref('')
   const tokenRef = useStorage('admin_token', '')
 
   let socket: Socket | null = null
@@ -156,9 +157,13 @@ export const useStatusStore = defineStore('status', () => {
       logs.value = []
       return
     }
-    logs.value = accountId === 'all'
+    const scoped = accountId === 'all'
       ? incoming.filter((item: any) => String(item.accountId || item.id || '') === scopeId)
       : incoming
+    // 防御：更小的快照不要覆盖已经积累的更长列表（否则刷新得到的长列表过几秒
+    // 被服务端回推的快照截短成几十条）。仅在清空(reset)、当前为空、或快照更长时才替换。
+    if (body.reset || logs.value.length === 0 || scoped.length >= logs.value.length)
+      logs.value = scoped
   }
 
   function handleRealtimeAccountLogsSnapshot(payload: any) {
@@ -169,9 +174,11 @@ export const useStatusStore = defineStore('status', () => {
     // 不做本地缓存与合并去重：快照到达时整体替换，与运行日志同策略；
     // 多账号只显示当前选中账号的条目，未选中账号时置空
     const scopeId = currentRealtimeAccountId.value || ''
-    accountLogs.value = scopeId
+    const scoped = scopeId
       ? incoming.filter((item: any) => String(item.accountId || item.id || '') === scopeId)
       : []
+    if (body.reset || accountLogs.value.length === 0 || scoped.length >= accountLogs.value.length)
+      accountLogs.value = scoped
   }
 
   function ensureRealtimeSocket() {
@@ -196,9 +203,11 @@ export const useStatusStore = defineStore('status', () => {
       realtimeConnected.value = true
       if (currentRealtimeAccountId.value) {
         socket?.emit('subscribe', { accountId: currentRealtimeAccountId.value })
+        subscribedAccountId.value = currentRealtimeAccountId.value
       }
       else {
         socket?.emit('subscribe', { accountId: 'all' })
+        subscribedAccountId.value = ''
       }
     })
 
@@ -238,6 +247,10 @@ export const useStatusStore = defineStore('status', () => {
     }
 
     if (client.connected) {
+      // 已连接且账号没变：不重复 subscribe，避免服务端每 30s 心跳回推一次
+      // 被截断的快照（上限 100/过滤后更少）把刷新得到的长列表整体覆盖短
+      if (subscribedAccountId.value === currentRealtimeAccountId.value)
+        return
       client.emit('subscribe', { accountId: currentRealtimeAccountId.value || 'all' })
       return
     }
@@ -258,6 +271,7 @@ export const useStatusStore = defineStore('status', () => {
     socket.disconnect()
     socket = null
     realtimeConnected.value = false
+    subscribedAccountId.value = ''
   }
 
   async function fetchStatus(accountId: string) {
