@@ -97,14 +97,12 @@ const expiryBadgeClass = computed(() => {
 const showRenewModal = ref(false)
 
 const allLogs = computed(() => {
+  // 不做任何合并去重：运行日志与账号日志按时间顺序平铺，重复条目也各自独立显示
   const merged = [
     ...(statusLogs.value || []).map((log: any) => normalizeRuntimeLog(log)),
     ...(statusAccountLogs.value || []).map((log: any) => normalizeRuntimeLog(log, true)),
   ]
-  const unique = new Map<string, RuntimeLogEntry>()
-  for (const log of merged)
-    unique.set(log.id, log)
-  return [...unique.values()].sort((a, b) => a.ts - b.ts)
+  return merged.sort((a, b) => a.ts - b.ts)
 })
 
 const filteredLogs = computed(() => allLogs.value.filter((log) => {
@@ -945,8 +943,8 @@ useIntervalFn(updateCountdowns, 1000)
               </div>
             </div>
             <div
-              v-for="log in visibleLogs"
-              :key="log.id"
+              v-for="(log, logIndex) in visibleLogs"
+              :key="`${log.id}-${logIndex}`"
               class="grid grid-cols-1 mb-0.5 gap-x-2 gap-y-1 border rounded-md px-2.5 py-1.5 transition-colors sm:grid-cols-[auto_1fr] sm:gap-y-0"
               :class="getLogRowClass(log)"
             >
