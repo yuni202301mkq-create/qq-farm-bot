@@ -88,9 +88,29 @@ export const useStatusStore = defineStore('status', () => {
     return /\b(?:ACE|TSDK)\b/i.test(text)
   }
 
+  function getLogIdentity(entry: any, source: 'runtime' | 'account') {
+    if (entry?.logId)
+      return String(entry.logId)
+    const ts = Number(entry?.ts) || Date.parse(String(entry?.time || '').replace(' ', 'T')) || 0
+    return [source, entry?.accountId || entry?.id || '', ts, entry?.action || '', entry?.tag || '', entry?.msg || ''].join('|')
+  }
+
+  function uniqueLogs(list: any[], source: 'runtime' | 'account') {
+    const seen = new Set<string>()
+    return list.filter((entry) => {
+      const identity = getLogIdentity(entry, source)
+      if (seen.has(identity))
+        return false
+      seen.add(identity)
+      return true
+    })
+  }
+
   function pushRealtimeLog(entry: any) {
     const next = normalizeLogEntry(entry)
     if (shouldHideLogEntryInFrontend(next))
+      return
+    if (logs.value.some(item => getLogIdentity(item, 'runtime') === getLogIdentity(next, 'runtime')))
       return
     logs.value.push(next)
     if (logs.value.length > 1000)
@@ -101,9 +121,11 @@ export const useStatusStore = defineStore('status', () => {
     const next = (entry && typeof entry === 'object') ? entry : {}
     if (shouldHideLogEntryInFrontend(next))
       return
+    if (accountLogs.value.some(item => getLogIdentity(item, 'account') === getLogIdentity(next, 'account')))
+      return
     accountLogs.value.push(next)
-    if (accountLogs.value.length > 1000)
-      accountLogs.value = accountLogs.value.slice(-1000)
+    if (accountLogs.value.length > 300)
+      accountLogs.value = accountLogs.value.slice(-300)
   }
 
   function handleRealtimeStatus(payload: any) {
@@ -146,39 +168,19 @@ export const useStatusStore = defineStore('status', () => {
     if (currentRealtimeAccountId.value && accountId && accountId !== 'all' && accountId !== currentRealtimeAccountId.value)
       return
     const list = Array.isArray(body.logs) ? body.logs : []
-    const incoming = list
+    logs.value = uniqueLogs(list, 'runtime')
       .map((item: any) => normalizeLogEntry(item))
       .filter((item: any) => !shouldHideLogEntryInFrontend(item))
-    // 不做本地缓存与合并去重：快照到达时整体替换，面板始终展示服务端当前的实时日志
-    // （服务端仅保留最近 24 小时，过期的旧日志不应在本地残留）。
-    // 只显示当前选中账号：未选中账号时不展示任何合并日志。
-    const scopeId = currentRealtimeAccountId.value || ''
-    if (!scopeId) {
-      logs.value = []
-      return
-    }
-    const scoped = accountId === 'all'
-      ? incoming.filter((item: any) => String(item.accountId || item.id || '') === scopeId)
-      : incoming
-    // 防御：更小的快照不要覆盖已经积累的更长列表（否则刷新得到的长列表过几秒
-    // 被服务端回推的快照截短成几十条）。仅在清空(reset)、当前为空、或快照更长时才替换。
-    if (body.reset || logs.value.length === 0 || scoped.length >= logs.value.length)
-      logs.value = scoped
   }
 
   function handleRealtimeAccountLogsSnapshot(payload: any) {
     const body = (payload && typeof payload === 'object') ? payload : {}
     const list = Array.isArray(body.logs) ? body.logs : []
-    const incoming = list
-      .filter((item: any) => !shouldHideLogEntryInFrontend(item))
-    // 不做本地缓存与合并去重：快照到达时整体替换，与运行日志同策略；
-    // 多账号只显示当前选中账号的条目，未选中账号时置空
-    const scopeId = currentRealtimeAccountId.value || ''
-    const scoped = scopeId
-      ? incoming.filter((item: any) => String(item.accountId || item.id || '') === scopeId)
-      : []
-    if (body.reset || accountLogs.value.length === 0 || scoped.length >= accountLogs.value.length)
-      accountLogs.value = scoped
+    accountLogs.value = uniqueLogs(currentRealtimeAccountId.value
+      ? list
+          .filter((item: any) => String(item?.accountId || item?.id || '') === currentRealtimeAccountId.value)
+          .filter((item: any) => !shouldHideLogEntryInFrontend(item))
+      : list.filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
   }
 
   function ensureRealtimeSocket() {
@@ -320,12 +322,14 @@ export const useStatusStore = defineStore('status', () => {
       if (requestedId && requestedId !== 'all' && !isCurrentAccount(requestedId))
         return
       if (data.ok) {
-        // 不做本地缓存与合并去重：HTTP 拉取整体替换，只展示服务端返回的当前账号日志
-        logs.value = Array.isArray(data.data)
-          ? data.data
+        const fetchedLogs = Array.isArray(data.data)
+          ? uniqueLogs(data.data
               .map((item: any) => normalizeLogEntry(item))
-              .filter((item: any) => !shouldHideLogEntryInFrontend(item))
+              .filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'runtime')
           : []
+        logs.value = realtimeConnected.value
+          ? uniqueLogs([...logs.value, ...fetchedLogs], 'runtime').slice(-1000)
+          : fetchedLogs
         error.value = ''
       }
     }
@@ -363,12 +367,14 @@ export const useStatusStore = defineStore('status', () => {
       if (Array.isArray(res.data)) {
         if (requestedId && !isCurrentAccount(requestedId))
           return
-        // 不做本地缓存与合并去重：整体替换，未选中账号时置空
-        accountLogs.value = !requestedId
-          ? []
-          : res.data
+        const fetchedAccountLogs = uniqueLogs(requestedId
+          ? res.data
               .filter((item: any) => String(item?.accountId || item?.id || '') === requestedId)
               .filter((item: any) => !shouldHideLogEntryInFrontend(item))
+          : res.data.filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
+        accountLogs.value = realtimeConnected.value
+          ? uniqueLogs([...accountLogs.value, ...fetchedAccountLogs], 'account').slice(-300)
+          : fetchedAccountLogs
       }
     }
     catch (e) {

@@ -17,7 +17,6 @@ function createWorkerManager(deps) {
         globalLogs,
         log,
         addAccountLog,
-        trimExpiredLogs,
         normalizeStatusForPanel,
         buildConfigSnapshotForAccount,
         getOfflineAutoDeleteMs,
@@ -554,10 +553,10 @@ function createWorkerManager(deps) {
                 } ${  JSON.stringify(entry.meta || {})}`).toLowerCase();
 
             wrk.logs.push(entry);
-            trimExpiredLogs(wrk.logs);
+            if (wrk.logs.length > 1000) wrk.logs.shift();
 
             globalLogs.push(entry);
-            trimExpiredLogs(globalLogs);
+            if (globalLogs.length > 2000) globalLogs.shift();
 
             if (typeof onWorkerLog === 'function') {
                 onWorkerLog(entry, accountId, wrk.name);
