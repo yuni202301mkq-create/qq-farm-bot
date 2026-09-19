@@ -821,11 +821,13 @@ function startAdminServer(dataProvider) {
         : "";
     const token = socket.data.adminToken;
     const session = token ? getAdminSession(token) : null;
+    const hasElevatedRole = !!session && hasElevatedAdminRole(session);
 
-    if (accountId && session && !hasElevatedAdminRole(session)) {
-      const accounts = getAccountsForUser();
+    if (accountId && !hasElevatedRole) {
+      // 会话缺失（token 有效但会话已失效）时一律拒绝，防止越权订阅他人账号
+      const accounts = session ? getAccountsForUser() : [];
       const account = accounts.find((item) => item.id === accountId);
-      if (!account || account.username !== session.username) {
+      if (!session || !account || account.username !== session.username) {
         socket.emit("subscribed", {
           accountId: "all",
           error: "无权访问此账号",
@@ -840,7 +842,7 @@ function startAdminServer(dataProvider) {
     if (accountId) {
       socket.join(`account:${  accountId}`);
       socket.data.accountId = accountId;
-    } else if (session && !hasElevatedAdminRole(session)) {
+    } else if (!hasElevatedRole) {
       // 普通用户：全局订阅只覆盖自己的账号，避免收到其他用户的数据
       joinOwnAccountRooms(socket, session);
     } else {
@@ -873,6 +875,9 @@ function startAdminServer(dataProvider) {
         if (socketUser) {
           // adminOnly 的日志（如「已加载系统配置」里的 serverUrl）只对管理员可见
           logs = filterLogsForUser(logs, socketUser);
+        } else if (!subscribedAccountId) {
+          // 未指定账号（全局视图）且会话缺失：无法确认可见范围，不下发任何日志
+          logs = [];
         }
         socket.emit("logs:snapshot", {
           accountId: subscribedAccountId || "all",

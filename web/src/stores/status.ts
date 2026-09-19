@@ -171,9 +171,14 @@ export const useStatusStore = defineStore('status', () => {
       .map((item: any) => normalizeLogEntry(item))
       .filter((item: any) => !shouldHideLogEntryInFrontend(item))
     // 不做本地缓存：快照到达时整体替换，面板始终展示服务端当前的实时日志
-    // （服务端仅保留最近 24 小时，过期的旧日志不应在本地残留）
+    // （服务端仅保留最近 24 小时，过期的旧日志不应在本地残留）。
+    // 只显示当前选中账号：未选中账号时不展示任何合并日志。
     const scopeId = currentRealtimeAccountId.value || ''
-    logs.value = scopeId && accountId === 'all'
+    if (!scopeId) {
+      logs.value = []
+      return
+    }
+    logs.value = accountId === 'all'
       ? incoming.filter((item: any) => String(item.accountId || item.id || '') === scopeId)
       : incoming
   }
@@ -183,8 +188,12 @@ export const useStatusStore = defineStore('status', () => {
     const list = Array.isArray(body.logs) ? body.logs : []
     const incoming = uniqueLogs(list
       .filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
-    // 不做本地缓存：快照到达时整体替换，与运行日志同策略
-    accountLogs.value = incoming
+    // 不做本地缓存：快照到达时整体替换，与运行日志同策略；
+    // 多账号只显示当前选中账号的条目，未选中账号时置空
+    const scopeId = currentRealtimeAccountId.value || ''
+    accountLogs.value = scopeId
+      ? incoming.filter((item: any) => String(item.accountId || item.id || '') === scopeId)
+      : []
   }
 
   function ensureRealtimeSocket() {
@@ -233,7 +242,14 @@ export const useStatusStore = defineStore('status', () => {
   }
 
   function connectRealtime(accountId: string) {
-    currentRealtimeAccountId.value = String(accountId || '').trim()
+    const nextAccountId = String(accountId || '').trim()
+    // 未选择账号时不做全局订阅：多账号下面板只跟随当前选中的账号，
+    // 避免订阅 'all' 把所有账号（或他人的）日志合并推送进来
+    if (!nextAccountId) {
+      disconnectRealtime()
+      return
+    }
+    currentRealtimeAccountId.value = nextAccountId
     if (!tokenRef.value)
       return
 
@@ -362,12 +378,13 @@ export const useStatusStore = defineStore('status', () => {
       if (Array.isArray(res.data)) {
         if (requestedId && !isCurrentAccount(requestedId))
           return
-        // 不做本地缓存：整体替换，与运行日志同策略
-        accountLogs.value = uniqueLogs(requestedId
-          ? res.data
+        // 不做本地缓存：整体替换，与运行日志同策略；
+        // 多账号只显示当前选中账号的条目，未选中账号时置空
+        accountLogs.value = !requestedId
+          ? []
+          : uniqueLogs(res.data
               .filter((item: any) => String(item?.accountId || item?.id || '') === requestedId)
-              .filter((item: any) => !shouldHideLogEntryInFrontend(item))
-          : res.data.filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
+              .filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
       }
     }
     catch (e) {
