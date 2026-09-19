@@ -84,7 +84,6 @@ function handleEnterSubmit() {
 }
 
 // ============ 更新日志 ============
-const DEFAULT_CHANGELOG_VERSION = 'V2.5.4'
 
 const showUpdateLog = ref(false)
 const changelogContent = ref('')
@@ -158,6 +157,9 @@ function onResetSuccess(resetUsername: string) {
 }
 
 onMounted(() => {
+  // 进页面就预拉更新日志：右下角按钮要显示真实最新版本号，
+  // 等用户点击才拉会一直显示无版本兜底（曾经硬编码过时的 V2.5.4）
+  loadChangelog()
   // 更新日志弹窗已移至登录成功后的主界面（DefaultLayout）自动弹出；登录页仅保留手动查看入口
   // 分享链接 /login?mode=forgot 直接唤起找回弹窗，页面本身仍按登录态呈现
   if (String(route.query.mode) === 'forgot')
@@ -580,7 +582,7 @@ async function submit() {
             @click="openUpdateLog"
           >
             <span class="i-carbon-time" />
-            <span>更新日志 · {{ changelogVersion || DEFAULT_CHANGELOG_VERSION }}</span>
+            <span>更新日志<span v-if="changelogVersion"> · {{ changelogVersion }}</span></span>
           </button>
           <div class="form-side__build">
             游戏版本 1.14.0.4_20260911
