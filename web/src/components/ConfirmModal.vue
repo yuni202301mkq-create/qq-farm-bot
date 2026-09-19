@@ -124,7 +124,8 @@ function confirm() {
 .confirm-modal-overlay {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  /* 高于底部 tab 栏（z-80）与更多卡片（z-100），低于更新日志弹窗（z-1100） */
+  z-index: 200;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -238,10 +239,6 @@ function confirm() {
 }
 
 @media (max-width: 480px) {
-  .confirm-modal-overlay {
-    align-items: flex-end;
-  }
-
   .confirm-modal {
     padding: 24px 22px 22px;
   }

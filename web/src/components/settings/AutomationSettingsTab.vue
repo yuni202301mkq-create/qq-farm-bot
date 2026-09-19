@@ -204,74 +204,74 @@ watch(() => props.currentAccountId, loadQixiFriends)
       <!-- Teleport 到 body：玻璃卡 backdrop-filter 会困住 fixed 弹窗 -->
       <Teleport to="body">
         <Transition name="fade">
-        <div v-if="mysteryShopSettingsVisible" class="fixed inset-0 z-50 grid items-start justify-items-center overflow-y-auto bg-gray-950/45 p-4 backdrop-blur-[2px]" @click.self="mysteryShopSettingsVisible = false">
-          <div class="my-auto max-h-[calc(100dvh-2rem)] max-w-lg w-full overflow-y-auto border border-gray-200 rounded-2xl bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
-            <div class="flex items-start justify-between border-b border-gray-100 px-6 py-5 dark:border-gray-700">
-              <div>
-                <div class="flex items-center gap-2">
-                  <span class="inline-grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
-                    <span class="i-carbon-store text-lg" />
-                  </span>
-                  <h3 class="text-lg text-gray-900 font-semibold dark:text-gray-100">
-                    神秘商人自动购买
-                  </h3>
+          <div v-if="mysteryShopSettingsVisible" class="fixed inset-0 z-[200] grid items-start justify-items-center overflow-y-auto bg-gray-950/45 p-4 backdrop-blur-[2px]" @click.self="mysteryShopSettingsVisible = false">
+            <div class="my-auto max-h-[calc(100dvh-2rem)] max-w-lg w-full overflow-y-auto border border-gray-200 rounded-2xl bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
+              <div class="flex items-start justify-between border-b border-gray-100 px-6 py-5 dark:border-gray-700">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="inline-grid h-8 w-8 place-items-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300">
+                      <span class="i-carbon-store text-lg" />
+                    </span>
+                    <h3 class="text-lg text-gray-900 font-semibold dark:text-gray-100">
+                      神秘商人自动购买
+                    </h3>
+                  </div>
+                  <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    选择自动购买时可以使用的货币。
+                  </p>
                 </div>
-                <p class="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                  选择自动购买时可以使用的货币。
-                </p>
+                <button class="inline-grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200" type="button" aria-label="关闭" @click="mysteryShopSettingsVisible = false">
+                  <span class="i-carbon-close text-xl" />
+                </button>
               </div>
-              <button class="inline-grid h-8 w-8 shrink-0 place-items-center rounded-lg text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-gray-700 dark:hover:text-gray-200" type="button" aria-label="关闭" @click="mysteryShopSettingsVisible = false">
-                <span class="i-carbon-close text-xl" />
-              </button>
-            </div>
-            <div class="px-6 py-5 space-y-2">
-              <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
-                <div class="min-w-0 flex items-center gap-3">
-                  <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-yellow-50 text-yellow-600 dark:bg-yellow-900/25 dark:text-yellow-300"><span class="i-carbon-currency-dollar text-lg" /></span>
-                  <div>
-                    <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
-                      金币
-                    </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      允许使用金币自动购买
+              <div class="px-6 py-5 space-y-2">
+                <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
+                  <div class="min-w-0 flex items-center gap-3">
+                    <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-yellow-50 text-yellow-600 dark:bg-yellow-900/25 dark:text-yellow-300"><span class="i-carbon-currency-dollar text-lg" /></span>
+                    <div>
+                      <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
+                        金币
+                      </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        允许使用金币自动购买
+                      </div>
                     </div>
                   </div>
+                  <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold" />
                 </div>
-                <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold" />
-              </div>
-              <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
-                <div class="min-w-0 flex items-center gap-3">
-                  <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-300"><span class="i-carbon-ticket text-lg" /></span>
-                  <div>
-                    <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
-                      点券
-                    </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      允许使用点券自动购买
+                <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
+                  <div class="min-w-0 flex items-center gap-3">
+                    <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-900/25 dark:text-blue-300"><span class="i-carbon-ticket text-lg" /></span>
+                    <div>
+                      <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
+                        点券
+                      </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        允许使用点券自动购买
+                      </div>
                     </div>
                   </div>
+                  <BaseSwitch v-model="settings.automation.mystery_shop_allow_coupon" />
                 </div>
-                <BaseSwitch v-model="settings.automation.mystery_shop_allow_coupon" />
-              </div>
-              <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
-                <div class="min-w-0 flex items-center gap-3">
-                  <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300"><span class="i-carbon-crop-health text-lg" /></span>
-                  <div>
-                    <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
-                      金豆豆
-                    </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-                      允许使用金豆豆自动购买
+                <div class="flex items-center justify-between gap-4 border border-gray-200 rounded-xl px-4 py-3 dark:border-gray-700">
+                  <div class="min-w-0 flex items-center gap-3">
+                    <span class="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-900/25 dark:text-emerald-300"><span class="i-carbon-crop-health text-lg" /></span>
+                    <div>
+                      <div class="text-sm text-gray-800 font-medium dark:text-gray-100">
+                        金豆豆
+                      </div><div class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        允许使用金豆豆自动购买
+                      </div>
                     </div>
                   </div>
+                  <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold_bean" />
                 </div>
-                <BaseSwitch v-model="settings.automation.mystery_shop_allow_gold_bean" />
               </div>
-            </div>
-            <div class="flex justify-end border-t border-gray-100 bg-gray-50/70 px-6 py-4 dark:border-gray-700 dark:bg-gray-900/20">
-              <BaseButton class="min-w-24" size="sm" @click="mysteryShopSettingsVisible = false">
-                完成
-              </BaseButton>
+              <div class="flex justify-end border-t border-gray-100 bg-gray-50/70 px-6 py-4 dark:border-gray-700 dark:bg-gray-900/20">
+                <BaseButton class="min-w-24" size="sm" @click="mysteryShopSettingsVisible = false">
+                  完成
+                </BaseButton>
+              </div>
             </div>
           </div>
-        </div>
         </Transition>
       </Teleport>
 
