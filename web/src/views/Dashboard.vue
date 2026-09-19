@@ -556,9 +556,10 @@ async function refresh() {
   if (!account)
     return
 
-  // 断线回退时走 HTTP 拉状态；日志由 pollLogs 每 5 秒整列表轮询
-  if (!realtimeConnected.value)
-    await statusStore.fetchStatus(currentAccountId.value)
+  // 状态无条件走 HTTP 拉一次：切换账号/进入页面时 socket 可能已被侧栏心跳
+  // 订阅到同一账号而跳过重新 subscribe，服务端不会主动推 status:update，
+  // 只依赖推送会让状态卡在「检查中」（尤其已停止的账号没有周期推送）。
+  await statusStore.fetchStatus(currentAccountId.value)
 
   // 仅在账号运行且连接稳定后再拉背包，避免启动阶段出现 500。
   await refreshBag()

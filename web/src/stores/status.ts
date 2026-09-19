@@ -254,6 +254,7 @@ export const useStatusStore = defineStore('status', () => {
       if (subscribedAccountId.value === currentRealtimeAccountId.value)
         return
       client.emit('subscribe', { accountId: currentRealtimeAccountId.value || 'all' })
+      subscribedAccountId.value = currentRealtimeAccountId.value
       return
     }
     client.connect()
