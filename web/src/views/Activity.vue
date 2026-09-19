@@ -216,7 +216,7 @@ const activityCards = computed(() => {
           : '暂未适配详情',
       icon: {
         '': 'i-carbon-calendar',
-        'pet-diary': 'i-fa-solid-paw',
+        'pet-diary': 'i-fas-paw',
         'charity-flower': 'i-carbon-favorite',
         'rain-poem': 'i-carbon-rain-heavy',
       }[adaptedKey || ''] || 'i-carbon-calendar',

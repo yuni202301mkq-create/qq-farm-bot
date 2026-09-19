@@ -25,7 +25,6 @@ const defaultLoginPageConfig: LoginPageConfig = {
 }
 
 export const useAppStore = defineStore('app', () => {
-  const sidebarOpen = ref(false)
   const currentTheme = ref<Theme>((localStorage.getItem(THEME_KEY) as Theme) || 'light-blue')
   const showThemePanel = ref(false)
   const loginPageConfig = ref<LoginPageConfig>({ ...defaultLoginPageConfig })
@@ -123,18 +122,6 @@ export const useAppStore = defineStore('app', () => {
     },
   }
 
-  function toggleSidebar() {
-    sidebarOpen.value = !sidebarOpen.value
-  }
-
-  function closeSidebar() {
-    sidebarOpen.value = false
-  }
-
-  function openSidebar() {
-    sidebarOpen.value = true
-  }
-
   async function fetchTheme() {
     try {
       const res = await api.get('/api/settings')
@@ -212,7 +199,6 @@ export const useAppStore = defineStore('app', () => {
   applyTheme(currentTheme.value)
 
   return {
-    sidebarOpen,
     isDark,
     currentTheme,
     showThemePanel,
@@ -221,9 +207,6 @@ export const useAppStore = defineStore('app', () => {
     applyTheme,
     toggleThemePanel,
     toggleDark,
-    toggleSidebar,
-    closeSidebar,
-    openSidebar,
     fetchTheme,
     fetchLoginPageConfig,
   }

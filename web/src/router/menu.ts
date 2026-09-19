@@ -45,7 +45,7 @@ export const menuRoutes: MenuItem[] = [
     path: 'pet',
     name: 'pet',
     label: '宠物',
-    icon: 'i-fa-solid-paw',
+    icon: 'i-fas-paw',
     component: () => import('@/views/Pet.vue'),
   },
   {
@@ -82,5 +82,14 @@ export const menuRoutes: MenuItem[] = [
     label: '设置',
     icon: 'i-carbon-settings',
     component: () => import('@/views/Settings.vue'),
+  },
+  {
+    path: 'changelog',
+    name: 'changelog',
+    label: '更新日志',
+    icon: 'i-carbon-catalog',
+    component: () => import('@/views/UpdateLog.vue'),
+    // 移动端从底部导航「更多」卡片进入，不占用桌面侧栏与底部 tab
+    showInNav: false,
   },
 ]

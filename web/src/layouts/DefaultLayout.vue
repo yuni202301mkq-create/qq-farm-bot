@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import axios from 'axios'
 import { storeToRefs } from 'pinia'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import BottomTabBar from '@/components/BottomTabBar.vue'
 import UpdateLogModal from '@/components/login/UpdateLogModal.vue'
 import MysteryMerchantBanner from '@/components/shop/MysteryMerchantBanner.vue'
 import Sidebar from '@/components/Sidebar.vue'
 import TopAccountMenu from '@/components/TopAccountMenu.vue'
-import { useAppStore } from '@/stores/app'
 import { useMemorialDay } from '@/composables/useMemorialDay'
+import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
-const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
+const { loginPageConfig } = storeToRefs(appStore)
 const { memorialText } = useMemorialDay()
 
 // ============ 更新日志：登录成功进入主界面后自动弹出一次 ============
@@ -50,33 +51,16 @@ onMounted(() => {
   showUpdateLog.value = true
   loadChangelog(true)
 })
-
-onUnmounted(() => {
-  // 清理逻辑
-})
 </script>
 
 <template>
   <div class="w-screen flex overflow-hidden bg-gray-50 dark:bg-gray-900" style="height: 100dvh;">
-    <!-- Mobile Sidebar Overlay -->
-    <div
-      v-if="sidebarOpen"
-      class="fixed inset-0 z-40 bg-gray-950/55 backdrop-blur-md transition-opacity lg:hidden"
-      @click="appStore.closeSidebar"
-    />
-
     <Sidebar />
 
     <main class="relative h-full min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden">
       <header class="glass-panel relative z-30 mx-2 mt-2 h-16 flex shrink-0 items-center justify-between rounded-lg px-3 md:mx-4 md:mt-4 md:px-5">
         <div class="min-w-0 flex items-center gap-2 sm:gap-3">
-          <button
-            class="h-10 w-10 flex shrink-0 items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-            @click="appStore.toggleSidebar"
-          >
-            <div class="i-carbon-menu text-xl" />
-          </button>
-          <div class="flex min-w-0 items-center gap-2 sm:gap-2.5">
+          <div class="min-w-0 flex items-center gap-2 sm:gap-2.5">
             <div
               class="h-8 w-8 flex flex-none items-center justify-center rounded-xl text-white shadow-md sm:h-9 sm:w-9"
               style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #f97316 100%); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);"
@@ -101,7 +85,7 @@ onUnmounted(() => {
       <!-- Main Content Area -->
       <div class="min-h-0 flex flex-1 flex-col overflow-hidden">
         <MysteryMerchantBanner />
-        <div class="custom-scrollbar min-h-0 flex flex-1 flex-col overflow-y-auto p-3 pb-[calc(1rem+env(safe-area-inset-bottom))] md:p-6 sm:p-4 md:pb-6 sm:pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div class="custom-scrollbar min-h-0 flex flex-1 flex-col overflow-y-auto p-3 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 sm:p-4 lg:pb-6 md:pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-[calc(5.25rem+env(safe-area-inset-bottom))]">
           <RouterView v-slot="{ Component, route }">
             <Transition name="slide-fade" mode="out-in">
               <component :is="Component" :key="route.path" />
@@ -111,10 +95,13 @@ onUnmounted(() => {
       </div>
     </main>
 
-    <!-- 更新日志弹窗：登录进入主界面后自动弹出 -->
+    <!-- 移动端底部导航：概览 / 个人 / 更多 / 活动 / 设置 -->
+    <BottomTabBar />
+    <!-- 更新日志弹窗：登录进入主界面后自动弹出，只展示最新一条，完整列表在「更多 → 更新日志」页面 -->
     <UpdateLogModal
       :show="showUpdateLog"
       :content="changelogContent"
+      latest-only
       :loading="changelogLoading"
       :error="changelogError"
       @close="showUpdateLog = false"

@@ -2,29 +2,28 @@
 import { useDateFormat, useIntervalFn, useNow } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import api from '@/api'
 
 import RenewCardModal from '@/components/RenewCardModal.vue'
 import { menuRoutes } from '@/router/menu'
-import { accountAvatarUrl } from '@/utils/avatar'
 import { useAccountStore } from '@/stores/account'
 import { useAppStore } from '@/stores/app'
 import { useShopStore } from '@/stores/shop'
 import { useStatusStore } from '@/stores/status'
 import { useUserStore } from '@/stores/user'
+import { accountAvatarUrl } from '@/utils/avatar'
 
 const accountStore = useAccountStore()
 const statusStore = useStatusStore()
 const appStore = useAppStore()
 const userStore = useUserStore()
 const shopStore = useShopStore()
-const route = useRoute()
 const router = useRouter()
 const { currentAccount, currentAccountId } = storeToRefs(accountStore)
 const { status, realtimeConnected } = storeToRefs(statusStore)
 const { mysteryOffer, mysteryOfferAccountId } = storeToRefs(shopStore)
-const { loginPageConfig, sidebarOpen } = storeToRefs(appStore)
+const { loginPageConfig } = storeToRefs(appStore)
 
 const wsErrorNotifiedAt = ref<Record<string, number>>({})
 
@@ -170,15 +169,6 @@ const hasActiveMysteryOffer = computed(() => {
 
 const version = __APP_VERSION__
 
-watch(
-  () => route.path,
-  () => {
-    // Close sidebar on route change (mobile only)
-    if (window.innerWidth < 1024)
-      appStore.closeSidebar()
-  },
-)
-
 const showThemeDropdown = ref(false)
 
 // ============ 侧栏账号卡：登录用户时长/额度/过期时间 + 续费与退出 ============
@@ -255,15 +245,15 @@ function handleLogout() {
 </script>
 
 <template>
+  <!-- 移动端导航已改为底部 tab 栏（BottomTabBar），侧栏仅桌面端展示 -->
   <aside
-    class="fixed inset-y-0 left-0 z-50 h-full w-72 flex flex-col border-r border-gray-200/60 p-3 transition-transform duration-300 lg:static lg:translate-x-0 dark:border-gray-700/60"
-    :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+    class="hidden h-full w-72 flex-none flex-col border-r border-gray-200/60 p-3 lg:static lg:flex dark:border-gray-700/60"
     :style="{ background: 'color-mix(in srgb, var(--surface-1) 90%, transparent)', color: 'var(--theme-text)' }"
   >
     <!-- Brand -->
     <div class="liquid-glass liquid-glass-static relative mb-3 flex-none rounded-2xl p-3">
       <div class="flex items-center justify-between">
-        <div class="flex min-w-0 items-center gap-3">
+        <div class="min-w-0 flex items-center gap-3">
           <div
             class="h-11 w-11 flex flex-none items-center justify-center rounded-2xl text-white shadow-lg"
             style="background: linear-gradient(135deg, #f472b6 0%, #a855f7 55%, #6366f1 100%); box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);"
@@ -276,13 +266,6 @@ function handleLogout() {
             </div>
           </div>
         </div>
-        <!-- Mobile Close Button -->
-        <button
-          class="h-10 w-10 flex flex-none items-center justify-center rounded-lg text-gray-500 transition lg:hidden hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
-          @click="appStore.closeSidebar"
-        >
-          <div class="i-carbon-close text-xl" />
-        </button>
       </div>
     </div>
 
@@ -292,7 +275,7 @@ function handleLogout() {
     <!-- 账号卡：登录用户时长/额度/过期时间 + 续费与退出 -->
     <div class="liquid-glass mb-3 flex-none rounded-2xl">
       <button
-        class="flex w-full items-center gap-2.5 p-3 text-left"
+        class="w-full flex items-center gap-2.5 p-3 text-left"
         :aria-expanded="showAccountCard"
         @click="showAccountCard = !showAccountCard"
       >
@@ -335,7 +318,7 @@ function handleLogout() {
 
       <div
         v-show="showAccountCard"
-        class="space-y-1.5 border-t px-3 pb-3 pt-2.5 text-xs"
+        class="border-t px-3 pb-3 pt-2.5 text-xs space-y-1.5"
         style="border-color: color-mix(in srgb, var(--theme-text) 10%, transparent);"
       >
         <div class="flex items-center justify-between">
@@ -355,9 +338,9 @@ function handleLogout() {
           <span class="truncate font-mono" style="color: var(--theme-text);">{{ expireAtText }}</span>
         </div>
 
-        <div class="space-y-1.5 pt-2">
+        <div class="pt-2 space-y-1.5">
           <button
-            class="flex w-full items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium transition hover:brightness-105"
+            class="w-full flex items-center justify-center gap-1.5 border rounded-lg py-2 text-sm font-medium transition hover:brightness-105"
             style="border-color: color-mix(in srgb, #f59e0b 45%, transparent); background: color-mix(in srgb, #f59e0b 12%, transparent); color: #f59e0b;"
             @click="showRenewModal = true"
           >
@@ -365,7 +348,7 @@ function handleLogout() {
             续费卡密/额度
           </button>
           <button
-            class="flex w-full items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium text-red-500 transition hover:brightness-105"
+            class="w-full flex items-center justify-center gap-1.5 border rounded-lg py-2 text-sm text-red-500 font-medium transition hover:brightness-105"
             style="border-color: color-mix(in srgb, #ef4444 40%, transparent); background: color-mix(in srgb, #ef4444 10%, transparent);"
             @click="handleLogout"
           >
