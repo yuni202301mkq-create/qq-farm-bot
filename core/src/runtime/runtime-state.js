@@ -34,6 +34,8 @@ function createRuntimeState(deps) {
     const ACCOUNT_LOGS_PER_ACCOUNT_CAP = 600;
     // 账号日志全局硬顶，防止账号数量极多时内存无限增长
     const ACCOUNT_LOGS_GLOBAL_CAP = 20000;
+    // 每日清理：每个账号每天（UTC+8 零点为界）清一次自己的日志
+    const accountLogWriteDay = new Map(); // accountId -> 最近一次写入时的日期 key
     const runtimeEvents = new EventEmitter();
     let nextLogSequence = 0;
 
@@ -41,6 +43,70 @@ function createRuntimeState(deps) {
         nextLogSequence = (nextLogSequence + 1) % Number.MAX_SAFE_INTEGER;
         return `${prefix}-${timestamp}-${nextLogSequence}`;
     }
+
+    // ==================== 账号日志每日清理 ====================
+
+    /** 时间戳 → UTC+8 日期 key（YYYY-MM-DD），与游戏日口径一致 */
+    function dayKeyFromTs(ts) {
+        const d = new Date((Number(ts) || 0) + 8 * 60 * 60 * 1000);
+        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+    }
+
+    /** 倒序删除列表里某账号的全部条目，返回删除数量 */
+    function removeAccountEntriesFromList(list, idStr) {
+        let removed = 0;
+        for (let i = list.length - 1; i >= 0; i--) {
+            if (String(list[i].accountId || '') === idStr) {
+                list.splice(i, 1);
+                removed += 1;
+            }
+        }
+        return removed;
+    }
+
+    /** 清掉某账号的全部日志（账号日志 + 运行日志中该账号的条目） */
+    function clearAccountLogsForDailyReset(idStr) {
+        const removedAccountLogs = removeAccountEntriesFromList(accountLogs, idStr);
+        const removedRuntimeLogs = removeAccountEntriesFromList(globalLogs, idStr);
+        if (removedAccountLogs + removedRuntimeLogs > 0) {
+            runtimeEvents.emit('account_logs_daily_cleared', {
+                accountId: idStr,
+                removedAccountLogs,
+                removedRuntimeLogs
+            });
+        }
+    }
+
+    /** 写入前检查：该账号跨天后的第一条日志，先把昨天的日志清掉 */
+    function maybeDailyClearForAccount(idStr) {
+        if (!idStr) return;
+        const today = dayKeyFromTs(Date.now());
+        if (accountLogWriteDay.get(idStr) === today) return;
+        accountLogWriteDay.set(idStr, today);
+        // 重启后内存本就为空，此时等于无操作；跨天时则清掉昨天残留的日志
+        clearAccountLogsForDailyReset(idStr);
+    }
+
+    /** 兜底巡检：长时间没再写日志的账号，跨天后由定时器清理（每 5 分钟一次） */
+    function sweepStaleAccountLogs() {
+        const today = dayKeyFromTs(Date.now());
+        const newestDay = new Map(); // accountId -> 最新一条日志的日期（列表按时间正序，倒序首个即最新）
+        const scan = (list) => {
+            for (let i = list.length - 1; i >= 0; i--) {
+                const entry = list[i];
+                const id = String(entry.accountId || '');
+                if (!id || newestDay.has(id)) continue;
+                newestDay.set(id, dayKeyFromTs(Number(entry.ts) || 0));
+            }
+        };
+        scan(accountLogs);
+        scan(globalLogs);
+        for (const [id, day] of newestDay) {
+            if (day && day !== today) clearAccountLogsForDailyReset(id);
+        }
+    }
+    const logDailySweepTimer = setInterval(sweepStaleAccountLogs, 5 * 60 * 1000);
+    if (typeof logDailySweepTimer.unref === 'function') logDailySweepTimer.unref();
 
     let configRevision = Date.now();
     const moduleLogger = createModuleLogger('runtime');
@@ -104,6 +170,9 @@ function createRuntimeState(deps) {
         };
         entry._searchText = (`${entry.msg || ''  } ${  entry.tag || ''  } ${  JSON.stringify(entry.meta || {})}`).toLowerCase();
 
+        // 该账号当天第一条运行日志：先清掉昨天的日志再写入
+        maybeDailyClearForAccount(String(accountId || ''));
+
         globalLogs.push(entry);
         if (globalLogs.length > 2000) globalLogs.shift();
         runtimeEvents.emit('log', entry);
@@ -129,6 +198,9 @@ function createRuntimeState(deps) {
             accountName: accountName || '',
             ...meta
         };
+        // 该账号当天第一条账号日志：先清掉昨天的日志再写入
+        maybeDailyClearForAccount(String(entry.accountId || ''));
+
         accountLogs.push(entry);
 
         // 每个账号各自保留最近 ACCOUNT_LOGS_PER_ACCOUNT_CAP 条：
