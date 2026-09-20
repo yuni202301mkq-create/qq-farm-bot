@@ -15,7 +15,7 @@ import { useStatusStore } from '@/stores/status'
 import { useToastStore } from '@/stores/toast'
 import { useUserStore } from '@/stores/user'
 import { formatCouponAmount, formatGoldAmount, formatGoldBeanAmount } from '@/utils/number-format'
-import { matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
+import { compactRuntimeLogs, matchesRuntimeLog, normalizeRuntimeLog } from '@/utils/runtime-log'
 
 const statusStore = useStatusStore()
 const accountStore = useAccountStore()
@@ -111,8 +111,7 @@ const filteredLogs = computed(() => allLogs.value.filter((log) => {
   return matchesRuntimeLog(log, filter)
 }))
 
-// 日志显示照 QQ-farm-BOT-GO 版：服务端给什么显示什么，平铺、不折叠、不去重
-const visibleLogs = computed(() => filteredLogs.value)
+const visibleLogs = computed(() => compactRuntimeLogs(filteredLogs.value))
 
 const modules = [
   { label: '全部模块', value: '' },
@@ -538,17 +537,7 @@ async function refreshIllustratedLevels() {
   }
 }
 
-// 运行日志照 QQ-farm-BOT-GO 版：每 5 秒整列表轮询替换，不依赖实时推送
-async function pollLogs() {
-  if (!currentAccountId.value || refreshingLogs.value)
-    return
-  await Promise.all([
-    statusStore.fetchLogs(currentAccountId.value, { limit: 300 }),
-    statusStore.fetchAccountLogs(currentAccountId.value, 600),
-  ])
-}
-
-async function refresh() {
+async function refresh(forceReloadLogs = false) {
   if (!currentAccountId.value)
     return
 
@@ -560,6 +549,13 @@ async function refresh() {
   // 订阅到同一账号而跳过重新 subscribe，服务端不会主动推 status:update，
   // 只依赖推送会让状态卡在「检查中」（尤其已停止的账号没有周期推送）。
   await statusStore.fetchStatus(currentAccountId.value)
+
+  // 日志加载照上游原版：断线回退时走 HTTP；实时连接正常时优先依赖 WS 推送。
+  if (!realtimeConnected.value)
+    await statusStore.fetchAccountLogs(currentAccountId.value)
+
+  if (forceReloadLogs || !realtimeConnected.value)
+    await statusStore.fetchLogs(currentAccountId.value, { limit: 300 })
 
   // 仅在账号运行且连接稳定后再拉背包，避免启动阶段出现 500。
   await refreshBag()
@@ -587,8 +583,7 @@ watch(currentAccountId, async (newId, oldId) => {
     resetDashboardState()
   }
   syncRealtimeAccount()
-  await refresh()
-  await pollLogs()
+  await refresh(true)
   await refreshIllustratedLevels()
   scrollToBottom()
 })
@@ -627,9 +622,7 @@ async function clearLogs() {
     const { data } = await api.delete('/api/logs')
     if (data?.ok) {
       toastStore.success('日志已清空')
-      // 服务端已清空，客户端并集列表必须同步清掉，否则下次轮询会把旧日志合并回来
-      statusStore.clearClientLogs()
-      await pollLogs()
+      await refresh(true)
     }
     else {
       toastStore.error(`清空失败: ${data?.error || '未知错误'}`)
@@ -668,16 +661,13 @@ function scrollToBottom() {
 onMounted(async () => {
   statusStore.setRealtimeLogsEnabled(true)
   syncRealtimeAccount()
-  await refresh()
-  await pollLogs()
+  await refresh(true)
   await refreshIllustratedLevels()
   scrollToBottom()
 })
 
 // Auto refresh fallback every 10s (WS 断开或启用筛选时回退 HTTP)
 useIntervalFn(refresh, 10000)
-// 运行日志每 5 秒整列表轮询替换（照 QQ-farm-BOT-GO 版）
-useIntervalFn(pollLogs, 5000)
 // Countdown timer (every 1s)
 useIntervalFn(updateCountdowns, 1000)
 </script>
@@ -733,8 +723,8 @@ useIntervalFn(updateCountdowns, 1000)
       <div class="ui-card metric-card min-h-[168px] flex flex-col justify-between rounded-lg p-5">
         <!-- 金币/点券/钻石/金豆：四张独立小卡片；数值独占一行（与图标同行时窄卡放不下完整数字） -->
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
-            <div class="flex items-center gap-1.5">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 text-center dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center justify-center gap-1.5">
               <img src="/game-config/resource-icons/gold.png" alt="金币" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">金币</span>
             </div>
@@ -749,8 +739,8 @@ useIntervalFn(updateCountdowns, 1000)
               {{ (status?.sessionGoldGained || 0) > 0 ? '+' : '' }}{{ formatGoldAmount(status?.sessionGoldGained || 0) }}
             </div>
           </div>
-          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
-            <div class="flex items-center gap-1.5">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 text-center dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center justify-center gap-1.5">
               <img src="/game-config/resource-icons/coupon.png" alt="点券" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">点券</span>
             </div>
@@ -765,8 +755,8 @@ useIntervalFn(updateCountdowns, 1000)
               {{ (status?.sessionCouponGained || 0) > 0 ? '+' : '' }}{{ formatCouponAmount(status?.sessionCouponGained || 0) }}
             </div>
           </div>
-          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
-            <div class="flex items-center gap-1.5">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 text-center dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center justify-center gap-1.5">
               <img src="/game-config/resource-icons/diamond.png" alt="钻石" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">钻石</span>
             </div>
@@ -774,8 +764,8 @@ useIntervalFn(updateCountdowns, 1000)
               {{ formatCouponAmount(status?.status?.diamond || 0) }}
             </div>
           </div>
-          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
-            <div class="flex items-center gap-1.5">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 text-center dark:border-gray-700/60 dark:bg-gray-800/40">
+            <div class="flex items-center justify-center gap-1.5">
               <img src="/game-config/resource-icons/gold-bean.png" alt="金豆豆" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">金豆</span>
             </div>
@@ -838,9 +828,9 @@ useIntervalFn(updateCountdowns, 1000)
       </div>
 
       <div class="ui-card metric-card min-h-[168px] flex flex-col rounded-lg p-5">
-        <!-- 2×2 独立小卡片：格子高度有限（约 60px），横向排布（图标左、文字右）避免三行堆叠挤压 -->
-        <div class="grid grid-cols-2 flex-1 content-center gap-2 sm:gap-3">
-          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+        <!-- 2×2 独立小卡片：限制网格最大宽度避免格子被拉长，整体居中 -->
+        <div class="grid grid-cols-2 mx-auto max-w-[360px] w-full flex-1 content-center gap-2 sm:gap-3">
+          <div class="min-w-0 flex items-center justify-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/fertilizer-normal.png" alt="普通化肥" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">普通化肥</span>
@@ -849,7 +839,7 @@ useIntervalFn(updateCountdowns, 1000)
               </span>
             </div>
           </div>
-          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 flex items-center justify-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/fertilizer-organic.png" alt="有机化肥" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">有机化肥</span>
@@ -858,14 +848,14 @@ useIntervalFn(updateCountdowns, 1000)
               </span>
             </div>
           </div>
-          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 flex items-center justify-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/illustrated-crop.png" alt="作物图鉴" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">作物图鉴</span>
               <span class="truncate font-bold tabular-nums">Lv.{{ illustratedLevels.crop }}</span>
             </div>
           </div>
-          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 flex items-center justify-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/illustrated-mutant.png" alt="超变图鉴" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">超变图鉴</span>
@@ -884,9 +874,7 @@ useIntervalFn(updateCountdowns, 1000)
               <h3 class="flex items-center gap-2 text-lg font-medium">
                 <div class="i-carbon-document" />
                 <span>运行日志</span>
-                <!-- 计数用折叠前的原始条数：visibleLogs 是 2 分钟窗口折叠后的行数，
-                     补发旧日志合并折叠区时行数会不增反降（如 65→64），看起来像丢日志 -->
-                <span class="text-xs text-gray-400 font-normal">{{ filteredLogs.length }} 条</span>
+                <span class="text-xs text-gray-400 font-normal">{{ visibleLogs.length }} 条</span>
               </h3>
             </div>
 
@@ -968,6 +956,7 @@ useIntervalFn(updateCountdowns, 1000)
                   <span class="shrink-0 rounded px-1.5 py-0.5 text-xs font-bold" :class="getLogTagClass(log.tag)">{{ log.tag }}</span>
                   <span v-if="log.event && log.source !== 'account'" class="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-500 dark:bg-blue-900/20 dark:text-blue-400">{{ getEventLabel(log.event) }}</span>
                   <span class="min-w-0 break-words leading-5" :class="getLogMsgClass(log.tag)">{{ log.msg }}</span>
+                  <span v-if="(log.repeatCount || 1) > 1" class="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-600 font-medium dark:bg-gray-700 dark:text-gray-300">×{{ log.repeatCount }}</span>
                 </div>
               </div>
             </div>
