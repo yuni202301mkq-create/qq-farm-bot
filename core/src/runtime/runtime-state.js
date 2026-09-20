@@ -30,6 +30,10 @@ function createRuntimeState(deps) {
     const workers = {};
     const globalLogs = [];
     const accountLogs = [];
+    // 运行日志每个账号各自保留的条数（互不挤占），与账号日志配额一致
+    const RUNTIME_LOGS_PER_ACCOUNT_CAP = 600;
+    // 运行日志全局硬顶，防止账号数量极多时内存无限增长
+    const RUNTIME_LOGS_GLOBAL_CAP = 20000;
     // 账号日志每个账号各自保留的条数（互不挤占）
     const ACCOUNT_LOGS_PER_ACCOUNT_CAP = 600;
     // 账号日志全局硬顶，防止账号数量极多时内存无限增长
@@ -108,6 +112,32 @@ function createRuntimeState(deps) {
     const logDailySweepTimer = setInterval(sweepStaleAccountLogs, 5 * 60 * 1000);
     if (typeof logDailySweepTimer.unref === 'function') logDailySweepTimer.unref();
 
+    /** 从尾部往回数某账号的条目，第 cap+1 条（更旧的）删掉：多账号场景下各账号日志互不挤占 */
+    function trimListPerAccountFromTail(list, idStr, cap) {
+        if (list.length <= cap) return;
+        let seen = 0;
+        for (let i = list.length - 1; i >= 0; i--) {
+            if (String(list[i].accountId || '') !== idStr) continue;
+            seen += 1;
+            if (seen > cap) {
+                list.splice(i, 1);
+                break;
+            }
+        }
+    }
+
+    /**
+     * 运行日志入列。全局列表曾按 2000 条滑动窗口裁剪，多账号时活跃账号会把
+     * 其他账号的旧日志一条条顶出去，面板上的运行日志因此持续变少；
+     * 改为每个账号各自保留最近 RUNTIME_LOGS_PER_ACCOUNT_CAP 条，全局硬顶仅作内存兜底。
+     */
+    function pushRuntimeEntry(entry) {
+        globalLogs.push(entry);
+        const idStr = String(entry.accountId || '');
+        if (idStr) trimListPerAccountFromTail(globalLogs, idStr, RUNTIME_LOGS_PER_ACCOUNT_CAP);
+        while (globalLogs.length > RUNTIME_LOGS_GLOBAL_CAP) globalLogs.shift();
+    }
+
     let configRevision = Date.now();
     const moduleLogger = createModuleLogger('runtime');
 
@@ -173,8 +203,7 @@ function createRuntimeState(deps) {
         // 该账号当天第一条运行日志：先清掉昨天的日志再写入
         maybeDailyClearForAccount(String(accountId || ''));
 
-        globalLogs.push(entry);
-        if (globalLogs.length > 2000) globalLogs.shift();
+        pushRuntimeEntry(entry);
         runtimeEvents.emit('log', entry);
     }
 
@@ -203,21 +232,8 @@ function createRuntimeState(deps) {
 
         accountLogs.push(entry);
 
-        // 每个账号各自保留最近 ACCOUNT_LOGS_PER_ACCOUNT_CAP 条：
-        // 从尾部往回数该账号的条目，第 CAP+1 条（更旧的）删掉，
-        // 这样多账号场景下各账号日志互不挤占
-        if (accountLogs.length > ACCOUNT_LOGS_PER_ACCOUNT_CAP) {
-            const idStr = String(entry.accountId || '');
-            let seen = 0;
-            for (let i = accountLogs.length - 1; i >= 0; i--) {
-                if (String(accountLogs[i].accountId || '') !== idStr) continue;
-                seen += 1;
-                if (seen > ACCOUNT_LOGS_PER_ACCOUNT_CAP) {
-                    accountLogs.splice(i, 1);
-                    break;
-                }
-            }
-        }
+        // 每个账号各自保留最近 ACCOUNT_LOGS_PER_ACCOUNT_CAP 条：多账号场景下互不挤占
+        trimListPerAccountFromTail(accountLogs, String(entry.accountId || ''), ACCOUNT_LOGS_PER_ACCOUNT_CAP);
         while (accountLogs.length > ACCOUNT_LOGS_GLOBAL_CAP) accountLogs.shift();
 
         runtimeEvents.emit('account_log', entry);
@@ -350,6 +366,7 @@ function createRuntimeState(deps) {
         buildConfigSnapshotForAccount,
         log,
         addAccountLog,
+        pushRuntimeEntry,
         normalizeStatusForPanel,
         buildDefaultStatus,
         filterLogs

@@ -627,6 +627,8 @@ async function clearLogs() {
     const { data } = await api.delete('/api/logs')
     if (data?.ok) {
       toastStore.success('日志已清空')
+      // 服务端已清空，客户端并集列表必须同步清掉，否则下次轮询会把旧日志合并回来
+      statusStore.clearClientLogs()
       await pollLogs()
     }
     else {
@@ -689,12 +691,12 @@ useIntervalFn(updateCountdowns, 1000)
             <div class="i-fas-user-circle" />
             账号
           </div>
-          <div class="flex max-w-[62%] flex-wrap items-center justify-end gap-1.5">
+          <div class="max-w-[62%] flex flex-wrap items-center justify-end gap-1.5">
             <span class="shrink-0" :class="expiryBadgeClass">{{ expiryBadgeText }}</span>
             <button
               type="button"
               title="续费卡密"
-              class="shrink-0 rounded-lg bg-amber-500 px-2 py-0.5 text-xs font-medium text-white transition-colors hover:bg-amber-600"
+              class="shrink-0 rounded-lg bg-amber-500 px-2 py-0.5 text-xs text-white font-medium transition-colors hover:bg-amber-600"
               @click="showRenewModal = true"
             >
               续费
@@ -731,7 +733,7 @@ useIntervalFn(updateCountdowns, 1000)
       <div class="ui-card metric-card min-h-[168px] flex flex-col justify-between rounded-lg p-5">
         <!-- 金币/点券/钻石/金豆：四张独立小卡片；数值独占一行（与图标同行时窄卡放不下完整数字） -->
         <div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <div class="flex items-center gap-1.5">
               <img src="/game-config/resource-icons/gold.png" alt="金币" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">金币</span>
@@ -747,7 +749,7 @@ useIntervalFn(updateCountdowns, 1000)
               {{ (status?.sessionGoldGained || 0) > 0 ? '+' : '' }}{{ formatGoldAmount(status?.sessionGoldGained || 0) }}
             </div>
           </div>
-          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <div class="flex items-center gap-1.5">
               <img src="/game-config/resource-icons/coupon.png" alt="点券" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">点券</span>
@@ -763,7 +765,7 @@ useIntervalFn(updateCountdowns, 1000)
               {{ (status?.sessionCouponGained || 0) > 0 ? '+' : '' }}{{ formatCouponAmount(status?.sessionCouponGained || 0) }}
             </div>
           </div>
-          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <div class="flex items-center gap-1.5">
               <img src="/game-config/resource-icons/diamond.png" alt="钻石" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">钻石</span>
@@ -772,7 +774,7 @@ useIntervalFn(updateCountdowns, 1000)
               {{ formatCouponAmount(status?.status?.diamond || 0) }}
             </div>
           </div>
-          <div class="min-w-0 rounded-xl border border-gray-100 bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 border border-gray-100 rounded-xl bg-gray-50/70 px-2.5 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <div class="flex items-center gap-1.5">
               <img src="/game-config/resource-icons/gold-bean.png" alt="金豆豆" class="h-7 w-7 shrink-0 object-contain">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">金豆</span>
@@ -807,7 +809,7 @@ useIntervalFn(updateCountdowns, 1000)
             查看消费明细
           </span>
           <span
-            class="rounded-full px-1.5 py-0.5 text-[11px] leading-none font-medium"
+            class="rounded-full px-1.5 py-0.5 text-[11px] font-medium leading-none"
             :style="{
               color: 'var(--theme-primary)',
               backgroundColor: 'color-mix(in srgb, var(--theme-primary) 14%, transparent)',
@@ -837,8 +839,8 @@ useIntervalFn(updateCountdowns, 1000)
 
       <div class="ui-card metric-card min-h-[168px] flex flex-col rounded-lg p-5">
         <!-- 2×2 独立小卡片：格子高度有限（约 60px），横向排布（图标左、文字右）避免三行堆叠挤压 -->
-        <div class="grid flex-1 grid-cols-2 content-center gap-2 sm:gap-3">
-          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+        <div class="grid grid-cols-2 flex-1 content-center gap-2 sm:gap-3">
+          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/fertilizer-normal.png" alt="普通化肥" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">普通化肥</span>
@@ -847,7 +849,7 @@ useIntervalFn(updateCountdowns, 1000)
               </span>
             </div>
           </div>
-          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/fertilizer-organic.png" alt="有机化肥" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">有机化肥</span>
@@ -856,14 +858,14 @@ useIntervalFn(updateCountdowns, 1000)
               </span>
             </div>
           </div>
-          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/illustrated-crop.png" alt="作物图鉴" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">作物图鉴</span>
               <span class="truncate font-bold tabular-nums">Lv.{{ illustratedLevels.crop }}</span>
             </div>
           </div>
-          <div class="flex min-w-0 items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
+          <div class="min-w-0 flex items-center gap-2.5 border border-gray-100 rounded-xl bg-gray-50/70 px-3 py-2 dark:border-gray-700/60 dark:bg-gray-800/40">
             <img src="/game-config/resource-icons/illustrated-mutant.png" alt="超变图鉴" class="h-8 w-8 shrink-0 object-contain">
             <div class="min-w-0 flex flex-col">
               <span class="truncate text-xs text-gray-500 dark:text-gray-400">超变图鉴</span>
@@ -1064,11 +1066,11 @@ useIntervalFn(updateCountdowns, 1000)
             <div
               v-for="(val, key) in filteredOperations"
               :key="key"
-              class="group min-w-0 flex items-center justify-between rounded-xl border border-gray-200/60 bg-white/50 px-2 py-1.5 transition-all duration-200 hover:-translate-y-px hover:border-gray-300 hover:shadow-md dark:border-gray-700/50 dark:bg-gray-800/40 dark:hover:border-gray-600 2xl:px-2.5"
+              class="group min-w-0 flex items-center justify-between border border-gray-200/60 rounded-xl bg-white/50 px-2 py-1.5 transition-all duration-200 dark:border-gray-700/50 hover:border-gray-300 dark:bg-gray-800/40 2xl:px-2.5 hover:shadow-md hover:-translate-y-px dark:hover:border-gray-600"
             >
               <div class="min-w-0 flex items-center gap-2">
                 <span
-                  class="h-6 w-6 flex flex-none items-center justify-center rounded-lg transition-transform duration-200 group-hover:scale-110 2xl:h-7 2xl:w-7 2xl:text-base"
+                  class="h-6 w-6 flex flex-none items-center justify-center rounded-lg transition-transform duration-200 2xl:h-7 2xl:w-7 group-hover:scale-110 2xl:text-base"
                   :class="getOpBadge(key)"
                 >
                   <div class="text-sm 2xl:text-base" :class="[getOpIcon(key), getOpColor(key)]" />

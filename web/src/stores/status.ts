@@ -106,6 +106,35 @@ export const useStatusStore = defineStore('status', () => {
     })
   }
 
+  // 客户端聚合上限：超过后从最旧开始丢弃，防止长时间运行内存无限增长
+  const RUNTIME_LOG_CLIENT_CAP = 2000
+  const ACCOUNT_LOG_CLIENT_CAP = 1000
+
+  /** 与服务端一致的 UTC+8 日期 key（每日零点清理口径） */
+  function utc8DayKey(ts: number) {
+    const d = new Date((Number(ts) || 0) + 8 * 60 * 60 * 1000)
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+  }
+
+  /**
+   * 按身份合并日志：轮询/快照到达时与现有列表取并集，而不是整表替换。
+   * 服务端各缓冲是滑动窗口，整表替换会让面板日志随新日志到来一条条从
+   * 头部消失（表现为「日志一点一点变少」）；合并后单次会话内日志只增不减，
+   * 跨天条目按服务端每日清理口径过滤，超上限再从最旧丢弃。
+   */
+  function mergeLogsById(existing: any[], incoming: any[], source: 'runtime' | 'account', cap: number) {
+    const map = new Map<string, any>()
+    for (const item of existing || [])
+      map.set(getLogIdentity(item, source), item)
+    for (const item of incoming || [])
+      map.set(getLogIdentity(item, source), item)
+    const todayKey = utc8DayKey(Date.now())
+    return [...map.values()]
+      .filter(item => utc8DayKey(Number(item?.ts) || 0) === todayKey)
+      .sort((a, b) => (Number(a?.ts) || 0) - (Number(b?.ts) || 0))
+      .slice(-cap)
+  }
+
   function pushRealtimeLog(entry: any) {
     const next = normalizeLogEntry(entry)
     if (shouldHideLogEntryInFrontend(next))
@@ -113,8 +142,8 @@ export const useStatusStore = defineStore('status', () => {
     if (logs.value.some(item => getLogIdentity(item, 'runtime') === getLogIdentity(next, 'runtime')))
       return
     logs.value.push(next)
-    if (logs.value.length > 1000)
-      logs.value = logs.value.slice(-1000)
+    if (logs.value.length > RUNTIME_LOG_CLIENT_CAP)
+      logs.value = logs.value.slice(-RUNTIME_LOG_CLIENT_CAP)
   }
 
   function pushRealtimeAccountLog(entry: any) {
@@ -124,8 +153,8 @@ export const useStatusStore = defineStore('status', () => {
     if (accountLogs.value.some(item => getLogIdentity(item, 'account') === getLogIdentity(next, 'account')))
       return
     accountLogs.value.push(next)
-    if (accountLogs.value.length > 300)
-      accountLogs.value = accountLogs.value.slice(-300)
+    if (accountLogs.value.length > ACCOUNT_LOG_CLIENT_CAP)
+      accountLogs.value = accountLogs.value.slice(-ACCOUNT_LOG_CLIENT_CAP)
   }
 
   function handleRealtimeStatus(payload: any) {
@@ -168,19 +197,25 @@ export const useStatusStore = defineStore('status', () => {
     if (currentRealtimeAccountId.value && accountId && accountId !== 'all' && accountId !== currentRealtimeAccountId.value)
       return
     const list = Array.isArray(body.logs) ? body.logs : []
-    logs.value = uniqueLogs(list, 'runtime')
-      .map((item: any) => normalizeLogEntry(item))
-      .filter((item: any) => !shouldHideLogEntryInFrontend(item))
+    logs.value = mergeLogsById(
+      logs.value,
+      uniqueLogs(list, 'runtime')
+        .map((item: any) => normalizeLogEntry(item))
+        .filter((item: any) => !shouldHideLogEntryInFrontend(item)),
+      'runtime',
+      RUNTIME_LOG_CLIENT_CAP,
+    )
   }
 
   function handleRealtimeAccountLogsSnapshot(payload: any) {
     const body = (payload && typeof payload === 'object') ? payload : {}
     const list = Array.isArray(body.logs) ? body.logs : []
-    accountLogs.value = uniqueLogs(currentRealtimeAccountId.value
+    const incoming = currentRealtimeAccountId.value
       ? list
           .filter((item: any) => String(item?.accountId || item?.id || '') === currentRealtimeAccountId.value)
           .filter((item: any) => !shouldHideLogEntryInFrontend(item))
-      : list.filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
+      : list.filter((item: any) => !shouldHideLogEntryInFrontend(item))
+    accountLogs.value = mergeLogsById(accountLogs.value, uniqueLogs(incoming, 'account'), 'account', ACCOUNT_LOG_CLIENT_CAP)
   }
 
   function ensureRealtimeSocket() {
@@ -323,12 +358,13 @@ export const useStatusStore = defineStore('status', () => {
       if (requestedId && requestedId !== 'all' && !isCurrentAccount(requestedId))
         return
       if (data.ok) {
-        // 照 QQ-farm-BOT-GO 版：轮询拉取整列表替换，服务端给什么显示什么
-        logs.value = Array.isArray(data.data)
+        // 保留 5 秒轮询节奏，但与现有列表按 id 取并集，日志在单次会话内只增不减
+        const incoming = Array.isArray(data.data)
           ? data.data
               .map((item: any) => normalizeLogEntry(item))
               .filter((item: any) => !shouldHideLogEntryInFrontend(item))
           : []
+        logs.value = mergeLogsById(logs.value, incoming, 'runtime', RUNTIME_LOG_CLIENT_CAP)
         error.value = ''
       }
     }
@@ -366,12 +402,13 @@ export const useStatusStore = defineStore('status', () => {
       if (Array.isArray(res.data)) {
         if (requestedId && !isCurrentAccount(requestedId))
           return
-        // 照 QQ-farm-BOT-GO 版：整列表替换
-        accountLogs.value = uniqueLogs(requestedId
+        // 同运行日志：按 id 并集合并，整表替换会让旧日志一条条消失
+        const incoming = (requestedId
           ? res.data
               .filter((item: any) => String(item?.accountId || item?.id || '') === requestedId)
               .filter((item: any) => !shouldHideLogEntryInFrontend(item))
-          : res.data.filter((item: any) => !shouldHideLogEntryInFrontend(item)), 'account')
+          : res.data.filter((item: any) => !shouldHideLogEntryInFrontend(item)))
+        accountLogs.value = mergeLogsById(accountLogs.value, incoming, 'account', ACCOUNT_LOG_CLIENT_CAP)
       }
     }
     catch (e) {
@@ -381,6 +418,12 @@ export const useStatusStore = defineStore('status', () => {
 
   function setRealtimeLogsEnabled(enabled: boolean) {
     realtimeLogsEnabled.value = !!enabled
+  }
+
+  /** 清空按钮专用：服务端已清空，客户端聚合列表必须一并清掉，否则并集合并会把旧日志救回来 */
+  function clearClientLogs() {
+    logs.value = []
+    accountLogs.value = []
   }
 
   return {
@@ -400,6 +443,7 @@ export const useStatusStore = defineStore('status', () => {
     fetchAccountLogs,
     fetchDailyGifts,
     setRealtimeLogsEnabled,
+    clearClientLogs,
     connectRealtime,
     disconnectRealtime,
   }

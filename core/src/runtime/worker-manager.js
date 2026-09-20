@@ -15,6 +15,7 @@ function createWorkerManager(deps) {
         workerScriptPath,
         workers,
         globalLogs,
+        pushRuntimeEntry,
         log,
         addAccountLog,
         normalizeStatusForPanel,
@@ -49,6 +50,9 @@ function createWorkerManager(deps) {
         getPetDiaryFriend: 30000,
     };
     const WATCHDOG_MAX_RESTARTS = 3;
+    // worker 日志 id 用独立自增序号：曾用 globalLogs.length 拼接，稳态裁剪下长度反复回到
+    // 同一值，同毫秒批量日志会生成相同 logId，前端按 id 去重时会把真实日志误合并掉
+    let workerLogSequence = 0;
 
     /** 是否支持 Thread 模式（非 pkg 打包 + Worker 可用） */
     const threadMode = runtimeMode === 'thread' && !processRef.pkg && typeof WorkerThread === 'function';
@@ -541,7 +545,7 @@ function createWorkerManager(deps) {
             const timestamp = Date.now();
             const entry = {
                 ...msg.data,
-                logId: `worker-${accountId}-${timestamp}-${globalLogs.length}`,
+                logId: `worker-${accountId}-${timestamp}-${(workerLogSequence = (workerLogSequence + 1) % Number.MAX_SAFE_INTEGER)}`,
                 accountId,
                 accountName: wrk.name,
                 ts: timestamp,
@@ -555,8 +559,13 @@ function createWorkerManager(deps) {
             wrk.logs.push(entry);
             if (wrk.logs.length > 1000) wrk.logs.shift();
 
-            globalLogs.push(entry);
-            if (globalLogs.length > 2000) globalLogs.shift();
+            // 走统一的运行日志入列：每账号独立保留配额，避免多账号互相挤占
+            if (typeof pushRuntimeEntry === 'function') {
+                pushRuntimeEntry(entry);
+            } else {
+                globalLogs.push(entry);
+                if (globalLogs.length > 2000) globalLogs.shift();
+            }
 
             if (typeof onWorkerLog === 'function') {
                 onWorkerLog(entry, accountId, wrk.name);
