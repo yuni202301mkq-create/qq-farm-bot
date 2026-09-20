@@ -1,6 +1,6 @@
 import { useIntervalFn } from '@vueuse/core'
-import { computed, ref } from 'vue'
 import solarlunar from 'solarlunar'
+import { computed, ref } from 'vue'
 
 /**
  * 纪念日提醒：扫描今天起 30 天内最近的纪念日（公历节日 + 农历节日 + 重要纪念日），
@@ -107,14 +107,32 @@ const upcoming = computed<MatchedDay | null>(() => {
   return null
 })
 
-const memorialText = computed(() => {
+// 标签行（最近的纪念日是：/ 今天是：）用于桌面端单行；移动端顶栏改为三行：
+// 应用名 / 日期(农历) / 名称+倒计时，字段按此拆分导出
+const memorialLabel = computed(() => {
+  if (!upcoming.value)
+    return ''
+  return upcoming.value.daysUntil === 0 ? '今天是：' : '最近的纪念日是：'
+})
+
+const memorialDate = computed(() => upcoming.value?.dateText || '')
+
+const memorialName = computed(() => upcoming.value?.name || '')
+
+const memorialCountdown = computed(() => {
+  if (!upcoming.value || upcoming.value.daysUntil === 0)
+    return ''
+  return `还有${upcoming.value.daysUntil}天`
+})
+
+const memorialDetail = computed(() => {
   if (!upcoming.value)
     return ''
   return upcoming.value.daysUntil === 0
-    ? `今天是：${upcoming.value.dateText}，${upcoming.value.name}`
-    : `最近的纪念日是：${upcoming.value.dateText}，${upcoming.value.name}，还有${upcoming.value.daysUntil}天`
+    ? `${upcoming.value.dateText}，${upcoming.value.name}`
+    : `${upcoming.value.dateText}，${upcoming.value.name}，还有${upcoming.value.daysUntil}天`
 })
 
 export function useMemorialDay() {
-  return { memorialText }
+  return { memorialLabel, memorialDate, memorialName, memorialCountdown, memorialDetail }
 }

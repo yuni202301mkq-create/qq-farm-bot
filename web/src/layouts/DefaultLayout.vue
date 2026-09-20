@@ -12,7 +12,7 @@ import { useAppStore } from '@/stores/app'
 
 const appStore = useAppStore()
 const { loginPageConfig } = storeToRefs(appStore)
-const { memorialText } = useMemorialDay()
+const { memorialLabel, memorialDate, memorialName, memorialCountdown, memorialDetail } = useMemorialDay()
 
 // ============ 更新日志：登录成功进入主界面后自动弹出一次 ============
 const showUpdateLog = ref(false)
@@ -59,21 +59,41 @@ onMounted(() => {
 
     <main class="relative h-full min-h-0 min-w-0 flex flex-1 flex-col overflow-hidden">
       <header class="glass-panel relative z-30 mx-2 mt-2 h-16 flex shrink-0 items-center justify-between rounded-lg px-3 md:mx-4 md:mt-4 md:px-5">
-        <div class="min-w-0 flex items-center gap-2 sm:gap-3">
+        <div class="min-w-0 flex items-center gap-1.5 sm:gap-3">
           <div class="min-w-0 flex items-center gap-2 sm:gap-2.5">
             <div
-              class="h-8 w-8 flex flex-none items-center justify-center rounded-xl text-white shadow-md sm:h-9 sm:w-9"
+              class="h-7 w-7 flex flex-none items-center justify-center rounded-lg text-white shadow-md sm:h-9 sm:w-9 sm:rounded-xl"
               style="background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 55%, #f97316 100%); box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);"
             >
-              <div class="i-carbon-sprout text-lg" />
+              <div class="i-carbon-sprout text-base sm:text-lg" />
             </div>
             <div class="min-w-0">
-              <div class="truncate text-base text-gray-900 font-bold md:text-lg dark:text-gray-100">
-                {{ loginPageConfig.title || '农场智能助手' }}
+              <!-- 移动端：应用名 + 纪念日两行（日期 / 名称+倒计时，倒计时用主题色强调） -->
+              <div class="min-w-0 sm:hidden space-y-px">
+                <div class="truncate text-sm text-gray-900 font-bold leading-tight dark:text-gray-100">
+                  {{ loginPageConfig.title || '农场智能助手' }}
+                </div>
+                <template v-if="memorialDetail">
+                  <div class="truncate text-[10px] text-gray-400 leading-tight dark:text-gray-500">
+                    {{ memorialDate }}
+                  </div>
+                  <div class="truncate text-[11px] leading-tight">
+                    <span class="text-gray-900 dark:text-white">{{ memorialName }}</span>
+                    <template v-if="memorialCountdown">
+                      <span class="text-gray-400">，</span>
+                      <span style="color: var(--theme-primary)">{{ memorialCountdown }}</span>
+                    </template>
+                  </div>
+                </template>
               </div>
-              <!-- 移动端顶栏高度有限，纪念日文案放不下会截断成"2026年…"，只在 sm 及以上展示 -->
-              <div v-if="memorialText" class="hidden truncate text-xs text-gray-900 font-bold sm:block dark:text-white">
-                {{ memorialText }}
+              <!-- 桌面端：应用名 + 单行纪念日 -->
+              <div class="hidden min-w-0 sm:block">
+                <div class="truncate text-base text-gray-900 font-bold md:text-lg dark:text-gray-100">
+                  {{ loginPageConfig.title || '农场智能助手' }}
+                </div>
+                <div v-if="memorialDetail" class="truncate text-xs text-gray-900 font-bold dark:text-white">
+                  {{ memorialLabel }}{{ memorialDetail }}
+                </div>
               </div>
             </div>
           </div>

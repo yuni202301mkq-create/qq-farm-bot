@@ -240,7 +240,7 @@ async function handleAccountSaved(payload?: {
   <div class="relative">
     <button
       ref="trigger"
-      class="max-w-[min(52vw,280px)] flex shrink-0 items-center gap-2 rounded-xl px-2 py-2 text-left transition sm:gap-3 sm:px-3 hover:bg-gray-100/70 dark:hover:bg-gray-700/50"
+      class="max-w-[min(52vw,280px)] flex shrink-0 items-center gap-1.5 rounded-xl px-1.5 py-2 text-left transition sm:gap-3 hover:bg-gray-100/70 sm:px-3 dark:hover:bg-gray-700/50"
       @click="toggleDropdown"
     >
       <span
@@ -265,7 +265,8 @@ async function handleAccountSaved(payload?: {
           </span>
         </div>
       </span>
-      <div class="min-w-0 flex flex-col">
+      <!-- 移动端只留头像 + 箭头：昵称/平台徽标在窄屏占宽明显，点击后下拉里都有 -->
+      <div class="hidden min-w-0 flex-col sm:flex">
         <span class="truncate text-sm text-gray-900 font-semibold dark:text-gray-100">
           {{ displayName }}
         </span>
@@ -278,9 +279,9 @@ async function handleAccountSaved(payload?: {
             {{ platform }}
           </span>
           <span
-          v-if="currentSubtitle"
-          class="hidden truncate sm:block"
-        >{{ currentSubtitle }}</span>
+            v-if="currentSubtitle"
+            class="hidden truncate sm:block"
+          >{{ currentSubtitle }}</span>
         </span>
       </div>
       <div
