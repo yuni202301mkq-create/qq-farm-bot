@@ -15,6 +15,7 @@ function createWorkerManager(deps) {
         workerScriptPath,
         workers,
         globalLogs,
+        pushRuntimeEntry,
         log,
         addAccountLog,
         normalizeStatusForPanel,
@@ -555,8 +556,13 @@ function createWorkerManager(deps) {
             wrk.logs.push(entry);
             if (wrk.logs.length > 1000) wrk.logs.shift();
 
-            globalLogs.push(entry);
-            if (globalLogs.length > 2000) globalLogs.shift();
+            // 走统一的运行日志入列：每账号独立保留配额，多账号互不挤占
+            if (typeof pushRuntimeEntry === 'function') {
+                pushRuntimeEntry(entry);
+            } else {
+                globalLogs.push(entry);
+                if (globalLogs.length > 2000) globalLogs.shift();
+            }
 
             if (typeof onWorkerLog === 'function') {
                 onWorkerLog(entry, accountId, wrk.name);
