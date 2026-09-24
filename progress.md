@@ -20,14 +20,14 @@
 - 登录页「忘记密码」已从纯提示升级为自助找回：`POST /api/forgot-password`（`admin-auth-routes.js`）用账号绑定过的卡密（注册卡存 `user.card`，续费卡看卡密库 `usedBy`）验证身份后重置密码，成功后 `invalidateAdminSessions` 踢掉该用户在线会话；同 IP+用户名 10 分钟内 5 次失败锁 10 分钟（**限流键用 `req.socket.remoteAddress` 而非 `req.ip`**：项目开了 `trust proxy`，`req.ip` 来自可伪造的 X-Forwarded-For，伪造即绕过；attempt 表每次失败都清理过期项并有 5000 条硬上限，防止撑爆内存），用户名/卡密错误统一返回「用户名或绑定卡密不匹配」。`AuthView.vue` 新增 `forgot` 模式（用户名→卡密→新密码→确认新密码，回车链式聚焦），超级管理员不可走此流程。测试见 `core/test/forgot-password.test.js`（6 用例）。
 - `AuthView.vue` 修复了用户名/卡密输入框同时绑定 `v-model` 与 `v-model.lazy` 导致 `vue-tsc -b` 报 TS1117、生产构建被阻断的问题（保留单个 `v-model`）。
 
-- TSDK/ACE 安全链路已升级到 2026-09-14 上游已验证的官方
-  `v3.9.0.1789137379` WASM（161084 字节，SHA-256
-  `1744e339d43425f9f24834fd49b3239f824f57fe76242d5b3128ac55b3110ac5`）。
+- TSDK/ACE 安全链路已升级到 2026-09-24 本机官方展开包中的
+  `v3.9.0.1790160550` WASM（161081 字节，SHA-256
+  `2c9e377ecc9a4fd9019f12191b589d543a60d6654580eb3e237b35f1fa5b1cb7`）。
   静态检查确认 22 个 imports、61 个 exports、17 个 mergewasm 数据段及解密密钥
   均与现有 Node 宿主兼容；默认运行文件已切换为
-  `tsdk-v3.9.0.1789137379.wasm`，保留 `tsdk-v3.9.0.1788935757.wasm` 用于回退。
+  `tsdk-v3.9.0.1790160550.wasm`，保留旧版本化 WASM 用于回退。
   登录与心跳请求已按 `1.14.0.4_20260911` 官方抓包逐字节锁定；自定义设备
-  协议仍保留扩展设备字段。本机最新 QQ 展开包仍为 2026-09-10 版，受控在线验收待完成。
+  协议仍保留扩展设备字段，受控在线验收待完成。
   语法检查、定向 ESLint 和 TSDK/网关协议测试通过；完整后端测试 360/360 通过。
   调用映射和内存所有权见 `core/docs/tsdk-ace-runtime.md`；受控在线 5/30 分钟好友
   操作仍需测试账号实测。
