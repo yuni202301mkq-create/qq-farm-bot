@@ -196,8 +196,9 @@ message WaterLandReply {
 message FarmingRequest {
     repeated int64 land_ids = 1;
     int64 host_gid = 2;
-    int32 host_type = 3;
-    int32 reason = 4;
+    // 官方编码器对 0 值也会显式上线（抓包夹具 1800/2000），proto3 需声明 optional 才能编码出零值。
+    optional int32 host_type = 3;
+    optional int32 reason = 4;
     repeated int64 clear_farm_social_item_ids = 5;
 }
 

@@ -34,7 +34,8 @@ message UseRequest {
 message UseTarget {
     int64 host_gid = 1;
     repeated int64 land_ids = 2;
-    int64 use_config_id = 3;
+    // 官方编码器对 0 值也会显式上线（抓包夹具 1800），proto3 需声明 optional 才能编码出零值。
+    optional int64 use_config_id = 3;
 }
 
 message UseReply {
