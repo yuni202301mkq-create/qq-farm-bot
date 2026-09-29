@@ -526,3 +526,39 @@ Operate 命令号、活动 ID、ActivityNode body 字段号全部未知。按活
 3. 拿到 List/Operate 明文字段号后，再补 proto、activity.js 服务、自动化开关（设置页+自动控制页）、活动面板。
 
 验证：`eslint`、`vue-tsc -b`、`vite build` 通过；产物 `Activity-*.js` 含两个活动文案、`activity-windows-*.js` 含新窗口常量。
+
+## 2026-09-30 合并上游：秋祈良愿与快乐不独享完整适配（wish-sign/share-reward）
+
+上午刚登记的两个活动占位卡片，上游（343d946 → 9982736，共 2 个提交）当天即给出完整适配：
+后端 List/Operate 协议、`WishShareActivityPanel`、活动素材、奖励配置、烟花道具使用、
+自动化开关（祈愿方向/自动祈愿/自动领奖/自动快乐值/档位奖励，活动结束自动关历史开关）及测试。
+占位登记按 progress.md 既定计划（"恢复协议后迁移到 adaptedKey 面板"）由上游实现自然承接，
+未删历史：过渡实现保留在提交 `7a6b46a`。
+
+### 合并冲突解决（5 个文件）
+
+- `web/src/constants/activity-windows.ts`：采用上游命名（`WISH_SIGN_/SHARE_REWARD_ACTIVITY_WINDOW`，
+  时间窗与本地占位完全同值）；本地 `AUTUMN_PRAYER_/SHARED_HAPPINESS_` 两常量退役，避免同窗双套常量。
+- `web/src/views/Activity.vue`：上游真实面板/store 接线全量进入；保留本地两项独立改动——
+  ① `LOCALLY_REGISTERED_ACTIVITIES` 兜底卡片机制与两个条目（仅改指向上游同值常量；目录扫描可用且
+  收录同名活动时按标题去重、以真实适配卡片为准，目录不可用时仍显示占位卡片）；
+  ② "未开始"活动卡片置灰禁止进入（上游仍只对"已结束"置灰，本地修复按 AGENTS.md 时间状态规则保留）。
+- `web/src/components/settings/AccountFeatureSettings.vue`：import 行取并集（上游新增活动窗口常量 + 本地 toast store）。
+- `core/src/services/warehouse.js`：import 行取并集（本地 `getServerDateKey` + 上游 `getServerTimeSec`/firework-use）。
+- `docs/CHANGELOG.md`：两边条目都保留，上游 v2.7.1（2026-09-24）在前。
+
+### 上游自带缺陷修复（提交 `8db094b`）
+
+上游 `firework-use.test.js` 2 例断言官方编码器对 0 值字段显式上线（UseTarget.use_config_id、
+FarmingRequest.host_type/reason 的 `1800`/`2000`），但其 proto 未声明 `optional`，protobufjs proto3
+隐式 presence 会省略零值——在纯上游代码（9982736 worktree）实测同样失败。修复：三个字段声明
+`optional`（显式 presence），不改字段号；18 例 wish-share/firework 测试全过，官方线格式对齐。
+
+### 验证
+
+- 前端：`vue-tsc -b && vite build` 通过。`npm run lint` 剩余 9 个错误均在合并未触及的历史文件
+  （`AccountStartupModal.vue`/`RunModeSelector.vue`/`solarlunar.d.ts`），`--fix` 波及的无关格式化已全部还原。
+- 后端：全量 `node --test` 515/517；2 例失败为 `device-protocol`/`seed-lock-planting` 的
+  `test.after` 临时目录清理 ENOTEMPTY（Windows 竞态），合并前提交 `7a6b46a` 实测同样失败，与本次合并无关。
+- 待人工验收：活动页两个新面板（祈愿/分享）在真实账号上的数据展示与自动化开关行为；
+  本地占位卡片与目录卡片的去重表现（登录态目录扫描成功时应只见真实适配卡片）。
