@@ -4,7 +4,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 
 interface AutomationForm {
   automation: Record<string, any>
@@ -58,6 +58,8 @@ let nowTimer: ReturnType<typeof window.setInterval> | null = null
 const showRainPoemActivity = computed(() => isWithinActivityWindowMs(RAIN_POEM_ACTIVITY_WINDOW, nowMs.value))
 const showCharityFlowerActivity = computed(() => isWithinActivityWindowMs(CHARITY_FLOWER_ACTIVITY_WINDOW, nowMs.value))
 const showPetDiaryActivity = computed(() => isWithinActivityWindowMs(PET_DIARY_ACTIVITY_WINDOW, nowMs.value))
+const showWishSignActivity = computed(() => isWithinActivityWindowMs(WISH_SIGN_ACTIVITY_WINDOW, nowMs.value))
+const showShareRewardActivity = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
 
 function isLandTypeSelected(value: string) {
   return Array.isArray(automation.value.fertilizer_land_types)
@@ -232,6 +234,55 @@ onUnmounted(() => {
               <BaseSwitch v-model="automation.charity_flower_public_fund_claim" label="领取并送出 1 元公益金" />
             </div>
           </template>
+        </div>
+
+        <!-- 秋祈良愿（按活动窗口自动显示） -->
+        <div v-if="showWishSignActivity" class="liquid-glass-sub mt-4 border border-amber-200/70 rounded-lg p-4 dark:border-amber-900/40">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm text-gray-900 font-medium dark:text-gray-100">
+                秋祈良愿
+              </div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                每日祈愿和领取好运奖励。烟花可在个人背包使用。
+              </div>
+            </div>
+            <span class="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">2026-09-24 00:00 — 2026-10-07 23:59</span>
+          </div>
+          <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <BaseSwitch v-model="automation.wish_sign_draw" label="自动祈愿" />
+            <BaseSwitch v-model="automation.wish_sign_claim" label="自动领取祈愿奖励" />
+          </div>
+          <div class="mt-3 max-w-xs">
+            <BaseSelect
+              v-model="automation.wish_sign_choice"
+              label="自动祈愿方向"
+              :options="[
+                { label: '财运', value: 1 }, { label: '感情', value: 2 }, { label: '前程', value: 3 },
+                { label: '生活', value: 4 }, { label: '农耕', value: 5 }, { label: '人际', value: 6 },
+              ]"
+            />
+          </div>
+        </div>
+
+        <!-- 快乐不独享（按活动窗口自动显示） -->
+        <div v-if="showShareRewardActivity" class="liquid-glass-sub mt-4 border border-orange-200/70 rounded-lg p-4 dark:border-orange-900/40">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm text-gray-900 font-medium dark:text-gray-100">
+                快乐不独享
+              </div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                自动分享领取首次分享快乐值，无需好友点击；自动领取每日快乐值和已达成的档位奖励。
+              </div>
+            </div>
+            <span class="shrink-0 rounded-full bg-orange-100 px-2 py-1 text-xs text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">2026-09-24 00:00 — 2026-10-12 23:59</span>
+          </div>
+          <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <BaseSwitch v-model="automation.share_reward_share" label="自动分享" />
+            <BaseSwitch v-model="automation.share_reward_daily" label="自动领取每日快乐值" />
+            <BaseSwitch v-model="automation.share_reward_milestones" label="自动领取档位奖励" />
+          </div>
         </div>
 
         <!-- 萌宠成长日记 -->

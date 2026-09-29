@@ -562,3 +562,18 @@ FarmingRequest.host_type/reason 的 `1800`/`2000`），但其 proto 未声明 `o
   `test.after` 临时目录清理 ENOTEMPTY（Windows 竞态），合并前提交 `7a6b46a` 实测同样失败，与本次合并无关。
 - 待人工验收：活动页两个新面板（祈愿/分享）在真实账号上的数据展示与自动化开关行为；
   本地占位卡片与目录卡片的去重表现（登录态目录扫描成功时应只见真实适配卡片）。
+
+## 2026-09-30 自动控制页补齐秋祈良愿/快乐不独享开关卡片
+
+上游合并只把两个活动的开关卡片加在了「设置 → 账号设置 → 日常与活动」（AccountFeatureSettings.vue），
+旧版「设置 → 自动控制」（AutomationControlPanel.vue）没有同步。按 AGENTS.md「旧版自动控制页要与账号
+设置保持同一批配置字段和同一套显隐规则」补齐：
+
+- 两张卡片（秋祈良愿：自动祈愿/自动领取祈愿奖励/自动祈愿方向下拉；快乐不独享：自动分享/自动领取每日
+  快乐值/自动领取档位奖励），字段与账号设置完全一致，含标题、说明与活动起止日期徽标。
+- 显隐复用同一套 `WISH_SIGN_/SHARE_REWARD_ACTIVITY_WINDOW` 时间窗判断，仅活动有效期内显示。
+- 开关默认值与「活动结束自动关闭历史开关」分组已在合并时由上游补齐（useAutomationSettings 默认值、
+  setting.ts 类型、store.js `TIMED_ACTIVITY_AUTOMATION_GROUPS`），旧页直接复用，无需后端改动。
+- 排查确认 `AutomationSettingsTab.vue` 已无任何引用（死代码），未改动；如需清理可另行删除。
+
+验证：`vue-tsc -b && vite build` 通过。旧页两张卡片的实际渲染与开关保存待人工验收。
