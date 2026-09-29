@@ -11,7 +11,7 @@ import QixiActivityPanel from '@/components/activity/QixiActivityPanel.vue'
 import RainPoemActivityPanel from '@/components/activity/RainPoemActivityPanel.vue'
 import StarRecordPanel from '@/components/activity/StarRecordPanel.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import { AUTUMN_PRAYER_ACTIVITY_WINDOW, CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARED_HAPPINESS_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useAccountStore } from '@/stores/account'
 import { useActivityStore } from '@/stores/activity'
 import { useToastStore } from '@/stores/toast'
@@ -155,6 +155,28 @@ const activityDirectoryGroups = ref<ActivityDirectoryNode[]>([])
 const unknownActivityIds = ref(new Set<number>())
 const activityScanLoading = ref(false)
 const ACTIVITY_REFRESH_INTERVAL_MS = 30_000
+
+// 本地已登记、协议尚未适配的活动。目录扫描依赖在线账号，不可用或尚未收录时，
+// 活动中心仍按官方时间窗展示卡片，并与目录结果按标题去重；恢复 Operate 协议后
+// 再迁移到 adaptedKey 面板。时间窗取自官方客户端展示（UTC+8）。
+const LOCALLY_REGISTERED_ACTIVITIES = [
+  {
+    key: 'local-autumn-prayer',
+    title: '秋祈良愿',
+    description: '每日祈愿和领取好运奖励，烟花可在个人背包使用',
+    icon: 'i-carbon-moon',
+    hue: 28,
+    window: AUTUMN_PRAYER_ACTIVITY_WINDOW,
+  },
+  {
+    key: 'local-shared-happiness',
+    title: '快乐不独享',
+    description: '分享领取快乐值，无需好友点击；可领取每日快乐值和档位奖励',
+    icon: 'i-carbon-smile',
+    hue: 330,
+    window: SHARED_HAPPINESS_ACTIVITY_WINDOW,
+  },
+]
 const sections = computed<ActivitySection[]>(() => [
   ...(SHOW_QIXI_ACTIVITY ? [{ key: 'qixi' as const, label: '鹊桥寄情', icon: 'i-carbon-favorite', count: qixiActivity.value?.gift.remainingCount || 0 }] : []),
   { key: 'journey', label: '千星游记', icon: 'i-carbon-map', count: activity.value?.passport?.claimableLevels || 0 },
@@ -198,7 +220,7 @@ const activityCards = computed(() => {
         endTime: RAIN_POEM_ACTIVITY_WINDOW.endMs / 1000,
         activityIds: [2026070300],
       }]
-  return source.map((group) => {
+  const directoryCards = source.map((group) => {
     const adaptedKey = group.id === 2026090100
       ? 'pet-diary' as const
       : group.activityIds.includes(2026070300) ? 'rain-poem' as const : group.activityIds.includes(2026090900) ? 'charity-flower' as const : null
@@ -231,6 +253,33 @@ const activityCards = computed(() => {
       },
     }
   }).sort((left, right) => {
+    const activePriority = Number(right.status === 'active') - Number(left.status === 'active')
+    return activePriority
+      || right.updatedMs - left.updatedMs
+      || right.window.startMs - left.window.startMs
+  })
+  // 目录已收录同名活动时以目录结果为准，避免出现重复卡片
+  const directoryTitles = new Set(directoryCards.map(card => card.title))
+  const localCards = LOCALLY_REGISTERED_ACTIVITIES
+    .filter(item => !directoryTitles.has(item.title))
+    .map(item => ({
+      key: item.key,
+      activityIds: [] as number[],
+      adaptedKey: null,
+      title: item.title,
+      description: item.description,
+      icon: item.icon,
+      image: '',
+      imagePosition: 'center',
+      window: { startMs: item.window.startMs, endMs: item.window.endMs },
+      updatedMs: item.window.updatedMs,
+      status: activityWindowStatus(item.window),
+      pending: true,
+      backgroundStyle: {
+        background: `radial-gradient(circle at 84% 18%, hsl(${(item.hue + 42) % 360} 82% 68% / 0.38), transparent 34%), radial-gradient(circle at 12% 92%, hsl(${(item.hue + 310) % 360} 75% 58% / 0.26), transparent 38%), linear-gradient(135deg, hsl(${item.hue} 52% 38%), hsl(${(item.hue + 32) % 360} 58% 18%))`,
+      },
+    }))
+  return [...directoryCards, ...localCards].sort((left, right) => {
     const activePriority = Number(right.status === 'active') - Number(left.status === 'active')
     return activePriority
       || right.updatedMs - left.updatedMs
@@ -562,8 +611,8 @@ onUnmounted(() => {
           v-for="card in filteredActivityCards"
           :key="card.key"
           class="group relative min-h-52 overflow-hidden rounded-lg text-left text-white shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-cyan-500"
-          :class="card.status === 'ended' ? 'cursor-not-allowed grayscale saturate-0' : 'hover:-translate-y-0.5 hover:shadow-lg'"
-          :disabled="card.status === 'ended'"
+          :class="card.status === 'active' ? 'hover:-translate-y-0.5 hover:shadow-lg' : 'cursor-not-allowed grayscale saturate-0'"
+          :disabled="card.status !== 'active'"
           @click="selectedActivity = card.key"
         >
           <img v-if="card.image" :src="card.image" alt="" class="absolute inset-0 h-full w-full object-cover transition duration-500" :style="{ objectPosition: card.imagePosition }" :class="card.status === 'active' && 'group-hover:scale-105'">

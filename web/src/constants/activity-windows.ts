@@ -20,6 +20,23 @@ export const PET_DIARY_ACTIVITY_WINDOW = {
   updatedMs: 1789005600 * 1000,
 }
 
+// 秋祈良愿。时间窗取自官方活动时间（2026-09-24 00:00 → 2026-10-07 23:59，UTC+8），
+// 目前仅登记活动中心展示；Operate 协议尚未恢复，未登记自动化开关，
+// 因此在 TIMED_ACTIVITY_AUTOMATION_GROUPS 中没有对应分组。
+export const AUTUMN_PRAYER_ACTIVITY_WINDOW = {
+  startMs: 1790179200 * 1000,
+  endMs: 1791388799 * 1000,
+  updatedMs: 1790697600 * 1000,
+}
+
+// 快乐不独享。时间窗取自官方活动时间（2026-09-24 00:00 → 2026-10-12 23:59，UTC+8），
+// 同上仅登记展示；分享与快乐值领取协议未恢复，未登记自动化开关。
+export const SHARED_HAPPINESS_ACTIVITY_WINDOW = {
+  startMs: 1790179200 * 1000,
+  endMs: 1791820799 * 1000,
+  updatedMs: 1790697600 * 1000,
+}
+
 export function isWithinActivityWindowMs(window: { startMs: number, endMs: number }, nowMs = Date.now()) {
   return nowMs >= window.startMs && nowMs <= window.endMs
 }

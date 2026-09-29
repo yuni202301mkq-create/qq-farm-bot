@@ -494,3 +494,35 @@
 - 手机端收紧版本条目间距：h1 `margin: 14px 0 6px; font-size: 1.2rem`、h2 `margin: 16px 0 8px`，一屏多显示约一个版本。
 
 验证：`npm run build` 通过；产物 `AuthView-*.css` 回读确认 `max-height:calc(100dvh - 1rem)`、`env(safe-area-inset-bottom)`、遮罩 `overflow-y:auto`、90vh 回退均已进包。
+
+## 2026-09-30 登记「秋祈良愿」「快乐不独享」到活动中心（仅展示层，协议待恢复）
+
+用户提供运行中客户端的截图：两个新活动已在官方侧开始，但本项目活动中心没有它们。
+本机为 Windows，无 `miniapp_src`、无新 HAR、缓存目录报告停留在 2026-09-14（status=unavailable），
+Operate 命令号、活动 ID、ActivityNode body 字段号全部未知。按活动手册
+「没有成功操作样本时前端保持只读，不根据旧活动猜命令号」，本次只做登记，不加自动化开关。
+
+### 已确认数据（来源：用户截图的官方活动卡片，UTC+8）
+
+| 活动 | 时间窗 | 说明 |
+| --- | --- | --- |
+| 秋祈良愿 | 2026-09-24 00:00 → 2026-10-07 23:59 | 每日祈愿+领取祈愿奖励；祈愿方向可选（截图见「财运」下拉）；烟花可在个人背包使用 |
+| 快乐不独享 | 2026-09-24 00:00 → 2026-10-12 23:59 | 首次分享领快乐值（无需好友点击）；每日快乐值；档位奖励 |
+
+### 改动
+
+- `web/src/constants/activity-windows.ts`：新增 `AUTUMN_PRAYER_ACTIVITY_WINDOW`（start 1790179200 / end 1791388799）与
+  `SHARED_HAPPINESS_ACTIVITY_WINDOW`（start 1790179200 / end 1791820799），`updatedMs` 为登记日 1790697600（2026-09-30）。
+  未在 `store.js` 的 `TIMED_ACTIVITY_AUTOMATION_GROUPS` 加分组：没有自动化 key 可挂。
+- `web/src/views/Activity.vue`：新增 `LOCALLY_REGISTERED_ACTIVITIES` 本地登记（卡片带「待适配」徽标、官方文案描述、
+  按登记日排序置顶），目录扫描可用且已收录同名活动时按标题去重、以目录结果为准。
+- 顺带按 AGENTS.md 时间状态规则修正活动卡片入口：原先只有「已结束」禁止进入，「未开始」现在同样置灰且禁止进入。
+
+### 待办（阻塞在协议数据）
+
+1. Mac 端按 `tsdk-update-runbook.md` 取最新 `miniapp_src`，在 `game.js` 检索两个活动的 ID、入口 UID 与模块名；
+2. 或按 `activity-update-runbook.md` §1 抓 HAR：分别打开两个活动 → 祈愿一次并切换方向 → 领取祈愿奖励；
+   分享一次 → 领取每日快乐值 → 领取一档档位奖励；
+3. 拿到 List/Operate 明文字段号后，再补 proto、activity.js 服务、自动化开关（设置页+自动控制页）、活动面板。
+
+验证：`eslint`、`vue-tsc -b`、`vite build` 通过；产物 `Activity-*.js` 含两个活动文案、`activity-windows-*.js` 含新窗口常量。
