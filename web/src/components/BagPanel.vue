@@ -35,17 +35,25 @@ type CategoryValue = typeof CATEGORY_OPTIONS[number]['value']
 
 const selectedCategory = ref<CategoryValue>('fruit')
 
+function itemImage(item: any) {
+  return item?.image || (Number(item?.id) === 6001 ? '/activity/wish-sign/firework.png' : '')
+}
+
+function itemType(item: any) {
+  return Number(item?.itemType) || (Number(item?.id) === 6001 ? 23 : 0)
+}
+
 function getItemCategory(item: any): CategoryValue {
   if (item?.category === 'seed')
     return 'seed'
   if (item?.category === 'fruit')
     return 'fruit'
-  const itemType = Number(item?.itemType || 0)
-  if (itemType === 17 || itemType === 6)
+  const type = itemType(item)
+  if (type === 17 || type === 6)
     return 'fruit'
-  if (itemType === 5)
+  if (type === 5)
     return 'seed'
-  if (itemType === 11)
+  if (type === 11 || Number(item?.id) === 6001)
     return 'tool'
   return 'other'
 }
@@ -109,7 +117,7 @@ function canBatchSell(item: any) {
 }
 
 function canUse(item: any) {
-  return Boolean(item?.usable) || Number(item?.itemType || 0) === 11
+  return Boolean(item?.usable) || itemType(item) === 11 || Number(item?.id) === 6001
 }
 
 // 锁定对种子和果实都生效：锁定的果实同样不参与批量出售
@@ -243,10 +251,11 @@ function handleSellClick(item: any) {
 }
 
 function handleUseClick(item: any) {
+  const count = Number(item.id) === 6001 ? 1 : Number(item.count || 1)
   confirmModal.value = {
     show: true,
     title: '确认使用',
-    message: `确定要使用全部 ${item.name || `物品${item.id}`} 吗?\n数量：${item.count || 0}`,
+    message: `确定要使用${Number(item.id) === 6001 ? '一枚' : '全部'} ${item.name || `物品${item.id}`} 吗?\n数量：${count}`,
     type: 'primary',
     loading: false,
     action: 'use',
@@ -324,11 +333,11 @@ async function handleConfirm() {
       const res = await bagStore.useItem(
         currentAccountId.value,
         Number(item.id),
-        Number(item.count || 1),
+        Number(item.id) === 6001 ? 1 : Number(item.count || 1),
         Number(sourceItem?.uid || 0),
       )
       if (res.ok) {
-        toastStore.success(`已使用 ${item.name || `物品${item.id}`}`)
+        toastStore.success(res.data?.message || `已使用 ${item.name || `物品${item.id}`}`)
         await loadBag()
       }
       else {
@@ -686,7 +695,7 @@ useIntervalFn(loadBag, 60000)
               <button
                 v-if="canUse(item)"
                 class="rounded bg-green-500 px-1.5 py-0.5 text-[10px] text-white opacity-70 transition dark:bg-green-600 hover:opacity-100"
-                title="使用全部"
+                :title="Number(item.id) === 6001 ? '使用一枚' : '使用全部'"
                 @click.stop="handleUseClick(item)"
               >
                 用
@@ -708,8 +717,8 @@ useIntervalFn(loadBag, 60000)
             :data-fallback="(item.name || '物').slice(0, 1)"
           >
             <img
-              v-if="item.image && !imageErrors[item.id]"
-              :src="item.image"
+              v-if="itemImage(item) && !imageErrors[item.id]"
+              :src="itemImage(item)"
               :alt="item.name"
               class="max-h-full max-w-full object-contain"
               loading="lazy"
@@ -734,7 +743,7 @@ useIntervalFn(loadBag, 60000)
           <div class="mb-2 flex flex-col items-center gap-0.5 text-[10px] text-gray-400 sm:text-xs">
             <span v-if="item.uid" class="hidden sm:inline">UID: {{ item.uid }}</span>
             <span>
-              类型: {{ item.itemType || 0 }}
+              类型: {{ itemType(item) }}
               <span v-if="getItemCategory(item) === 'seed' && Number(item.rarity) >= 2"> · 稀有</span>
               <span v-else-if="item.level > 0"> · Lv{{ item.level }}</span>
               <span v-if="item.price > 0" :class="getPriceClass(item)"> · {{ item.price }}{{ item.priceUnit || '金' }}</span>

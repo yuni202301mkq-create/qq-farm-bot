@@ -8,6 +8,7 @@ const sources = require('../src/gameConfig/seed_images_named/illustrated-fruit-s
 
 test('missing illustrated fruits resolve official names and intact local images', () => {
   const expected = new Map([
+    [1046030, '黄金·月下美人'], [40435, '山丹丹'], [46030, '月下美人'],
     [1040516, '黄金·狗尾草'], [1041072, '黄金·寒兰'],
     [1041625, '黄金·枸杞'], [1045995, '黄金·芦苇'],
     [204008, '比熊棉花糖'], [204009, '黄金·比熊棉花糖'],

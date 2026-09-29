@@ -11,7 +11,8 @@ import QixiActivityPanel from '@/components/activity/QixiActivityPanel.vue'
 import RainPoemActivityPanel from '@/components/activity/RainPoemActivityPanel.vue'
 import StarRecordPanel from '@/components/activity/StarRecordPanel.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
-import { AUTUMN_PRAYER_ACTIVITY_WINDOW, CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARED_HAPPINESS_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import WishShareActivityPanel from '@/components/activity/WishShareActivityPanel.vue'
+import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 import { useAccountStore } from '@/stores/account'
 import { useActivityStore } from '@/stores/activity'
 import { useToastStore } from '@/stores/toast'
@@ -95,6 +96,10 @@ const {
   rainPoemLoading,
   charityFlowerActivity,
   charityFlowerLoading,
+  wishSignActivity,
+  wishSignLoading,
+  shareRewardActivity,
+  shareRewardLoading,
 } = storeToRefs(activityStore)
 
 const SHOW_QIXI_ACTIVITY = false
@@ -103,6 +108,8 @@ const nowMs = ref(Date.now())
 let nowTimer: ReturnType<typeof window.setInterval> | null = null
 const rainPoemActivityActive = computed(() => isWithinActivityWindowMs(RAIN_POEM_ACTIVITY_WINDOW, nowMs.value))
 const charityFlowerActivityActive = computed(() => isWithinActivityWindowMs(CHARITY_FLOWER_ACTIVITY_WINDOW, nowMs.value))
+const wishSignActivityActive = computed(() => isWithinActivityWindowMs(WISH_SIGN_ACTIVITY_WINDOW, nowMs.value))
+const shareRewardActivityActive = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
 const petDiaryActivityActive = computed(() => isWithinActivityWindowMs(PET_DIARY_ACTIVITY_WINDOW, nowMs.value))
 const selectedActivity = ref<string | null>(null)
 const activityStatusFilter = ref<'active' | 'upcoming' | 'ended'>('active')
@@ -156,9 +163,9 @@ const unknownActivityIds = ref(new Set<number>())
 const activityScanLoading = ref(false)
 const ACTIVITY_REFRESH_INTERVAL_MS = 30_000
 
-// 本地已登记、协议尚未适配的活动。目录扫描依赖在线账号，不可用或尚未收录时，
-// 活动中心仍按官方时间窗展示卡片，并与目录结果按标题去重；恢复 Operate 协议后
-// 再迁移到 adaptedKey 面板。时间窗取自官方客户端展示（UTC+8）。
+// 本地兜底登记的活动卡片。这两个活动上游已完整适配（wish-sign / share-reward），
+// 目录扫描可用且收录同名活动时按标题去重、以真实适配卡片为准；目录不可用（如未登录
+// 或扫描失败）时仍按官方时间窗展示占位卡片，避免活动中心空缺。时间窗取自官方客户端展示（UTC+8）。
 const LOCALLY_REGISTERED_ACTIVITIES = [
   {
     key: 'local-autumn-prayer',
@@ -166,7 +173,7 @@ const LOCALLY_REGISTERED_ACTIVITIES = [
     description: '每日祈愿和领取好运奖励，烟花可在个人背包使用',
     icon: 'i-carbon-moon',
     hue: 28,
-    window: AUTUMN_PRAYER_ACTIVITY_WINDOW,
+    window: WISH_SIGN_ACTIVITY_WINDOW,
   },
   {
     key: 'local-shared-happiness',
@@ -174,7 +181,7 @@ const LOCALLY_REGISTERED_ACTIVITIES = [
     description: '分享领取快乐值，无需好友点击；可领取每日快乐值和档位奖励',
     icon: 'i-carbon-smile',
     hue: 330,
-    window: SHARED_HAPPINESS_ACTIVITY_WINDOW,
+    window: SHARE_REWARD_ACTIVITY_WINDOW,
   },
 ]
 const sections = computed<ActivitySection[]>(() => [
@@ -224,15 +231,16 @@ const activityCards = computed(() => {
     const adaptedKey = group.id === 2026090100
       ? 'pet-diary' as const
       : group.activityIds.includes(2026070300) ? 'rain-poem' as const : group.activityIds.includes(2026090900) ? 'charity-flower' as const : null
+    const adapted = group.activityIds.includes(2026092400) ? 'wish-sign' as const : group.activityIds.includes(2026092500) ? 'share-reward' as const : adaptedKey
     const window = { startMs: group.startTime * 1000, endMs: group.endTime * 1000 }
     const hue = Math.abs(group.id * 37) % 360
     return {
       key: String(group.id),
       activityIds: group.activityIds,
-      adaptedKey,
-      title: adaptedKey === 'pet-diary' ? '萌宠日记' : group.title || `活动 ${group.id}`,
-      description: adaptedKey
-        ? adaptedKey === 'pet-diary' ? '查看比熊成长、爪印手记、拾物小铺与比熊赠礼' : adaptedKey === 'charity-flower' ? '查看爱心、公益进度与奖励状态' : '查看天气、每日进度与气象研究'
+      adaptedKey: adapted,
+      title: adapted === 'pet-diary' ? '萌宠日记' : group.title || `活动 ${group.id}`,
+      description: adapted
+        ? adapted === 'pet-diary' ? '查看比熊成长、爪印手记、拾物小铺与比熊赠礼' : adapted === 'charity-flower' ? '查看爱心、公益进度与奖励状态' : adapted === 'wish-sign' ? '查看祈愿状态、祈愿池和每日奖励' : adapted === 'share-reward' ? '查看每日快乐值与档位进度' : '查看天气、每日进度与气象研究'
         : ACTIVITY_CLIENT_PREVIEWS.some(item => item.title === group.title || item.ids.some(id => group.activityIds.includes(id)))
           ? '已读取客户端静态预览，动态规则待服务端开放'
           : '暂未适配详情',
@@ -240,14 +248,14 @@ const activityCards = computed(() => {
         '': 'i-carbon-calendar',
         'pet-diary': 'i-fas-paw',
         'charity-flower': 'i-carbon-favorite',
-        'rain-poem': 'i-carbon-rain-heavy',
-      }[adaptedKey || ''] || 'i-carbon-calendar',
-      image: adaptedKey === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.webp?v=20260912' : group.imageUrl || (adaptedKey === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : ''),
-      imagePosition: adaptedKey === 'pet-diary' ? 'center 64%' : 'center',
+        'rain-poem': 'i-carbon-rain-heavy', 'wish-sign': 'i-carbon-sun', 'share-reward': 'i-carbon-share',
+      }[adapted || ''] || 'i-carbon-calendar',
+      image: adapted === 'pet-diary' ? '/activity/pet-diary/scene-home-adult.webp?v=20260912' : adapted === 'wish-sign' ? '/activity/wish-sign/card-bg.svg' : adapted === 'share-reward' ? '/activity/share-reward/card-bg.svg' : group.imageUrl || (adapted === 'rain-poem' ? '/activity/rain-poem/day-rain-bg.jpg' : ''),
+      imagePosition: adapted === 'pet-diary' ? 'center 64%' : 'center',
       window,
       updatedMs: window.startMs,
       status: activityWindowStatus(window),
-      pending: !adaptedKey && group.activityIds.some(id => unknownActivityIds.value.has(id)),
+      pending: !adapted && group.activityIds.some(id => unknownActivityIds.value.has(id)),
       backgroundStyle: {
         background: `radial-gradient(circle at 84% 18%, hsl(${(hue + 42) % 360} 82% 68% / 0.38), transparent 34%), radial-gradient(circle at 12% 92%, hsl(${(hue + 310) % 360} 75% 58% / 0.26), transparent 38%), linear-gradient(135deg, hsl(${hue} 52% 38%), hsl(${(hue + 32) % 360} 58% 18%))`,
       },
@@ -412,6 +420,10 @@ async function refreshAll() {
       requests.push(activityStore.fetchRainPoemActivity(String(currentAccountId.value)))
     if (charityFlowerActivityActive.value)
       requests.push(activityStore.fetchCharityFlowerActivity(String(currentAccountId.value)))
+    if (wishSignActivityActive.value)
+      requests.push(activityStore.fetchWishSignActivity(String(currentAccountId.value)))
+    if (shareRewardActivityActive.value)
+      requests.push(activityStore.fetchShareRewardActivity(String(currentAccountId.value)))
     // 萌宠日记不在此处拉取：PetDiaryActivityPanel 自己订阅 usePetDiaryStore，
     // 走 /api/activity/pet-diary/state 完整快照，无需旧只读接口。
     await Promise.all(requests)
@@ -675,6 +687,16 @@ onUnmounted(() => {
       <div v-else-if="charityFlowerActivityActive && !currentAccountId" class="rounded-lg bg-white p-10 text-center text-sm text-gray-500 shadow dark:bg-gray-800">
         {{ L.needAccount }}
       </div>
+    </div>
+    <div v-else-if="selectedActivityCard?.adaptedKey === 'wish-sign' && selectedActivityCard.status === 'active'" class="space-y-3">
+      <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null"><span class="i-carbon-arrow-left" />返回活动列表</button>
+      <WishShareActivityPanel v-if="wishSignActivityActive && currentAccountId" kind="wish" :activity="wishSignActivity" :loading="wishSignLoading" @refresh="refreshAll" />
+      <div v-else-if="wishSignActivityActive && !currentAccountId" class="rounded-lg bg-white p-10 text-center text-sm text-gray-500 shadow dark:bg-gray-800">{{ L.needAccount }}</div>
+    </div>
+    <div v-else-if="selectedActivityCard?.adaptedKey === 'share-reward' && selectedActivityCard.status === 'active'" class="space-y-3">
+      <button class="inline-flex items-center gap-1.5 text-sm text-gray-500 transition hover:text-gray-900 dark:hover:text-white" @click="selectedActivity = null"><span class="i-carbon-arrow-left" />返回活动列表</button>
+      <WishShareActivityPanel v-if="shareRewardActivityActive && currentAccountId" kind="share" :activity="shareRewardActivity" :loading="shareRewardLoading" @refresh="refreshAll" />
+      <div v-else-if="shareRewardActivityActive && !currentAccountId" class="rounded-lg bg-white p-10 text-center text-sm text-gray-500 shadow dark:bg-gray-800">{{ L.needAccount }}</div>
     </div>
     <!--
       萌宠日记面板自带游戏风格顶栏与返回按钮，且直接读 usePetDiaryStore，
