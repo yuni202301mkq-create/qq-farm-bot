@@ -58,8 +58,8 @@ const hasActiveLogFilter = computed(() =>
 const currentAccountDisconnected = computed(() =>
   currentStatusReady.value && !status.value?.connection?.connected,
 )
-// 自动偷菜开关关闭时，偷菜 tick 会被后端「停放」（占位 15 分钟），倒计时无意义，
-// 概览偷菜栏直接显示「已关闭」。
+// 自动偷菜开关关闭时，偷菜 tick 会被后端按巡查区间「停放」（仅占位，不执行偷菜），
+// 倒计时无意义，概览偷菜栏直接显示「已关闭」。
 const stealAutomationDisabled = computed(() =>
   status.value?.automation ? status.value.automation.friend_steal === false : false,
 )

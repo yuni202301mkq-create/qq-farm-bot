@@ -1227,7 +1227,12 @@ let nextStealRunAt = 0;
 async function runStealTick(autoConfig) {
     if (stealTaskRunning || friendSyncPaused) return;
     if (!autoConfig.friend_steal) {
-        nextStealRunAt = Date.now() + (15 * 60 * 1000);
+        // 开关关闭时按用户配置的偷菜巡查区间「停放」，不再固定 15 分钟：
+        // 倒计时与巡查间隔保持一致，重新打开开关后也能按原节奏接上。
+        nextStealRunAt = Date.now() + randomIntervalMs(
+            CONFIG.stealCheckIntervalMin || 180000,
+            CONFIG.stealCheckIntervalMax || 300000
+        );
         return;
     }
     const deferMs = getBusinessDeferMs('friend');
