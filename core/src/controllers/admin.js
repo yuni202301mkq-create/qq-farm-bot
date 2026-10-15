@@ -769,6 +769,7 @@ function startAdminServer(dataProvider) {
     resolveAccountReference,
     ensureEmbeddedCaptureService,
     stopEmbeddedCaptureService,
+    updateRuntimeConfig,
   });
   // 抓包服务默认开启：嵌入模式下随管理面板一起拉起，无需人工到设置页保存一次
   if (ensureEmbeddedCaptureService())

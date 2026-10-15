@@ -587,6 +587,9 @@ async function sellAllFruits() {
       const id = toNum(item.id);
       const count = toNum(item.count);
       if (!isFruitItemId(id) || count <= 0) continue;
+      // 奶茶热销中活动：预留制作所需果实，不参与自动出售（来自上游 milk-tea 适配）
+      const reservedForTea = require('./activity-milk-tea').reserveMilkTeaFruit(id, isAutomationOn('milk_tea_craft'), getServerTimeSec());
+      if (reservedForTea) continue;
       // 官方锁定的物品不参与自动出售（locked 为 proto bool，锁定时为 true）
       if (item.locked) {
         lockedFruitCount += count;

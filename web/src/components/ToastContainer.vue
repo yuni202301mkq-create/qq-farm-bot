@@ -38,6 +38,8 @@ function getBorderColor(type: string) {
       <div
         v-for="toast in toasts"
         :key="toast.id"
+        :role="toast.type === 'error' ? 'alert' : 'status'"
+        aria-atomic="true"
         class="pointer-events-auto max-w-full w-80 flex items-start gap-3 rounded p-4 shadow-lg transition-all duration-300"
         :class="[getBgColor(toast.type), getBorderColor(toast.type)]"
       >
@@ -57,7 +59,8 @@ function getBorderColor(type: string) {
           </button>
         </div>
         <button
-          class="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          aria-label="关闭通知"
+          class="h-11 w-11 flex shrink-0 items-center justify-center text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
           @click="toastStore.remove(toast.id)"
         >
           <div class="i-carbon-close text-lg" />
@@ -70,7 +73,7 @@ function getBorderColor(type: string) {
 <style scoped>
 .toast-enter-active,
 .toast-leave-active {
-  transition: all 0.3s ease;
+  transition: transform 0.2s ease, opacity 0.2s ease;
 }
 
 .toast-enter-from {
