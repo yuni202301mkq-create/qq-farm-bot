@@ -4,7 +4,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
 import BaseSelect from '@/components/ui/BaseSelect.vue'
 import BaseSwitch from '@/components/ui/BaseSwitch.vue'
-import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
+import { CHARITY_FLOWER_ACTIVITY_WINDOW, isWithinActivityWindowMs, MILK_TEA_ACTIVITY_WINDOW, MILK_TEA_BUSINESS_WINDOW, PET_DIARY_ACTIVITY_WINDOW, RAIN_POEM_ACTIVITY_WINDOW, SHARE_REWARD_ACTIVITY_WINDOW, WISH_SIGN_ACTIVITY_WINDOW } from '@/constants/activity-windows'
 
 interface AutomationForm {
   automation: Record<string, any>
@@ -60,6 +60,8 @@ const showCharityFlowerActivity = computed(() => isWithinActivityWindowMs(CHARIT
 const showPetDiaryActivity = computed(() => isWithinActivityWindowMs(PET_DIARY_ACTIVITY_WINDOW, nowMs.value))
 const showWishSignActivity = computed(() => isWithinActivityWindowMs(WISH_SIGN_ACTIVITY_WINDOW, nowMs.value))
 const showShareRewardActivity = computed(() => isWithinActivityWindowMs(SHARE_REWARD_ACTIVITY_WINDOW, nowMs.value))
+const showMilkTeaActivity = computed(() => isWithinActivityWindowMs(MILK_TEA_ACTIVITY_WINDOW, nowMs.value))
+const showMilkTeaBusiness = computed(() => isWithinActivityWindowMs(MILK_TEA_BUSINESS_WINDOW, nowMs.value))
 
 function isLandTypeSelected(value: string) {
   return Array.isArray(automation.value.fertilizer_land_types)
@@ -283,6 +285,71 @@ onUnmounted(() => {
             <BaseSwitch v-model="automation.share_reward_daily" label="自动领取每日快乐值" />
             <BaseSwitch v-model="automation.share_reward_milestones" label="自动领取档位奖励" />
           </div>
+        </div>
+
+        <!-- 节令小札（常驻，与账号设置一致） -->
+        <div class="liquid-glass-sub mt-4 border border-emerald-200/70 rounded-lg p-4 dark:border-emerald-900/40">
+          <div class="text-sm text-gray-900 font-medium dark:text-gray-100">
+            节令小札
+          </div>
+          <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            查看各节令赠礼与领取状态，自动领取节令奖励。
+          </div>
+          <div class="mt-3 max-w-xs">
+            <BaseSwitch v-model="automation.star_solar_claim" label="自动领取节令奖励" />
+          </div>
+        </div>
+
+        <!-- 奶茶热销中（按活动窗口自动显示，字段与账号设置一致） -->
+        <div v-if="showMilkTeaActivity" class="liquid-glass-sub mt-4 border border-amber-200/70 rounded-lg p-4 dark:border-amber-900/40">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="text-sm text-gray-900 font-medium dark:text-gray-100">
+                奶茶热销中
+              </div>
+              <div class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                经营奶茶小店：领取收益与工资、快乐值奖励、雇佣打工与制作奶茶等。
+              </div>
+            </div>
+            <span class="shrink-0 rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">2026-10-15 10:00 — 2026-11-16 23:59</span>
+          </div>
+          <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <BaseSwitch v-model="automation.mall_coupon_gift_buy" label="自动购买点券礼包（买完剩余限额，余额不足时跳过）" />
+            <BaseSwitch v-model="automation.milk_tea_cashier" label="自动领取收益（领取店铺累计营业收益）" />
+            <BaseSwitch v-model="automation.milk_tea_wages" label="自动领取工资（领取已结算的打工工资）" />
+            <BaseSwitch v-model="automation.milk_tea_share_daily" label="自动领取每日快乐值" />
+            <BaseSwitch v-model="automation.milk_tea_share_rewards" label="自动领取快乐值奖励" />
+            <BaseSwitch v-model="automation.milk_tea_fund_rewards" label="自动领取成长基金奖励" />
+            <template v-if="showMilkTeaBusiness">
+              <BaseSwitch v-model="automation.milk_tea_upgrade" label="自动升级店铺（营业额达到要求后升级）" />
+              <BaseSwitch v-model="automation.milk_tea_craft" label="自动制作奶茶（加工全部已解锁配方对应的果实）" />
+              <BaseSwitch v-model="automation.milk_tea_boost" label="自动使用宣传喇叭" />
+              <BaseSwitch v-model="automation.milk_tea_hire" label="自动雇佣员工（按列表顺序选择首个符合类型的空闲好友）" />
+              <BaseSwitch v-model="automation.milk_tea_seed_buy" label="自动购买已解锁种子（不使用钻石）" />
+            </template>
+          </div>
+          <template v-if="showMilkTeaBusiness">
+            <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <BaseSelect
+                v-model="automation.milk_tea_hire_duration"
+                label="雇佣时长"
+                :options="[
+                  { label: '4 小时', value: 1 }, { label: '12 小时', value: 2 }, { label: '24 小时', value: 3 },
+                ]"
+              />
+              <BaseSelect
+                v-model="automation.milk_tea_hire_talent"
+                label="雇佣类型"
+                :options="[
+                  { label: '任意好友', value: 0 }, { label: '金牌销售', value: 9001 }, { label: '金牌宣传', value: 9002 },
+                  { label: '金牌服务', value: 9003 }, { label: '实习员工（默默搬砖）', value: 9004 },
+                ]"
+              />
+            </div>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              指定类型无空闲好友时，依次选择其他空闲好友、实习员工；均不可用则等待下次检查。时长或奶茶券不足时跳过。
+            </p>
+          </template>
         </div>
 
         <!-- 萌宠成长日记 -->
