@@ -315,34 +315,49 @@ defineExpose({ fetchBagSeeds })
           <!-- 名称与库存/等级 -->
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1">
-              <span class="truncate text-xs text-gray-800 font-semibold sm:text-sm dark:text-gray-200">
+              <span class="min-w-0 line-clamp-2 break-all text-xs text-gray-800 font-semibold sm:truncate sm:text-sm dark:text-gray-200">
                 {{ seed.name }}
               </span>
               <span
                 v-if="Number(seed.plantSize) === 2"
-                class="shrink-0 border border-emerald-300 rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700 font-semibold leading-none dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                class="hidden sm:inline-flex shrink-0 border border-emerald-300 rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700 font-semibold leading-none dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
                 title="四格作物，占用 2×2 土地"
               >
                 &lt;2x2&gt;
               </span>
               <span
                 v-if="seed.locked"
-                class="inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-700 font-semibold dark:bg-amber-900/50 dark:text-amber-300"
+                class="hidden sm:inline-flex shrink-0 items-center gap-0.5 rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-700 font-semibold dark:bg-amber-900/50 dark:text-amber-300"
                 title="已在「我的背包」中锁定，不参与种植"
               >
                 <span class="i-carbon-locked block h-2.5 w-2.5" />
                 已锁定
               </span>
             </div>
-            <div class="mt-0.5 flex items-center gap-2 text-[11px] whitespace-nowrap text-gray-500 sm:gap-3 sm:text-xs dark:text-gray-400">
-              <span>库存 {{ seed.count }}</span>
-              <span class="shrink-0">等级{{ seed.requiredLevel }}</span>
+            <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] leading-tight text-gray-500 sm:gap-3 sm:text-xs dark:text-gray-400">
+              <span class="whitespace-nowrap">库存 {{ seed.count }}</span>
+              <span class="shrink-0 whitespace-nowrap">等级{{ seed.requiredLevel }}</span>
+              <span
+                v-if="Number(seed.plantSize) === 2"
+                class="inline-flex shrink-0 items-center whitespace-nowrap border border-emerald-300 rounded bg-emerald-50 px-1 py-0.5 text-[10px] text-emerald-700 font-semibold leading-none sm:hidden dark:border-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                title="四格作物，占用 2×2 土地"
+              >
+                &lt;2x2&gt;
+              </span>
+              <span
+                v-if="seed.locked"
+                class="inline-flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded bg-amber-100 px-1 py-0.5 text-[10px] text-amber-700 font-semibold sm:hidden dark:bg-amber-900/50 dark:text-amber-300"
+                title="已在「我的背包」中锁定，不参与种植"
+              >
+                <span class="i-carbon-locked block h-2.5 w-2.5" />
+                已锁定
+              </span>
             </div>
           </div>
 
-          <!-- 右侧操作：上移 / 下移 / 移出优先列表（这些按钮不参与拖拽） -->
-          <div class="seed-act flex shrink-0 items-center gap-0.5">
-            <div class="flex flex-col items-center">
+          <!-- 右侧操作：上移 / 下移 / 移出优先列表（这些按钮不参与拖拽）；手机上隐藏上下移，靠长按拖拽排序，给名称腾出宽度 -->
+          <div class="seed-act hidden shrink-0 items-center gap-0.5 sm:flex">
+            <div class="hidden flex-col items-center sm:flex">
               <button
                 type="button"
                 class="grid h-4 w-5 place-items-center rounded text-gray-400 transition-colors hover:text-amber-600 disabled:opacity-30 dark:hover:text-amber-300"
@@ -413,6 +428,13 @@ defineExpose({ fetchBagSeeds })
 </template>
 
 <style scoped>
+/* 全局触屏规则（style.css @media pointer:coarse 下 button min-width/min-height 44px）
+   会把卡片内的小图标按钮撑到 44×44，挤爆紧凑卡片导致名称被压缩消失，这里恢复原始尺寸 */
+.bag-seed-item button {
+  min-width: 0;
+  min-height: 0;
+}
+
 /* 拖拽占位（留在原列表中的虚线框） */
 .bag-seed-ghost {
   opacity: 0.4;
