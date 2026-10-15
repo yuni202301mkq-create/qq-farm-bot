@@ -355,8 +355,8 @@ defineExpose({ fetchBagSeeds })
             </div>
           </div>
 
-          <!-- 右侧操作：上移 / 下移 / 移出优先列表（这些按钮不参与拖拽）；手机上隐藏上下移，靠长按拖拽排序，给名称腾出宽度 -->
-          <div class="seed-act hidden shrink-0 items-center gap-0.5 sm:flex">
+          <!-- 右侧操作：上移 / 下移 / 移出优先列表（这些按钮不参与拖拽）；手机上隐藏上下移箭头（长按拖拽排序），删除×保留 -->
+          <div class="seed-act flex shrink-0 items-center gap-0.5">
             <div class="hidden flex-col items-center sm:flex">
               <button
                 type="button"
