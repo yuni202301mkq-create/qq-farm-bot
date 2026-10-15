@@ -279,7 +279,7 @@ defineExpose({ fetchBagSeeds })
       :delay-on-touch-only="true"
       filter=".seed-act"
       :prevent-on-filter="false"
-      class="bag-seed-grid grid gap-x-2 gap-y-7 sm:grid-cols-2 xl:grid-cols-3"
+      class="bag-seed-grid grid grid-cols-2 gap-x-2 gap-y-7 xl:grid-cols-3"
       @end="onDragEnd"
     >
       <template #item="{ element: seed, index }">
