@@ -284,7 +284,7 @@ defineExpose({ fetchBagSeeds })
     >
       <template #item="{ element: seed, index }">
         <div
-          class="bag-seed-item relative flex select-none items-center gap-2.5 border border-amber-200 rounded-xl bg-white py-2 pl-5 pr-2.5 transition-shadow dark:border-amber-700/50 dark:bg-gray-800"
+          class="bag-seed-item relative flex select-none items-center gap-1.5 border border-amber-200 rounded-xl bg-white py-1.5 pl-4 pr-1 sm:gap-2.5 sm:py-2 sm:pl-5 sm:pr-2.5 transition-shadow dark:border-amber-700/50 dark:bg-gray-800"
           :class="{
             // 锁定种子：把默认 1px 浅橙边换成 2px 深橙边，背景也染成 amber-50 提示，单层醒目不再叠 ring 出现双边框
             '!border-2 !border-amber-500 !bg-amber-50 dark:!border-amber-400 dark:!bg-amber-900/30': seed.locked,
@@ -294,19 +294,19 @@ defineExpose({ fetchBagSeeds })
         >
           <!-- 左上角序号徽标，压在卡片边角上 -->
           <span
-            class="absolute left-0 top-0 z-10 grid h-6 w-6 place-items-center border border-amber-300 rounded-full bg-amber-400 text-[11px] text-amber-950 font-bold shadow-sm -translate-x-1/2 -translate-y-1/2 dark:border-amber-500 dark:bg-amber-500"
+            class="absolute left-0 top-0 z-10 grid h-5 w-5 place-items-center border border-amber-300 rounded-full bg-amber-400 text-[10px] text-amber-950 font-bold shadow-sm -translate-x-1/2 -translate-y-1/2 sm:h-6 sm:w-6 sm:text-[11px] dark:border-amber-500 dark:bg-amber-500"
             :title="`优先顺序第 ${index + 1} 位`"
           >
             {{ index + 1 }}
           </span>
 
           <!-- 种子图标 -->
-          <div class="h-10 w-10 flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-amber-50 dark:bg-gray-700">
+          <div class="h-8 w-8 flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-amber-50 sm:h-10 sm:w-10 dark:bg-gray-700">
             <img
               v-if="seed.image"
               :src="seed.image"
               :alt="`${seed.name}种子`"
-              class="h-10 w-10 object-contain"
+              class="h-8 w-8 object-contain sm:h-10 sm:w-10"
               loading="lazy"
             >
             <span v-else class="i-carbon-sprout block h-6 w-6 text-amber-500 dark:text-amber-300" />
@@ -314,8 +314,8 @@ defineExpose({ fetchBagSeeds })
 
           <!-- 名称与库存/等级 -->
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5">
-              <span class="truncate text-sm text-gray-800 font-semibold dark:text-gray-200">
+            <div class="flex items-center gap-1">
+              <span class="truncate text-xs text-gray-800 font-semibold sm:text-sm dark:text-gray-200">
                 {{ seed.name }}
               </span>
               <span
@@ -334,9 +334,9 @@ defineExpose({ fetchBagSeeds })
                 已锁定
               </span>
             </div>
-            <div class="mt-0.5 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+            <div class="mt-0.5 flex items-center gap-2 text-[11px] whitespace-nowrap text-gray-500 sm:gap-3 sm:text-xs dark:text-gray-400">
               <span>库存 {{ seed.count }}</span>
-              <span>等级{{ seed.requiredLevel }}</span>
+              <span class="shrink-0">等级{{ seed.requiredLevel }}</span>
             </div>
           </div>
 
@@ -366,7 +366,7 @@ defineExpose({ fetchBagSeeds })
             </div>
             <button
               type="button"
-              class="grid h-7 w-7 shrink-0 place-items-center rounded-md text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30 dark:hover:text-red-400"
+              class="grid h-6 w-6 shrink-0 place-items-center rounded-md text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 sm:h-7 sm:w-7 dark:hover:bg-red-900/30 dark:hover:text-red-400"
               title="移出优先列表（不参与背包优先种植）"
               aria-label="移出优先列表"
               @click="removeBagSeedFromPriority(seed.seedId)"
